@@ -3,6 +3,11 @@ import {
   DEFAULT_SIZE_OPTIONS,
   normalizeOptionNames,
 } from "./configuration-validation.ts";
+import {
+  inferCatalogAttribute,
+  normalizeCatalogText,
+  resolveProductExclusions,
+} from "@multi-sync/catalog-rules";
 
 export const DIAGNOSTICS_CLASSIFICATION_VERSION =
   "diagnostics-v9-positive-price-validation";
@@ -68,26 +73,6 @@ const comparableAttributes: Array<{
   { key: "color", label: "Color" },
 ];
 
-const attributeAliases: Record<DiagnosticAttribute, ReadonlySet<string>> = {
-  gender: new Set(["gender", "targetgender"]),
-  age: new Set(["age", "agegroup", "agerange", "targetage", "targetagegroup"]),
-  size: new Set([
-    "size",
-    "apparelsize",
-    "clothingsize",
-    "productsize",
-    "shoesize",
-  ]),
-  color: new Set([
-    "color",
-    "colour",
-    "colorpattern",
-    "colourpattern",
-    "productcolor",
-    "productcolour",
-  ]),
-};
-
 function normalizeIdentifier(value: string) {
   return value
     .normalize("NFKC")
@@ -98,15 +83,7 @@ function normalizeIdentifier(value: string) {
 export function getDiagnosticAttribute(
   value: string,
 ): DiagnosticAttribute | null {
-  const normalized = normalizeIdentifier(value);
-
-  for (const attribute of comparableAttributes) {
-    if (attributeAliases[attribute.key].has(normalized)) {
-      return attribute.key;
-    }
-  }
-
-  return null;
+  return inferCatalogAttribute(value);
 }
 
 function splitScalarValue(value: string) {
@@ -261,11 +238,7 @@ function normalizeValueSet(values: string[]) {
 }
 
 export function normalizeDiagnosticMatchText(value: string) {
-  return value
-    .normalize("NFKC")
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLocaleLowerCase();
+  return normalizeCatalogText(value);
 }
 
 export function getDiagnosticExclusionReasons(
@@ -276,38 +249,7 @@ export function getDiagnosticExclusionReasons(
     return [];
   }
 
-  const productCollectionIds = new Set(product.collectionIds ?? []);
-  const reasons: DiagnosticWarning[] = [];
-
-  for (const collection of rules.excludedCollections) {
-    if (productCollectionIds.has(collection.id)) {
-      reasons.push({
-        code: `excluded-collection-${collection.id.split("/").at(-1)}`,
-        message: `Excluded collection: ${collection.title}`,
-      });
-    }
-  }
-
-  const normalizedTitle = normalizeDiagnosticMatchText(product.title);
-  const matchedTerms = new Set<string>();
-
-  for (const term of rules.excludedTitleTerms) {
-    const normalizedTerm = normalizeDiagnosticMatchText(term);
-
-    if (
-      normalizedTerm &&
-      normalizedTitle.includes(normalizedTerm) &&
-      !matchedTerms.has(normalizedTerm)
-    ) {
-      matchedTerms.add(normalizedTerm);
-      reasons.push({
-        code: `excluded-title-${matchedTerms.size}`,
-        message: `Excluded by title term: ${term}`,
-      });
-    }
-  }
-
-  return reasons;
+  return resolveProductExclusions(product, rules);
 }
 
 function equalSets(left: Set<string>, right: Set<string>) {

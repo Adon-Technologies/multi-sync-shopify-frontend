@@ -25,6 +25,7 @@
     "node": ">=20.19 <22 || >=22.12"
   },
   "dependencies": {
+    "@multi-sync/catalog-rules": "file:packages/catalog-rules",
     "@prisma/client": "^6.16.3",
     "@react-router/dev": "^7.12.0",
     "@react-router/fs-routes": "^7.12.0",

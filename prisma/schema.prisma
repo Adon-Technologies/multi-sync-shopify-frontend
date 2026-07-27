@@ -48,6 +48,7 @@ model Store {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   configuration Configuration?
+  xmlLinks      XmlLink[]
 
   @@index([status])
 }
@@ -106,4 +107,48 @@ model DiagnosticsSnapshotProduct {
   @@unique([shop, scanVersion, productId])
   @@index([shop, scanVersion, position])
   @@index([shop, scanVersion, status, position])
+}
+
+enum XmlFeedStatus {
+  NOT_GENERATED
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model XmlLink {
+  id                    String        @id @default(auto()) @map("_id") @db.ObjectId
+  storeId               String        @db.ObjectId
+  store                 Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  marketId              String
+  marketName            String
+  countryName           String?
+  countryCode           String?
+  currencyName          String?
+  currencyCode          String?
+  locale                String
+  token                 String        @unique
+  publicUrl             String
+  gcsObjectName         String?
+  status                XmlFeedStatus @default(NOT_GENERATED)
+  lastRefreshedAt       DateTime?
+  fileSizeBytes         BigInt?
+  lastError             String?
+  generationStartedAt   DateTime?
+  generationCompletedAt DateTime?
+  generationNumber      Int           @default(0)
+  processedProducts     Int           @default(0)
+  totalProducts         Int?
+  processedVariants     Int           @default(0)
+  generatedItems        Int           @default(0)
+  skippedItems          Int           @default(0)
+  leaseOwner            String?
+  leaseExpiresAt        DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@unique([storeId, marketId])
+  @@index([storeId, status])
+  @@index([status, leaseExpiresAt])
 }

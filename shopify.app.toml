@@ -2,7 +2,7 @@
 
 client_id = "f9deb604ed05729d64a9c9e59fa5044a"
 name = "Multi-sync"
-application_url = "https://example.com"
+application_url = "https://multi-sync.fly.dev"
 embedded = true
 
 [build]
@@ -24,7 +24,9 @@ api_version = "2026-04"
 scopes = "write_metaobject_definitions,write_metaobjects,write_products,read_products,read_inventory,write_inventory,read_locations,write_locations,read_locales,write_locales,read_markets,write_markets,read_translations"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://multi-sync.fly.dev/auth/callback"
+]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"

@@ -1,0 +1,98 @@
+.feeds {
+  display: grid;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tableHeader {
+  font-weight: 700;
+}
+
+.primaryLabel {
+  color: #303030;
+  font-weight: 650;
+}
+
+.marketDetails,
+.secondaryText,
+.progressText {
+  display: block;
+  margin-top: 3px;
+  color: #616161;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.feedUrl {
+  display: block;
+  color: #303030;
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.statusStack {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.loadingLine {
+  display: block;
+  width: 96px;
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #ebebeb 25%, #f7f7f7 37%, #ebebeb 63%);
+  background-size: 400% 100%;
+  animation: feedShimmer 1.4s ease infinite;
+}
+
+.loadingLineWide {
+  width: min(220px, 50vw);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+@keyframes feedShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@media (max-width: 489px) {
+  .header s-paragraph {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingLine {
+    animation: none;
+  }
+}

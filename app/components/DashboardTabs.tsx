@@ -4,11 +4,13 @@ import { Await } from "react-router";
 import { InlineLoadingValue, SectionError } from "./DashboardStates";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
+import { FeedsPanel } from "./FeedsPanel";
 import type {
   ProductStatistics,
   StoreInformation,
 } from "../services/dashboard.server";
 import type { DiagnosticsQueryScope } from "../services/diagnostics-query";
+import type { FeedQueryScope } from "../services/feed-query";
 import styles from "../styles/dashboard.module.css";
 
 const tabs = [
@@ -24,6 +26,7 @@ type StatisticKey = Exclude<keyof ProductStatistics, "generatedAt">;
 
 interface DashboardTabsProps {
   diagnosticsScope: DiagnosticsQueryScope | null;
+  feedScope: FeedQueryScope | null;
   statistics: Promise<ProductStatistics>;
   storeInformation: Promise<StoreInformation>;
   isRefreshing: boolean;
@@ -366,6 +369,20 @@ export function DashboardTabs(props: DashboardTabsProps) {
       </div>
 
       <div
+        aria-labelledby="tab-feeds"
+        className={styles.panel}
+        hidden={activeTab !== "feeds"}
+        id="panel-feeds"
+        role="tabpanel"
+        tabIndex={0}
+      >
+        <FeedsPanel
+          active={activeTab === "feeds"}
+          scope={props.feedScope}
+        />
+      </div>
+
+      <div
         aria-labelledby="tab-diagnostics"
         className={styles.panel}
         hidden={activeTab !== "diagnostics"}
@@ -398,14 +415,6 @@ export function DashboardTabs(props: DashboardTabsProps) {
         />
       </div>
 
-      <div
-        aria-labelledby="tab-feeds"
-        className={styles.emptyPanel}
-        hidden={activeTab !== "feeds"}
-        id="panel-feeds"
-        role="tabpanel"
-        tabIndex={0}
-      />
     </div>
   );
 }

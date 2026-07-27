@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -273,6 +274,7 @@ export function ConfigurationsPanel({
   active,
   scope,
 }: ConfigurationsPanelProps) {
+  const shopify = useAppBridge();
   const queryClient = useQueryClient();
   const queryScope = scope ?? {
     shop: "pending-shop",
@@ -282,7 +284,7 @@ export function ConfigurationsPanel({
   const [fieldErrors, setFieldErrors] = useState<ConfigurationFieldErrors>({});
   const [feedback, setFeedback] = useState<{
     message: string;
-    tone: "success" | "critical" | "info";
+    tone: "critical";
   } | null>(null);
   const [collectionSearch, setCollectionSearch] = useState("");
   const [debouncedCollectionSearch, setDebouncedCollectionSearch] =
@@ -449,6 +451,7 @@ export function ConfigurationsPanel({
     }
 
     try {
+      setFeedback(null);
       const result = await saveMutation.mutateAsync(validated);
       const configuration = result.configuration;
       setForm({
@@ -465,10 +468,7 @@ export function ConfigurationsPanel({
           current ? { ...current, configuration } : current,
       );
 
-      setFeedback({
-        message: "Configuration saved successfully.",
-        tone: "success",
-      });
+      shopify.toast.show("Configuration saved successfully.");
     } catch (error) {
       if (error instanceof ConfigurationRequestError) {
         setFieldErrors(error.fields ?? {});

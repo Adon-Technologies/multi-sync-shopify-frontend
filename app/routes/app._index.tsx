@@ -31,6 +31,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shop: session.shop,
       sessionId: session.id,
     },
+    feedScope: {
+      locale: null,
+      shop: session.shop,
+      sessionId: session.id,
+    },
   };
 };
 
@@ -42,7 +47,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const { diagnosticsScope, statistics, storeInformation } =
+  const { diagnosticsScope, feedScope, statistics, storeInformation } =
     useLoaderData<typeof loader>();
   const refreshFetcher = useFetcher<typeof action>();
   const isRefreshing = refreshFetcher.state !== "idle";
@@ -52,6 +57,7 @@ export default function Index() {
     <s-page heading="Multi Sync" inlineSize="large">
       <DashboardTabs
         diagnosticsScope={diagnosticsScope}
+        feedScope={feedScope}
         isRefreshing={isRefreshing}
         onRefresh={refresh}
         statistics={statistics}
@@ -66,6 +72,7 @@ export function HydrateFallback() {
     <s-page heading="Multi Sync" inlineSize="large">
       <DashboardTabs
         diagnosticsScope={null}
+        feedScope={null}
         isRefreshing={false}
         onRefresh={() => undefined}
         statistics={pendingStatistics}

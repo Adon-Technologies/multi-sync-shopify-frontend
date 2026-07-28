@@ -29,6 +29,10 @@
   min-width: 0;
 }
 
+.pricingFeature {
+  grid-column: 1 / -1;
+}
+
 .featureHeading h3 {
   color: #202223;
   font-size: 14px;
@@ -102,12 +106,17 @@
   color: #4a4a4a;
   cursor: pointer;
   display: inline-flex;
-  font-size: 17px;
+  font-size: 0;
   height: 20px;
   justify-content: center;
   line-height: 1;
   padding: 0;
   width: 20px;
+}
+
+.tag button::before {
+  content: "\00d7";
+  font-size: 17px;
 }
 
 .tag button:hover,
@@ -200,6 +209,106 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.attributeRulesCard {
+  display: grid;
+  gap: 16px;
+}
+
+.attributeRuleButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ruleStatuses {
+  border-top: 1px solid #ebebeb;
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.ruleStatus {
+  display: grid;
+  gap: 5px;
+}
+
+.rulesModalContent {
+  display: grid;
+  gap: 16px;
+  max-height: min(70vh, 680px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.rulesSectionBox,
+.ruleCard {
+  border: 1px solid #e3e3e3;
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.rulesCollectionSection,
+.ruleCollectionsField,
+.ruleCollectionPicker,
+.ruleValuePicker {
+  display: grid;
+  gap: 10px;
+}
+
+.ruleValueOptions {
+  display: grid;
+  gap: 4px;
+  max-height: 236px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ruleValueOptions s-button {
+  display: block;
+  width: 100%;
+}
+
+.rulesSectionHeader,
+.ruleCardHeader {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.rulesList {
+  display: grid;
+  gap: 12px;
+  max-height: 440px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.rulesEmptyState {
+  align-items: center;
+  border: 1px dashed #c9cccf;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  min-height: 80px;
+  padding: 16px;
+  text-align: center;
+}
+
+.ruleFieldLabel {
+  color: #202223;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 20px;
+}
+
+.ruleCardSkeleton {
+  display: grid;
+  gap: 8px;
+}
+
 @keyframes configuration-pulse {
   0%,
   100% {
@@ -225,5 +334,11 @@
   .optionModalToolbar {
     align-items: stretch;
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rulesSectionHeader,
+  .ruleCardHeader {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

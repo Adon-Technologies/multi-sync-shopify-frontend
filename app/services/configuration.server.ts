@@ -1,6 +1,26 @@
-import type { Prisma } from "@prisma/client";
+import type {
+  AttributeRuleJob,
+  AttributeRuleKind,
+  Prisma,
+} from "@prisma/client";
 
 import prisma from "../db.server";
+import { ensureAttributeRuleConfigurationFields } from "./attribute-rule-schema.server";
+import {
+  AttributeRulesValidationError,
+  hasAttributeRuleProductAccess,
+  parseStoredAgeRules,
+  parseStoredGenderRules,
+  validateAgeRules,
+  validateGenderRules,
+  type AgeRulesConfiguration,
+  type AttributeRuleKind as PublicAttributeRuleKind,
+  type GenderRulesConfiguration,
+} from "./attribute-rules";
+import {
+  CollectionVerificationError,
+  verifyShopCollections,
+} from "./collection-search.server";
 import { createDiagnosticsConfigurationRevision } from "./configuration-revision.server";
 import {
   DEFAULT_COLOR_OPTIONS,
@@ -42,16 +62,25 @@ interface ConfigurationBootstrapQuery {
 }
 
 interface StoredConfiguration {
+  ageRules: Prisma.JsonValue | null;
+  ageRulesAppliedVersion: number;
+  ageRulesVersion: number;
   alertsEmail: string;
   colorOption: string | null;
   colorOptions: string[];
   countryCode: string;
   createdAt: Date;
+  defaultAgeGroup: string | null;
+  defaultGender: string | null;
   diagnosticsRevision: string;
   excludedCollections: Prisma.JsonValue;
   excludedTitleTerms: string[];
+  genderRules: Prisma.JsonValue | null;
+  genderRulesAppliedVersion: number;
+  genderRulesVersion: number;
   id: string;
   optionMappingsInitialized: boolean;
+  showSalePriceInGoogleFeed: boolean;
   sizeOption: string | null;
   sizeOptions: string[];
   storeId: string;
@@ -59,8 +88,41 @@ interface StoredConfiguration {
 }
 
 export interface PublicConfiguration extends ConfigurationInput {
+  ageRules: AgeRulesConfiguration["rules"];
+  ageRulesAppliedVersion: number;
+  ageRulesVersion: number;
+  defaultAgeGroup: AgeRulesConfiguration["defaultAgeGroup"];
+  defaultGender: GenderRulesConfiguration["defaultGender"];
+  genderRules: GenderRulesConfiguration["rules"];
+  genderRulesAppliedVersion: number;
+  genderRulesVersion: number;
   id: string;
   updatedAt: string;
+}
+
+export interface PublicAttributeRuleJob {
+  generationCompletedAt: string | null;
+  generationStartedAt: string | null;
+  kind: PublicAttributeRuleKind;
+  lastError: string | null;
+  processedProducts: number;
+  ruleVersion: number;
+  status: "IDLE" | "QUEUED" | "PROCESSING" | "COMPLETED" | "FAILED";
+  totalProducts: number | null;
+}
+
+export interface PublicAttributeRuleJobs {
+  age: PublicAttributeRuleJob | null;
+  gender: PublicAttributeRuleJob | null;
+}
+
+export class AttributeRuleScopeError extends Error {
+  constructor() {
+    super(
+      "Gender and Age rules require the write_products Shopify scope. Deploy the updated app scopes and reauthorize the store.",
+    );
+    this.name = "AttributeRuleScopeError";
+  }
 }
 
 export interface DiagnosticsConfigurationRules {
@@ -74,25 +136,46 @@ export interface DiagnosticsConfigurationRules {
 function mapConfiguration(
   configuration: StoredConfiguration,
 ): PublicConfiguration {
+  const gender = parseStoredGenderRules(
+    configuration.defaultGender,
+    configuration.genderRules,
+  );
+  const age = parseStoredAgeRules(
+    configuration.defaultAgeGroup,
+    configuration.ageRules,
+  );
+
   return {
     id: configuration.id,
+    ageRules: age.rules,
+    ageRulesAppliedVersion: configuration.ageRulesAppliedVersion,
+    ageRulesVersion: configuration.ageRulesVersion,
     alertsEmail: configuration.alertsEmail,
     countryCode: configuration.countryCode,
+    defaultAgeGroup: age.defaultAgeGroup,
+    defaultGender: gender.defaultGender,
     colorOptions: normalizeOptionNames(configuration.colorOptions),
     sizeOptions: normalizeOptionNames(configuration.sizeOptions),
     excludedCollections: normalizeSelectedCollections(
       configuration.excludedCollections,
     ),
     excludedTitleTerms: configuration.excludedTitleTerms,
+    genderRules: gender.rules,
+    genderRulesAppliedVersion: configuration.genderRulesAppliedVersion,
+    genderRulesVersion: configuration.genderRulesVersion,
+    showSalePriceInGoogleFeed:
+      configuration.showSalePriceInGoogleFeed,
     updatedAt: configuration.updatedAt.toISOString(),
   };
 }
 
 function getStoredDiagnosticsRevision(configuration: StoredConfiguration) {
   return createDiagnosticsConfigurationRevision({
+    ageRulesAppliedVersion: configuration.ageRulesAppliedVersion,
     colorOptions: configuration.colorOptions,
     excludedCollections: configuration.excludedCollections,
     excludedTitleTerms: configuration.excludedTitleTerms,
+    genderRulesAppliedVersion: configuration.genderRulesAppliedVersion,
     sizeOptions: configuration.sizeOptions,
   });
 }
@@ -148,6 +231,7 @@ export async function getConfigurationPageData(
   admin: AdminGraphQLClient,
   session: { accessToken?: string; shop: string },
 ) {
+  await ensureAttributeRuleConfigurationFields();
   const store = await upsertInstalledStore(session);
   const existingConfiguration = await prisma.configuration.findUnique({
     where: { storeId: store.id },
@@ -183,6 +267,7 @@ export async function getConfigurationPageData(
         excludedCollections: [] as Prisma.InputJsonValue,
         excludedTitleTerms: [],
         optionMappingsInitialized: true,
+        showSalePriceInGoogleFeed: false,
         sizeOptions: [...DEFAULT_SIZE_OPTIONS],
         storeId: store.id,
       },
@@ -193,6 +278,7 @@ export async function getConfigurationPageData(
 
   return {
     configuration: mapConfiguration(configuration),
+    ruleJobs: await getAttributeRuleJobStatuses(store.id),
   };
 }
 
@@ -200,9 +286,24 @@ export async function saveConfigurationForShop(
   session: { accessToken?: string; shop: string },
   value: unknown,
 ) {
+  await ensureAttributeRuleConfigurationFields();
   const input = validateConfigurationInput(value);
   const store = await upsertInstalledStore(session);
-  const nextDiagnosticsRevision = createDiagnosticsConfigurationRevision(input);
+  const previousConfiguration = await prisma.configuration.findUnique({
+    where: { storeId: store.id },
+    select: {
+      ageRulesAppliedVersion: true,
+      genderRulesAppliedVersion: true,
+      showSalePriceInGoogleFeed: true,
+    },
+  });
+  const nextDiagnosticsRevision = createDiagnosticsConfigurationRevision({
+    ...input,
+    ageRulesAppliedVersion:
+      previousConfiguration?.ageRulesAppliedVersion ?? 0,
+    genderRulesAppliedVersion:
+      previousConfiguration?.genderRulesAppliedVersion ?? 0,
+  });
   const configuration = await prisma.configuration.upsert({
     where: { storeId: store.id },
     create: {
@@ -223,15 +324,39 @@ export async function saveConfigurationForShop(
       sizeOption: null,
     },
   });
+  const pricingChanged =
+    previousConfiguration === null
+      ? input.showSalePriceInGoogleFeed
+      : previousConfiguration.showSalePriceInGoogleFeed !==
+        input.showSalePriceInGoogleFeed;
+
+  if (pricingChanged) {
+    await prisma.xmlLink.updateMany({
+      where: {
+        gcsObjectName: { not: null },
+        storeId: store.id,
+      },
+      data: { requiresRefresh: true },
+    });
+  }
+  const staleFeedCount = await prisma.xmlLink.count({
+    where: {
+      gcsObjectName: { not: null },
+      requiresRefresh: true,
+      storeId: store.id,
+    },
+  });
 
   return {
     configuration: mapConfiguration(configuration),
+    feedRefreshRequired: staleFeedCount > 0,
   };
 }
 
 export async function getDiagnosticsConfigurationRules(
   shop: string,
 ): Promise<DiagnosticsConfigurationRules> {
+  await ensureAttributeRuleConfigurationFields();
   const store = await prisma.store.findUnique({
     where: { shopDomain: normalizeShopDomain(shop) },
     include: { configuration: true },
@@ -242,9 +367,11 @@ export async function getDiagnosticsConfigurationRules(
 
   if (configuration) {
     const revision = createDiagnosticsConfigurationRevision({
+      ageRulesAppliedVersion: configuration.ageRulesAppliedVersion,
       colorOptions: configuration.colorOptions,
       excludedCollections: configuration.excludedCollections,
       excludedTitleTerms: configuration.excludedTitleTerms,
+      genderRulesAppliedVersion: configuration.genderRulesAppliedVersion,
       sizeOptions: configuration.sizeOptions,
     });
 
@@ -270,5 +397,222 @@ export async function getDiagnosticsConfigurationRules(
     sizeOptions: normalizeOptionNames(
       configuration?.sizeOptions ?? DEFAULT_SIZE_OPTIONS,
     ),
+  };
+}
+
+function mapAttributeRuleJob(
+  job: AttributeRuleJob | null,
+): PublicAttributeRuleJob | null {
+  if (!job) return null;
+  return {
+    generationCompletedAt: job.generationCompletedAt?.toISOString() ?? null,
+    generationStartedAt: job.generationStartedAt?.toISOString() ?? null,
+    kind: job.kind === "GENDER" ? "gender" : "age",
+    lastError: job.lastError,
+    processedProducts: job.processedProducts,
+    ruleVersion: job.ruleVersion,
+    status: job.status,
+    totalProducts: job.totalProducts,
+  };
+}
+
+export async function getAttributeRuleJobStatuses(
+  storeId: string,
+): Promise<PublicAttributeRuleJobs> {
+  const jobs = await prisma.attributeRuleJob.findMany({
+    where: { storeId },
+  });
+  return {
+    age: mapAttributeRuleJob(
+      jobs.find(({ kind }) => kind === "AGE") ?? null,
+    ),
+    gender: mapAttributeRuleJob(
+      jobs.find(({ kind }) => kind === "GENDER") ?? null,
+    ),
+  };
+}
+
+export async function getAttributeRuleJobStatusesForShop(
+  session: { accessToken?: string; shop: string },
+) {
+  const store = await upsertInstalledStore(session);
+  return getAttributeRuleJobStatuses(store.id);
+}
+
+function assertAttributeRuleScopes(scope: string | undefined) {
+  if (!hasAttributeRuleProductAccess(scope)) {
+    throw new AttributeRuleScopeError();
+  }
+}
+
+async function verifiedRules<T extends GenderRulesConfiguration | AgeRulesConfiguration>(
+  admin: AdminGraphQLClient,
+  configuration: T,
+): Promise<T> {
+  const collections = configuration.rules.flatMap((rule) => rule.collections);
+  let verified: SelectedCollection[];
+  try {
+    verified = await verifyShopCollections(admin, collections);
+  } catch (error) {
+    if (error instanceof CollectionVerificationError) {
+      throw new AttributeRulesValidationError(error.message);
+    }
+    throw error;
+  }
+  const verifiedById = new Map(
+    verified.map((collection) => [collection.id, collection]),
+  );
+  return {
+    ...configuration,
+    rules: configuration.rules.map((rule) => ({
+      ...rule,
+      collections: rule.collections.map(
+        ({ id }) => verifiedById.get(id)!,
+      ),
+    })),
+  } as T;
+}
+
+export async function saveAttributeRulesForShop(
+  admin: AdminGraphQLClient,
+  session: {
+    accessToken?: string;
+    scope?: string;
+    shop: string;
+  },
+  kind: PublicAttributeRuleKind,
+  value: unknown,
+) {
+  await ensureAttributeRuleConfigurationFields();
+  assertAttributeRuleScopes(session.scope);
+  const store = await upsertInstalledStore(session);
+  const validated =
+    kind === "gender"
+      ? await verifiedRules(admin, validateGenderRules(value))
+      : await verifiedRules(admin, validateAgeRules(value));
+  const prismaKind: AttributeRuleKind =
+    kind === "gender" ? "GENDER" : "AGE";
+
+  const result = await prisma.$transaction(async (transaction) => {
+    const configuration =
+      kind === "gender"
+        ? await transaction.configuration.update({
+            where: { storeId: store.id },
+            data: {
+              defaultGender: (
+                validated as GenderRulesConfiguration
+              ).defaultGender,
+              genderRules:
+                validated.rules as unknown as Prisma.InputJsonValue,
+              genderRulesVersion: { increment: 1 },
+            },
+          })
+        : await transaction.configuration.update({
+            where: { storeId: store.id },
+            data: {
+              ageRules:
+                validated.rules as unknown as Prisma.InputJsonValue,
+              ageRulesVersion: { increment: 1 },
+              defaultAgeGroup: (
+                validated as AgeRulesConfiguration
+              ).defaultAgeGroup,
+            },
+          });
+    const ruleVersion =
+      kind === "gender"
+        ? configuration.genderRulesVersion
+        : configuration.ageRulesVersion;
+    const job = await transaction.attributeRuleJob.upsert({
+      where: {
+        storeId_kind: {
+          kind: prismaKind,
+          storeId: store.id,
+        },
+      },
+      create: {
+        kind: prismaKind,
+        ruleVersion,
+        status: "QUEUED",
+        storeId: store.id,
+      },
+      update: {
+        generationCompletedAt: null,
+        generationStartedAt: null,
+        lastError: null,
+        leaseExpiresAt: null,
+        leaseOwner: null,
+        processedProducts: 0,
+        ruleVersion,
+        status: "QUEUED",
+        totalProducts: null,
+      },
+    });
+
+    return { configuration, job };
+  });
+
+  return {
+    configuration: mapConfiguration(result.configuration),
+    job: mapAttributeRuleJob(result.job)!,
+    ruleJobs: await getAttributeRuleJobStatuses(store.id),
+  };
+}
+
+export async function retryAttributeRulesForShop(
+  session: {
+    accessToken?: string;
+    scope?: string;
+    shop: string;
+  },
+  kind: PublicAttributeRuleKind,
+) {
+  await ensureAttributeRuleConfigurationFields();
+  assertAttributeRuleScopes(session.scope);
+  const store = await upsertInstalledStore(session);
+  const configuration = await prisma.configuration.findUnique({
+    where: { storeId: store.id },
+    select: {
+      ageRulesVersion: true,
+      genderRulesVersion: true,
+    },
+  });
+  if (!configuration) {
+    throw new AttributeRulesValidationError(
+      "Open Configurations and save the rules before retrying.",
+    );
+  }
+
+  const prismaKind: AttributeRuleKind =
+    kind === "gender" ? "GENDER" : "AGE";
+  const ruleVersion =
+    kind === "gender"
+      ? configuration.genderRulesVersion
+      : configuration.ageRulesVersion;
+  const retried = await prisma.attributeRuleJob.updateMany({
+    where: {
+      kind: prismaKind,
+      status: "FAILED",
+      storeId: store.id,
+    },
+    data: {
+      generationCompletedAt: null,
+      generationStartedAt: null,
+      lastError: null,
+      leaseExpiresAt: null,
+      leaseOwner: null,
+      processedProducts: 0,
+      ruleVersion,
+      status: "QUEUED",
+      totalProducts: null,
+    },
+  });
+  if (retried.count === 0) {
+    throw new AttributeRulesValidationError(
+      "This rule job is not currently failed and does not need a retry.",
+    );
+  }
+
+  return {
+    ruleJobs: await getAttributeRuleJobStatuses(store.id),
   };
 }

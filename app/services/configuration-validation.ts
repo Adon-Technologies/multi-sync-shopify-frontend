@@ -10,6 +10,7 @@ export interface ConfigurationInput {
   sizeOptions: string[];
   excludedCollections: SelectedCollection[];
   excludedTitleTerms: string[];
+  showSalePriceInGoogleFeed: boolean;
 }
 
 export interface ConfigurationFieldErrors {
@@ -19,6 +20,7 @@ export interface ConfigurationFieldErrors {
   sizeOptions?: string;
   excludedCollections?: string;
   excludedTitleTerms?: string;
+  showSalePriceInGoogleFeed?: string;
 }
 
 export class ConfigurationValidationError extends Error {
@@ -176,6 +178,8 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
   const excludedTitleTerms = normalizeExcludedTitleTerms(
     input.excludedTitleTerms,
   );
+  const showSalePriceInGoogleFeed =
+    input.showSalePriceInGoogleFeed === true;
 
   if (!EMAIL_ADDRESS.test(alertsEmail) || alertsEmail.length > 254) {
     fields.alertsEmail = "Enter a valid email address.";
@@ -242,6 +246,14 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     fields.excludedTitleTerms = "Remove empty product-title terms.";
   }
 
+  if (
+    input.showSalePriceInGoogleFeed !== undefined &&
+    typeof input.showSalePriceInGoogleFeed !== "boolean"
+  ) {
+    fields.showSalePriceInGoogleFeed =
+      "Choose whether the Google feed should include sale prices.";
+  }
+
   if (Object.keys(fields).length > 0) {
     throw new ConfigurationValidationError(fields);
   }
@@ -253,5 +265,6 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     sizeOptions,
     excludedCollections,
     excludedTitleTerms,
+    showSalePriceInGoogleFeed,
   };
 }

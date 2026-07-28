@@ -63,6 +63,7 @@ test("configuration retains stable collection IDs and normalized store values", 
       },
     ],
     excludedTitleTerms: [" Sample "],
+    showSalePriceInGoogleFeed: true,
   });
 
   assert.deepEqual(configuration, {
@@ -77,5 +78,30 @@ test("configuration retains stable collection IDs and normalized store values", 
       },
     ],
     excludedTitleTerms: ["Sample"],
+    showSalePriceInGoogleFeed: true,
   });
+});
+
+test("sale-price feed setting defaults false and validates Boolean values", () => {
+  const base = {
+    alertsEmail: "alerts@example.com",
+    countryCode: "US",
+    colorOptions: ["Color"],
+    excludedCollections: [],
+    excludedTitleTerms: [],
+    sizeOptions: ["Size"],
+  };
+
+  assert.equal(
+    validateConfigurationInput(base).showSalePriceInGoogleFeed,
+    false,
+  );
+  assert.throws(
+    () =>
+      validateConfigurationInput({
+        ...base,
+        showSalePriceInGoogleFeed: "true",
+      }),
+    /Correct the highlighted configuration fields/,
+  );
 });

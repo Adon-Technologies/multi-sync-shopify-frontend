@@ -62,3 +62,25 @@ test("changing an option-name mapping invalidates the Diagnostics revision", () 
 
   assert.notEqual(previous, next);
 });
+
+test("completed Gender or Age rule jobs invalidate the Diagnostics revision", () => {
+  const base = createDiagnosticsConfigurationRevision({
+    ageRulesAppliedVersion: 0,
+    genderRulesAppliedVersion: 0,
+  });
+
+  assert.notEqual(
+    base,
+    createDiagnosticsConfigurationRevision({
+      ageRulesAppliedVersion: 0,
+      genderRulesAppliedVersion: 1,
+    }),
+  );
+  assert.notEqual(
+    base,
+    createDiagnosticsConfigurationRevision({
+      ageRulesAppliedVersion: 1,
+      genderRulesAppliedVersion: 0,
+    }),
+  );
+});

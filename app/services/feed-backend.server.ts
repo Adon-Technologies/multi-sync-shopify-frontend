@@ -38,8 +38,9 @@ function signature(
 
 export async function requestFeedBackend<TResponse>(
   session: FeedSession,
-  method: "GET" | "POST",
+  method: "DELETE" | "GET" | "POST",
   pathname: string,
+  input?: unknown,
 ) {
   const store = await upsertInstalledStore(session);
 
@@ -51,7 +52,7 @@ export async function requestFeedBackend<TResponse>(
   }
 
   const timestamp = Date.now().toString();
-  const body = "";
+  const body = input === undefined ? "" : JSON.stringify(input);
   let response: Response;
 
   try {
@@ -59,6 +60,7 @@ export async function requestFeedBackend<TResponse>(
       method,
       headers: {
         Accept: "application/json",
+        ...(body ? { "Content-Type": "application/json" } : {}),
         "x-multi-sync-shop": store.shopDomain,
         "x-multi-sync-signature": signature(
           store.accessToken,
@@ -69,6 +71,7 @@ export async function requestFeedBackend<TResponse>(
         ),
         "x-multi-sync-timestamp": timestamp,
       },
+      ...(body ? { body } : {}),
     });
   } catch {
     throw new FeedBackendError(

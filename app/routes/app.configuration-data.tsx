@@ -2,9 +2,14 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { searchShopCollections } from "../services/collection-search.server";
 import {
+  AttributeRuleScopeError,
+  getAttributeRuleJobStatusesForShop,
   getConfigurationPageData,
+  retryAttributeRulesForShop,
+  saveAttributeRulesForShop,
   saveConfigurationForShop,
 } from "../services/configuration.server";
+import { AttributeRulesValidationError } from "../services/attribute-rules";
 import { ConfigurationValidationError } from "../services/configuration-validation";
 import { getShopVariantOptionNames } from "../services/variant-option-discovery.server";
 import { authenticate } from "../shopify.server";
@@ -30,6 +35,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return Response.json({ ok: true, intent, optionNames });
     }
 
+    if (intent === "rule-status") {
+      const ruleJobs = await getAttributeRuleJobStatusesForShop(session);
+      return Response.json({ ok: true, intent, ruleJobs });
+    }
+
     const data = await getConfigurationPageData(admin, session);
     return Response.json({ ok: true, intent: "configuration", ...data });
   } catch (error) {
@@ -50,22 +60,50 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
   try {
     const value = (await request.json()) as unknown;
-    const result = await saveConfigurationForShop(session, value);
+    const input =
+      typeof value === "object" && value !== null && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null;
+    const result =
+      input?.intent === "save-attribute-rules" &&
+      (input.kind === "gender" || input.kind === "age")
+        ? await saveAttributeRulesForShop(
+            admin,
+            session,
+            input.kind,
+            input.configuration,
+          )
+        : input?.intent === "retry-attribute-rules" &&
+            (input.kind === "gender" || input.kind === "age")
+          ? await retryAttributeRulesForShop(session, input.kind)
+          : await saveConfigurationForShop(session, value);
 
     return Response.json({ ok: true, ...result });
   } catch (error) {
-    if (error instanceof ConfigurationValidationError) {
+    if (
+      error instanceof ConfigurationValidationError ||
+      error instanceof AttributeRulesValidationError
+    ) {
       return Response.json(
         {
           ok: false,
           error: error.message,
-          fields: error.fields,
+          ...(error instanceof ConfigurationValidationError
+            ? { fields: error.fields }
+            : {}),
         },
         { status: 400 },
+      );
+    }
+
+    if (error instanceof AttributeRuleScopeError) {
+      return Response.json(
+        { ok: false, error: error.message },
+        { status: 403 },
       );
     }
 

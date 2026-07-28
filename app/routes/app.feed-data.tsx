@@ -16,6 +16,7 @@ export type FeedStatus =
 
 export interface FeedMetadata {
   createdAt: string;
+  feedType: "PRIMARY" | "ADDITIONAL";
   fileSizeBytes: string | null;
   generatedItems: number;
   generationCompletedAt: string | null;
@@ -27,6 +28,7 @@ export interface FeedMetadata {
   processedProducts: number;
   processedVariants: number;
   publicUrl: string;
+  requiresRefresh: boolean;
   skippedItems: number;
   status: FeedStatus;
   totalProducts: number | null;
@@ -39,13 +41,22 @@ export interface FeedMarket {
   currencyCode: string;
   currencyName: string | null;
   id: string;
+  languageName: string | null;
   locale: string;
   name: string;
+}
+
+export interface ActiveFeedGeneration {
+  feedId: string;
+  feedType: "PRIMARY" | "ADDITIONAL";
+  label: string;
+  status: "QUEUED" | "PROCESSING";
 }
 
 export type FeedDataResponse =
   | {
       ok: true;
+      activeGeneration: ActiveFeedGeneration | null;
       feed: FeedMetadata | null;
       market: FeedMarket | null;
       backendUnavailable: boolean;
@@ -99,6 +110,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         return Response.json({
           ok: true,
           ...stored,
+          activeGeneration: null,
           backendUnavailable: true,
           marketUnavailable: true,
         } satisfies FeedDataResponse);

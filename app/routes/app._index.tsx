@@ -6,7 +6,10 @@ import type {
 import { useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
-import { DashboardTabs } from "../components/DashboardTabs";
+import {
+  DashboardTabs,
+  parseDashboardTab,
+} from "../components/DashboardTabs";
 import {
   getProductStatistics,
   getStoreInformation,
@@ -21,6 +24,9 @@ const pendingStoreInformation = new Promise<StoreInformation>(() => undefined);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+  const initialTab = parseDashboardTab(
+    new URL(request.url).searchParams.get("tab"),
+  );
 
   return {
     // These promises start concurrently and stream independently. React
@@ -36,6 +42,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shop: session.shop,
       sessionId: session.id,
     },
+    initialTab,
   };
 };
 
@@ -47,8 +54,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const { diagnosticsScope, feedScope, statistics, storeInformation } =
-    useLoaderData<typeof loader>();
+  const {
+    diagnosticsScope,
+    feedScope,
+    initialTab,
+    statistics,
+    storeInformation,
+  } = useLoaderData<typeof loader>();
   const refreshFetcher = useFetcher<typeof action>();
   const isRefreshing = refreshFetcher.state !== "idle";
   const refresh = () => refreshFetcher.submit(null, { method: "post" });
@@ -58,6 +70,7 @@ export default function Index() {
       <DashboardTabs
         diagnosticsScope={diagnosticsScope}
         feedScope={feedScope}
+        initialTab={initialTab}
         isRefreshing={isRefreshing}
         onRefresh={refresh}
         statistics={statistics}

@@ -83,7 +83,9 @@
 }
 
 .refreshArea {
+  display: flex;
   flex: 0 0 auto;
+  gap: 8px;
 }
 
 .cardGrid {
@@ -111,11 +113,11 @@
 
 .descriptionRow {
   display: grid;
-  grid-template-columns: minmax(86px, 0.65fr) minmax(0, 1.35fr);
-  gap: 16px;
+  grid-template-columns: minmax(78px, max-content) minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
-  min-height: 48px;
-  padding: 10px 0;
+  min-height: 38px;
+  padding: 6px 0;
   border-bottom: 1px solid #ebebeb;
 }
 
@@ -142,6 +144,12 @@
   font-size: 14px;
   font-weight: 550;
   text-align: end;
+}
+
+.badgeValue {
+  display: inline-flex;
+  width: 100%;
+  justify-content: flex-end;
 }
 
 .emptyPanel {
@@ -231,6 +239,10 @@
 
   .descriptionRow dd {
     text-align: start;
+  }
+
+  .badgeValue {
+    justify-content: flex-start;
   }
 }
 

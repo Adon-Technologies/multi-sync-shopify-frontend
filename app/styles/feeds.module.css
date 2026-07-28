@@ -10,6 +10,108 @@
   gap: 16px;
 }
 
+.additionalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 0 16px;
+}
+
+.addMarketForm {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e1e3e5;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.additionalFormList {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.selectorGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.selectorField {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.selectorLabel {
+  color: #303030;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 20px;
+}
+
+.selectorField s-clickable {
+  min-height: 34px;
+}
+
+.selectorPopoverContent {
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 308px;
+  min-height: 0;
+}
+
+.selectorResults {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.selectorResults s-button {
+  display: block;
+  text-align: left;
+  width: 100%;
+}
+
+.selectorEmpty {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 64px;
+  padding: 8px;
+  text-align: center;
+}
+
+.formActions,
+.inlineError,
+.inlineLoading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.formError,
+.rowError {
+  color: #8e0b21;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.rowError {
+  max-width: 280px;
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
 .tableHeader {
   font-weight: 700;
 }
@@ -31,11 +133,22 @@
 
 .feedUrl {
   display: block;
-  color: #303030;
+  color: #005bd3;
   font-size: 13px;
   line-height: 20px;
   overflow-wrap: anywhere;
+  text-decoration: none;
   white-space: normal;
+}
+
+.feedUrl:hover {
+  text-decoration: underline;
+}
+
+.feedUrl:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid #005bd3;
+  outline-offset: 2px;
 }
 
 .actions {
@@ -88,6 +201,15 @@
 @media (max-width: 489px) {
   .header s-paragraph {
     display: none;
+  }
+
+  .additionalHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .selectorGrid {
+    grid-template-columns: 1fr;
   }
 }
 

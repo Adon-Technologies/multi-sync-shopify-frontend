@@ -1,5 +1,13 @@
-import { Suspense, useRef, useState, type KeyboardEvent } from "react";
+import {
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { Await } from "react-router";
+import { useAppBridge } from "@shopify/app-bridge-react";
+import { useQuery } from "@tanstack/react-query";
 
 import { InlineLoadingValue, SectionError } from "./DashboardStates";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
@@ -9,6 +17,7 @@ import type {
   ProductStatistics,
   StoreInformation,
 } from "../services/dashboard.server";
+import { configurationQueryOptions } from "../services/configuration-query";
 import type { DiagnosticsQueryScope } from "../services/diagnostics-query";
 import type { FeedQueryScope } from "../services/feed-query";
 import styles from "../styles/dashboard.module.css";
@@ -20,17 +29,23 @@ const tabs = [
   { id: "configurations", label: "Configurations" },
 ] as const;
 
-type TabId = (typeof tabs)[number]["id"];
+export type DashboardTabId = (typeof tabs)[number]["id"];
 type SectionState = "loading" | "ready" | "error";
 type StatisticKey = Exclude<keyof ProductStatistics, "generatedAt">;
 
 interface DashboardTabsProps {
   diagnosticsScope: DiagnosticsQueryScope | null;
   feedScope: FeedQueryScope | null;
+  initialTab?: DashboardTabId;
   statistics: Promise<ProductStatistics>;
   storeInformation: Promise<StoreInformation>;
   isRefreshing: boolean;
   onRefresh: () => void;
+}
+
+interface DashboardPanelContentProps extends DashboardTabsProps {
+  active: boolean;
+  onOpenFeeds: () => void;
 }
 
 interface StatisticsTableProps {
@@ -41,10 +56,54 @@ interface StatisticsTableProps {
 }
 
 interface StoreInformationProps {
+  alertsEmail?: string | null;
+  alertsEmailState: SectionState;
   store?: StoreInformation;
   state: SectionState;
   isRetrying: boolean;
   onRetry: () => void;
+}
+
+export function parseDashboardTab(value: string | null): DashboardTabId {
+  return tabs.some(({ id }) => id === value)
+    ? (value as DashboardTabId)
+    : "dashboard";
+}
+
+function activeTabStorageKey(shop: string) {
+  return `multi-sync:${shop}:active-tab`;
+}
+
+function storedActiveTab(shop: string) {
+  try {
+    return window.localStorage.getItem(activeTabStorageKey(shop));
+  } catch {
+    return null;
+  }
+}
+
+function persistActiveTab(tabId: DashboardTabId, shop?: string) {
+  if (typeof window === "undefined") return;
+
+  const url = new URL(window.location.href);
+  if (tabId === "dashboard") {
+    url.searchParams.delete("tab");
+  } else {
+    url.searchParams.set("tab", tabId);
+  }
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+  if (shop) {
+    try {
+      window.localStorage.setItem(activeTabStorageKey(shop), tabId);
+    } catch {
+      // The URL remains the primary persistence mechanism when embedded
+      // browser storage is unavailable.
+    }
+  }
 }
 
 function formatCount(value: number) {
@@ -127,6 +186,8 @@ function StatisticsTable({
 }
 
 function StoreInformationCard({
+  alertsEmail,
+  alertsEmailState,
   store,
   state,
   isRetrying,
@@ -139,8 +200,9 @@ function StoreInformationCard({
     value: string | null | undefined,
     label: string,
     skeletonWidth: "small" | "large",
+    valueState = state,
   ) => {
-    if (state === "loading") {
+    if (valueState === "loading") {
       return (
         <InlineLoadingValue
           label={`Loading store ${label}`}
@@ -149,11 +211,11 @@ function StoreInformationCard({
       );
     }
 
-    if (state === "error") {
+    if (valueState === "error") {
       return <span className={styles.unavailableValue}>Unavailable</span>;
     }
 
-    return value ?? "Not available";
+    return value || "Not available";
   };
 
   return (
@@ -180,10 +242,18 @@ function StoreInformationCard({
           <dt>Currency</dt>
           <dd>
             {state === "ready" && store?.currency ? (
-              <s-badge>{store.currency}</s-badge>
+              <span className={styles.badgeValue}>
+                <s-badge>{store.currency}</s-badge>
+              </span>
             ) : (
               renderValue(store?.currency, "currency", "small")
             )}
+          </dd>
+        </div>
+        <div className={styles.descriptionRow}>
+          <dt>Email</dt>
+          <dd>
+            {renderValue(alertsEmail, "email", "large", alertsEmailState)}
           </dd>
         </div>
       </dl>
@@ -192,11 +262,36 @@ function StoreInformationCard({
 }
 
 function DashboardPanelContent({
+  active,
+  diagnosticsScope,
   statistics,
   storeInformation,
   isRefreshing,
+  onOpenFeeds,
   onRefresh,
-}: DashboardTabsProps) {
+}: DashboardPanelContentProps) {
+  const configurationScope = diagnosticsScope ?? {
+    shop: "pending-shop",
+    sessionId: "pending-session",
+  };
+  const configurationQuery = useQuery({
+    ...configurationQueryOptions(configurationScope),
+    enabled: active && Boolean(diagnosticsScope),
+  });
+  const alertsEmailState: SectionState =
+    !diagnosticsScope ||
+    (configurationQuery.isPending && !configurationQuery.data)
+      ? "loading"
+      : configurationQuery.isError
+        ? "error"
+        : "ready";
+  const refreshDashboard = () => {
+    onRefresh();
+    if (diagnosticsScope) {
+      void configurationQuery.refetch();
+    }
+  };
+
   return (
     <>
       <div className={styles.dashboardHeader}>
@@ -210,11 +305,14 @@ function DashboardPanelContent({
           <span aria-live="polite" className={styles.visuallyHidden}>
             {isRefreshing ? "Refreshing dashboard data" : ""}
           </span>
+          <s-button onClick={onOpenFeeds} variant="primary">
+            Open feeds
+          </s-button>
           <s-button
             accessibilityLabel="Refresh dashboard data"
             icon="refresh"
             loading={isRefreshing ? true : undefined}
-            onClick={onRefresh}
+            onClick={refreshDashboard}
             variant="secondary"
           >
             Refresh
@@ -232,7 +330,7 @@ function DashboardPanelContent({
               fallback={
                 <StatisticsTable
                   isRetrying={isRefreshing}
-                  onRetry={onRefresh}
+                  onRetry={refreshDashboard}
                   state="loading"
                 />
               }
@@ -241,7 +339,7 @@ function DashboardPanelContent({
                 errorElement={
                   <StatisticsTable
                     isRetrying={isRefreshing}
-                    onRetry={onRefresh}
+                    onRetry={refreshDashboard}
                     state="error"
                   />
                 }
@@ -250,7 +348,7 @@ function DashboardPanelContent({
                 {(loadedStatistics) => (
                   <StatisticsTable
                     isRetrying={isRefreshing}
-                    onRetry={onRefresh}
+                    onRetry={refreshDashboard}
                     state="ready"
                     statistics={loadedStatistics}
                   />
@@ -264,8 +362,10 @@ function DashboardPanelContent({
           <Suspense
             fallback={
               <StoreInformationCard
+                alertsEmail={configurationQuery.data?.configuration.alertsEmail}
+                alertsEmailState={alertsEmailState}
                 isRetrying={isRefreshing}
-                onRetry={onRefresh}
+                onRetry={refreshDashboard}
                 state="loading"
               />
             }
@@ -273,8 +373,12 @@ function DashboardPanelContent({
             <Await
               errorElement={
                 <StoreInformationCard
+                  alertsEmail={
+                    configurationQuery.data?.configuration.alertsEmail
+                  }
+                  alertsEmailState={alertsEmailState}
                   isRetrying={isRefreshing}
-                  onRetry={onRefresh}
+                  onRetry={refreshDashboard}
                   state="error"
                 />
               }
@@ -282,8 +386,12 @@ function DashboardPanelContent({
             >
               {(store) => (
                 <StoreInformationCard
+                  alertsEmail={
+                    configurationQuery.data?.configuration.alertsEmail
+                  }
+                  alertsEmailState={alertsEmailState}
                   isRetrying={isRefreshing}
-                  onRetry={onRefresh}
+                  onRetry={refreshDashboard}
                   state="ready"
                   store={store}
                 />
@@ -297,11 +405,47 @@ function DashboardPanelContent({
 }
 
 export function DashboardTabs(props: DashboardTabsProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const shopify = useAppBridge();
+  const [activeTab, setActiveTab] = useState<DashboardTabId>(
+    props.initialTab ?? "dashboard",
+  );
+  const [hasUnsavedConfigurationChanges, setHasUnsavedConfigurationChanges] =
+    useState(false);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  const selectTab = (tabId: TabId, tabIndex?: number) => {
+  useEffect(() => {
+    const shop = props.diagnosticsScope?.shop;
+    if (
+      !shop ||
+      new URL(window.location.href).searchParams.has("tab")
+    ) {
+      return;
+    }
+
+    const storedTab = parseDashboardTab(
+      storedActiveTab(shop),
+    );
+    setActiveTab(storedTab);
+  }, [props.diagnosticsScope?.shop]);
+
+  const selectTab = async (
+    tabId: DashboardTabId,
+    tabIndex?: number,
+  ) => {
+    if (
+      tabId !== activeTab &&
+      activeTab === "configurations" &&
+      hasUnsavedConfigurationChanges
+    ) {
+      try {
+        await shopify.saveBar.leaveConfirmation();
+      } catch {
+        return;
+      }
+    }
+
     setActiveTab(tabId);
+    persistActiveTab(tabId, props.diagnosticsScope?.shop);
     if (tabIndex !== undefined) {
       tabRefs.current[tabIndex]?.focus();
     }
@@ -325,7 +469,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
 
     if (nextIndex !== undefined) {
       event.preventDefault();
-      selectTab(tabs[nextIndex].id, nextIndex);
+      void selectTab(tabs[nextIndex].id, nextIndex);
     }
   };
 
@@ -342,7 +486,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
               className={styles.tab}
               id={`tab-${tab.id}`}
               key={tab.id}
-              onClick={() => selectTab(tab.id)}
+              onClick={() => void selectTab(tab.id)}
               onKeyDown={(event) => handleKeyDown(event, index)}
               ref={(element) => {
                 tabRefs.current[index] = element;
@@ -365,7 +509,11 @@ export function DashboardTabs(props: DashboardTabsProps) {
         role="tabpanel"
         tabIndex={0}
       >
-        <DashboardPanelContent {...props} />
+        <DashboardPanelContent
+          {...props}
+          active={activeTab === "dashboard"}
+          onOpenFeeds={() => void selectTab("feeds", 1)}
+        />
       </div>
 
       <div
@@ -376,10 +524,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
         role="tabpanel"
         tabIndex={0}
       >
-        <FeedsPanel
-          active={activeTab === "feeds"}
-          scope={props.feedScope}
-        />
+        <FeedsPanel active={activeTab === "feeds"} scope={props.feedScope} />
       </div>
 
       <div
@@ -409,12 +554,14 @@ export function DashboardTabs(props: DashboardTabsProps) {
         role="tabpanel"
         tabIndex={0}
       >
-        <ConfigurationsPanel
-          active={activeTab === "configurations"}
-          scope={props.diagnosticsScope}
-        />
+        {activeTab === "configurations" ? (
+          <ConfigurationsPanel
+            active
+            onUnsavedChangesChange={setHasUnsavedConfigurationChanges}
+            scope={props.diagnosticsScope}
+          />
+        ) : null}
       </div>
-
     </div>
   );
 }

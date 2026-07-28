@@ -39,16 +39,19 @@ enum StoreStatus {
 }
 
 model Store {
-  id            String         @id @default(auto()) @map("_id") @db.ObjectId
-  shopDomain    String         @unique
-  accessToken   String?
-  status        StoreStatus    @default(INSTALLED)
-  installedAt   DateTime       @default(now())
-  uninstalledAt DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  configuration Configuration?
-  xmlLinks      XmlLink[]
+  id                     String             @id @default(auto()) @map("_id") @db.ObjectId
+  shopDomain             String             @unique
+  accessToken            String?
+  status                 StoreStatus        @default(INSTALLED)
+  installedAt            DateTime           @default(now())
+  uninstalledAt          DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  configuration          Configuration?
+  xmlLinks               XmlLink[]
+  attributeRuleJobs      AttributeRuleJob[]
+  feedGenerationFeedId   String?
+  feedGenerationLockedAt DateTime?
 
   @@index([status])
 }
@@ -68,10 +71,66 @@ model Configuration {
   excludedCollections       Json
   excludedTitleTerms        String[]
   diagnosticsRevision       String   @default("")
+  showSalePriceInGoogleFeed Boolean  @default(false)
+  defaultGender             String?
+  defaultAgeGroup           String?
+  genderRules               Json?
+  ageRules                  Json?
+  genderRulesVersion        Int      @default(0)
+  ageRulesVersion           Int      @default(0)
+  genderRulesAppliedVersion Int      @default(0)
+  ageRulesAppliedVersion    Int      @default(0)
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
   @@index([updatedAt])
+}
+
+enum AttributeRuleKind {
+  GENDER
+  AGE
+}
+
+enum AttributeRuleJobStatus {
+  IDLE
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model AttributeRuleJob {
+  id                    String                 @id @default(auto()) @map("_id") @db.ObjectId
+  storeId               String                 @db.ObjectId
+  store                 Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  kind                  AttributeRuleKind
+  ruleVersion           Int
+  status                AttributeRuleJobStatus @default(QUEUED)
+  processedProducts     Int                    @default(0)
+  totalProducts         Int?
+  lastError             String?
+  generationStartedAt   DateTime?
+  generationCompletedAt DateTime?
+  leaseOwner            String?
+  leaseExpiresAt        DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@unique([storeId, kind])
+  @@index([status, leaseExpiresAt])
+}
+
+model AttributeRuleMatch {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  jobId       String   @db.ObjectId
+  ruleVersion Int
+  productId   String
+  value       String
+  ruleIndex   Int
+  createdAt   DateTime @default(now())
+
+  @@unique([jobId, ruleVersion, productId])
+  @@index([jobId, ruleVersion])
 }
 
 model DiagnosticsSnapshot {
@@ -117,17 +176,27 @@ enum XmlFeedStatus {
   FAILED
 }
 
+enum XmlFeedType {
+  PRIMARY
+  ADDITIONAL
+}
+
 model XmlLink {
   id                    String        @id @default(auto()) @map("_id") @db.ObjectId
   storeId               String        @db.ObjectId
   store                 Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  feedType              XmlFeedType   @default(PRIMARY)
   marketId              String
   marketName            String
+  marketSlug            String?
   countryName           String?
+  countrySlug           String?
   countryCode           String?
   currencyName          String?
   currencyCode          String?
   locale                String
+  languageName          String?
+  storefrontUrl         String?
   token                 String        @unique
   publicUrl             String
   gcsObjectName         String?
@@ -143,12 +212,14 @@ model XmlLink {
   processedVariants     Int           @default(0)
   generatedItems        Int           @default(0)
   skippedItems          Int           @default(0)
+  requiresRefresh       Boolean       @default(false)
   leaseOwner            String?
   leaseExpiresAt        DateTime?
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
-  @@unique([storeId, marketId])
+  @@unique([storeId, marketId, countryCode, locale])
+  @@index([storeId, feedType])
   @@index([storeId, status])
   @@index([status, leaseExpiresAt])
 }

@@ -11,9 +11,11 @@ import {
 } from "./configuration-validation.ts";
 
 export interface DiagnosticsRevisionInput {
+  ageRulesAppliedVersion?: number | unknown;
   colorOptions?: string[] | unknown;
   excludedCollections?: SelectedCollection[] | unknown;
   excludedTitleTerms?: string[] | unknown;
+  genderRulesAppliedVersion?: number | unknown;
   sizeOptions?: string[] | unknown;
 }
 
@@ -37,10 +39,20 @@ export function createDiagnosticsConfigurationRevision(
     .map((term) => term.toLocaleLowerCase())
     .sort();
   const normalizedInput = {
+    ageRulesAppliedVersion:
+      typeof input.ageRulesAppliedVersion === "number" &&
+      Number.isSafeInteger(input.ageRulesAppliedVersion)
+        ? input.ageRulesAppliedVersion
+        : 0,
     colorOptions: normalizeOptions(input.colorOptions, DEFAULT_COLOR_OPTIONS),
     sizeOptions: normalizeOptions(input.sizeOptions, DEFAULT_SIZE_OPTIONS),
     excludedCollectionIds: collectionIds,
     excludedTitleTerms: titleTerms,
+    genderRulesAppliedVersion:
+      typeof input.genderRulesAppliedVersion === "number" &&
+      Number.isSafeInteger(input.genderRulesAppliedVersion)
+        ? input.genderRulesAppliedVersion
+        : 0,
   };
 
   return createHash("sha256")

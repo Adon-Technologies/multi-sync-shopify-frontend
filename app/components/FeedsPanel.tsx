@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
   useMutation,
@@ -7,16 +7,38 @@ import {
 } from "@tanstack/react-query";
 
 import type {
+  AdditionalFeedActionResponse,
+  AdditionalFeedEntry,
+  AdditionalFeedsResponse,
+  AdditionalMarketOption,
+} from "../routes/app.additional-feeds";
+import type {
   FeedDataResponse,
   FeedMetadata,
   FeedStatus,
 } from "../routes/app.feed-data";
 import {
+  additionalFormCombinationKey,
+  availableLanguagesForForm,
+  createAdditionalMarketForm,
+  reconcileAdditionalMarketForms,
+  selectedAdditionalFormCombinations,
+  visibleAdditionalFeedEntries,
+  type AdditionalMarketFormState,
+} from "../services/additional-feed-forms";
+import {
+  additionalFeedsQueryOptions,
+  additionalLanguagesQueryOptions,
+  additionalMarketOptionsQueryOptions,
+  deleteAdditionalFeed,
   feedKeys,
+  generateAdditionalFeed,
   generatePrimaryFeed,
   primaryFeedQueryOptions,
+  refreshAdditionalFeed,
   type FeedQueryScope,
 } from "../services/feed-query";
+import { shouldPollPrimaryFeed } from "../services/feed-generation-state";
 import styles from "../styles/feeds.module.css";
 
 interface FeedsPanelProps {
@@ -26,12 +48,25 @@ interface FeedsPanelProps {
 
 const pendingStatuses = new Set<FeedStatus>(["QUEUED", "PROCESSING"]);
 
-function isPendingFeed(data: FeedDataResponse | undefined) {
+function isSuccessfulFeedData(
+  data: FeedDataResponse | undefined,
+): data is Extract<FeedDataResponse, { ok: true }> {
+  return data?.ok === true;
+}
+
+function hasPendingAdditionalFeeds(
+  data:
+    | {
+        activeGeneration?: unknown;
+        feeds?: AdditionalFeedEntry[];
+        ok?: boolean;
+      }
+    | undefined,
+) {
   return Boolean(
     data?.ok &&
-      !data.backendUnavailable &&
-      data.feed &&
-      pendingStatuses.has(data.feed.status),
+      (data.activeGeneration ||
+        data.feeds?.some(({ feed }) => pendingStatuses.has(feed.status))),
   );
 }
 
@@ -79,7 +114,7 @@ function statusLabel(status: FeedStatus) {
     case "PROCESSING":
       return "Generating";
     case "COMPLETED":
-      return "Ready";
+      return "Up to date";
     case "FAILED":
       return "Failed";
     default:
@@ -87,7 +122,17 @@ function statusLabel(status: FeedStatus) {
   }
 }
 
-function StatusBadge({ status }: { status: FeedStatus }) {
+function StatusBadge({
+  requiresRefresh,
+  status,
+}: {
+  requiresRefresh: boolean;
+  status: FeedStatus;
+}) {
+  if (status === "COMPLETED" && requiresRefresh) {
+    return <s-badge tone="warning">Refresh required</s-badge>;
+  }
+
   const tone =
     status === "COMPLETED"
       ? "success"
@@ -140,6 +185,394 @@ function generationProgress(feed: FeedMetadata) {
     : "Preparing catalog";
 }
 
+interface AdditionalMarketFormProps {
+  active: boolean;
+  endpoint: string;
+  form: AdditionalMarketFormState;
+  forms: AdditionalMarketFormState[];
+  generationLocked: boolean;
+  isGenerating: boolean;
+  marketError: boolean;
+  marketLoading: boolean;
+  marketOptions: AdditionalMarketOption[];
+  onGenerate: (form: AdditionalMarketFormState) => void;
+  onRemove: (formId: string) => void;
+  onUpdate: (
+    formId: string,
+    update: Partial<AdditionalMarketFormState>,
+  ) => void;
+  queryScope: FeedQueryScope;
+  scopeReady: boolean;
+}
+
+function AdditionalMarketForm({
+  active,
+  endpoint,
+  form,
+  forms,
+  generationLocked,
+  isGenerating,
+  marketError,
+  marketLoading,
+  marketOptions,
+  onGenerate,
+  onRemove,
+  onUpdate,
+  queryScope,
+  scopeReady,
+}: AdditionalMarketFormProps) {
+  const [marketSearch, setMarketSearch] = useState("");
+  const [languageSearch, setLanguageSearch] = useState("");
+  const marketSearchRef =
+    useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const languageSearchRef =
+    useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const marketPopoverId = `${form.id}-market-popover`;
+  const languagePopoverId = `${form.id}-language-popover`;
+  const languagesQuery = useQuery({
+    ...additionalLanguagesQueryOptions(
+      queryScope,
+      form.market?.marketId ?? "",
+      form.market?.countryCode ?? "",
+      endpoint,
+    ),
+    enabled:
+      active && scopeReady && Boolean(form.market) && !form.pendingFeedId,
+  });
+  const selectableMarkets = useMemo(() => {
+    if (
+      !form.market ||
+      marketOptions.some(({ value }) => value === form.market?.value)
+    ) {
+      return marketOptions;
+    }
+    return [form.market, ...marketOptions];
+  }, [form.market, marketOptions]);
+  const selectableLanguages = useMemo(() => {
+    if (!form.market || !languagesQuery.data?.ok) {
+      return form.language ? [form.language] : [];
+    }
+
+    const available = availableLanguagesForForm(
+      languagesQuery.data.languages,
+      form.market,
+      forms,
+      form.id,
+    );
+    if (
+      form.language &&
+      !available.some(
+        ({ locale }) =>
+          locale.toLocaleLowerCase() ===
+          form.language?.locale.toLocaleLowerCase(),
+      )
+    ) {
+      return [form.language, ...available];
+    }
+    return available;
+  }, [
+    form.id,
+    form.language,
+    form.market,
+    forms,
+    languagesQuery.data,
+  ]);
+  const selectionLocked = isGenerating || Boolean(form.pendingFeedId);
+  const normalizedMarketSearch = marketSearch
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase();
+  const normalizedLanguageSearch = languageSearch
+    .normalize("NFKC")
+    .trim()
+    .toLocaleLowerCase();
+  const filteredMarkets = selectableMarkets.filter((option) =>
+    [
+      option.marketName,
+      option.countryName,
+      option.countryCode,
+      option.currencyCode,
+    ]
+      .join(" ")
+      .normalize("NFKC")
+      .toLocaleLowerCase()
+      .includes(normalizedMarketSearch),
+  );
+  const filteredLanguages = selectableLanguages.filter((language) =>
+    [language.name, language.locale]
+      .join(" ")
+      .normalize("NFKC")
+      .toLocaleLowerCase()
+      .includes(normalizedLanguageSearch),
+  );
+  const marketDisabled =
+    marketLoading || marketError || selectionLocked;
+  const languageDisabled =
+    !form.market ||
+    languagesQuery.isPending ||
+    languagesQuery.isError ||
+    selectionLocked;
+
+  return (
+    <div className={styles.addMarketForm}>
+      <div className={styles.selectorGrid}>
+        <div className={styles.selectorField}>
+          <span className={styles.selectorLabel}>Market and country</span>
+          <s-clickable
+            accessibilityLabel="Choose a Shopify Market and country"
+            background="base"
+            border="small-100"
+            borderColor="base"
+            borderRadius="base"
+            borderStyle="solid"
+            commandFor={marketPopoverId}
+            disabled={marketDisabled ? true : undefined}
+            inlineSize="100%"
+            padding="small-200 base"
+          >
+            <s-stack
+              alignItems="center"
+              direction="inline"
+              gap="small"
+              justifyContent="space-between"
+            >
+              <s-text color={form.market ? "base" : "subdued"}>
+                {form.market
+                  ? `${form.market.marketName}: ${form.market.countryName} / ${form.market.currencyCode}`
+                  : marketLoading
+                    ? "Loading Shopify Markets"
+                    : "Choose market and country"}
+              </s-text>
+              <s-icon color="subdued" type="chevron-down" />
+            </s-stack>
+          </s-clickable>
+          {form.error === "Choose a market and country." ? (
+            <span className={styles.formError} role="alert">
+              {form.error}
+            </span>
+          ) : null}
+          <s-popover
+            blockSize="340px"
+            id={marketPopoverId}
+            inlineSize="420px"
+            onHide={() => setMarketSearch("")}
+            onShow={() => {
+              window.requestAnimationFrame(() =>
+                marketSearchRef.current?.focus(),
+              );
+            }}
+          >
+            <s-box padding="small-200">
+              <div className={styles.selectorPopoverContent}>
+                <s-search-field
+                  label="Search Markets and countries"
+                  labelAccessibilityVisibility="exclusive"
+                  onInput={(event) => setMarketSearch(event.currentTarget.value)}
+                  placeholder="Search market or country"
+                  ref={marketSearchRef}
+                  value={marketSearch}
+                />
+                <div className={styles.selectorResults}>
+                  {filteredMarkets.length === 0 ? (
+                    <div className={styles.selectorEmpty}>
+                      <s-text color="subdued">
+                        No Markets or countries found.
+                      </s-text>
+                    </div>
+                  ) : (
+                    <s-stack direction="block" gap="small-100">
+                      {filteredMarkets.map((option) => (
+                        <s-button
+                          command="--hide"
+                          commandFor={marketPopoverId}
+                          key={option.value}
+                          onClick={() => {
+                            setMarketSearch("");
+                            setLanguageSearch("");
+                            onUpdate(form.id, {
+                              error: null,
+                              language: null,
+                              market: option,
+                              pendingFeedId: null,
+                            });
+                          }}
+                          variant="tertiary"
+                        >
+                          {option.marketName}: {option.countryName} /{" "}
+                          {option.currencyCode}
+                        </s-button>
+                      ))}
+                    </s-stack>
+                  )}
+                </div>
+              </div>
+            </s-box>
+          </s-popover>
+        </div>
+
+        <div className={styles.selectorField}>
+          <span className={styles.selectorLabel}>Language</span>
+          <s-clickable
+            accessibilityLabel="Choose a feed language"
+            background="base"
+            border="small-100"
+            borderColor="base"
+            borderRadius="base"
+            borderStyle="solid"
+            commandFor={languagePopoverId}
+            disabled={languageDisabled ? true : undefined}
+            inlineSize="100%"
+            padding="small-200 base"
+          >
+            <s-stack
+              alignItems="center"
+              direction="inline"
+              gap="small"
+              justifyContent="space-between"
+            >
+              <s-text color={form.language ? "base" : "subdued"}>
+                {form.language
+                  ? `${form.language.name} / ${form.language.locale.toUpperCase()}`
+                  : languagesQuery.isPending
+                    ? "Loading languages"
+                    : "Choose language"}
+              </s-text>
+              <s-icon color="subdued" type="chevron-down" />
+            </s-stack>
+          </s-clickable>
+          {form.error === "Choose a language." ? (
+            <span className={styles.formError} role="alert">
+              {form.error}
+            </span>
+          ) : null}
+          <s-popover
+            blockSize="340px"
+            id={languagePopoverId}
+            inlineSize="420px"
+            onHide={() => setLanguageSearch("")}
+            onShow={() => {
+              window.requestAnimationFrame(() =>
+                languageSearchRef.current?.focus(),
+              );
+            }}
+          >
+            <s-box padding="small-200">
+              <div className={styles.selectorPopoverContent}>
+                <s-search-field
+                  label="Search feed languages"
+                  labelAccessibilityVisibility="exclusive"
+                  onInput={(event) =>
+                    setLanguageSearch(event.currentTarget.value)
+                  }
+                  placeholder="Search language"
+                  ref={languageSearchRef}
+                  value={languageSearch}
+                />
+                <div className={styles.selectorResults}>
+                  {filteredLanguages.length === 0 ? (
+                    <div className={styles.selectorEmpty}>
+                      <s-text color="subdued">No languages found.</s-text>
+                    </div>
+                  ) : (
+                    <s-stack direction="block" gap="small-100">
+                      {filteredLanguages.map((language) => (
+                        <s-button
+                          command="--hide"
+                          commandFor={languagePopoverId}
+                          key={language.locale}
+                          onClick={() => {
+                            setLanguageSearch("");
+                            onUpdate(form.id, {
+                              error: null,
+                              language,
+                            });
+                          }}
+                          variant="tertiary"
+                        >
+                          {language.name} / {language.locale.toUpperCase()}
+                        </s-button>
+                      ))}
+                    </s-stack>
+                  )}
+                </div>
+              </div>
+            </s-box>
+          </s-popover>
+        </div>
+      </div>
+
+      {marketLoading ||
+      (form.market && languagesQuery.isPending && !form.pendingFeedId) ? (
+        <div className={styles.inlineLoading}>
+          <s-spinner
+            accessibilityLabel="Loading Shopify Market options"
+            size="base"
+          />
+        </div>
+      ) : null}
+
+      {languagesQuery.isError && !form.pendingFeedId ? (
+        <div className={styles.inlineError}>
+          <span className={styles.formError} role="alert">
+            Languages could not be loaded for this Market and country.
+          </span>
+          <s-button
+            onClick={() => void languagesQuery.refetch()}
+            variant="secondary"
+          >
+            Retry
+          </s-button>
+        </div>
+      ) : null}
+
+      {form.market &&
+      languagesQuery.data?.ok &&
+      selectableLanguages.length === 0 &&
+      !form.pendingFeedId ? (
+        <s-text color="subdued">
+          No ungenerated languages remain for this Market and country.
+        </s-text>
+      ) : null}
+
+      {form.error &&
+      !["Choose a market and country.", "Choose a language."].includes(
+        form.error,
+      ) ? (
+        <span className={styles.formError} role="alert">
+          {form.error}
+        </span>
+      ) : null}
+
+      {isGenerating && form.market && form.language ? (
+        <s-text color="subdued">
+          Generating {form.market.marketName} / {form.market.countryName} /{" "}
+          {form.language.name}
+        </s-text>
+      ) : null}
+
+      <div className={styles.formActions}>
+        <s-button
+          disabled={generationLocked ? true : undefined}
+          loading={isGenerating ? true : undefined}
+          onClick={() => onGenerate(form)}
+          variant="primary"
+        >
+          {form.pendingFeedId && form.error
+            ? "Retry generation"
+            : "Generate feed URL"}
+        </s-button>
+        <s-button
+          disabled={isGenerating ? true : undefined}
+          onClick={() => onRemove(form.id)}
+          variant="secondary"
+        >
+          Cancel
+        </s-button>
+      </div>
+    </div>
+  );
+}
+
 export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   const shopify = useAppBridge();
   const queryClient = useQueryClient();
@@ -147,8 +580,15 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     message: string;
     tone: "critical";
   } | null>(null);
+  const [additionalForms, setAdditionalForms] = useState<
+    AdditionalMarketFormState[]
+  >([]);
+  const nextFormId = useRef(0);
+  const [deleteTarget, setDeleteTarget] =
+    useState<AdditionalFeedEntry | null>(null);
   const wasActive = useRef(false);
   const endpoint = "/app/feed-data";
+  const additionalEndpoint = "/app/additional-feeds";
   const queryScope = scope ?? {
     locale: null,
     sessionId: "pending",
@@ -158,16 +598,70 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     ...primaryFeedQueryOptions(queryScope, endpoint),
     enabled: active && Boolean(scope),
     refetchInterval: (currentQuery) =>
-      active && isPendingFeed(currentQuery.state.data)
+      active && shouldPollPrimaryFeed(currentQuery.state.data)
         ? 2_000
         : false,
     refetchIntervalInBackground: false,
   });
+  const additionalQuery = useQuery({
+    ...additionalFeedsQueryOptions(queryScope, additionalEndpoint),
+    enabled: active && Boolean(scope),
+    refetchInterval: (currentQuery) =>
+      active && hasPendingAdditionalFeeds(currentQuery.state.data)
+        ? 2_000
+        : false,
+    refetchIntervalInBackground: false,
+  });
+  const refetchAdditionalFeeds = additionalQuery.refetch;
+  const marketOptionsQuery = useQuery({
+    ...additionalMarketOptionsQueryOptions(
+      queryScope,
+      additionalEndpoint,
+    ),
+    enabled:
+      active && Boolean(scope) && additionalForms.length > 0,
+  });
+  const invalidateFeedQueries = async () => {
+    if (!scope) return;
+    await queryClient.invalidateQueries({
+      queryKey: feedKeys.all(scope),
+    });
+  };
+  const applyAdditionalActionResult = (
+    result: AdditionalFeedActionResponse,
+  ) => {
+    if (!scope || !result.ok) return;
+    queryClient.setQueryData<AdditionalFeedsResponse>(
+      feedKeys.additional(scope, additionalEndpoint),
+      (current) => {
+        if (!current?.ok || !result.entry) return current;
+        const feeds = current.feeds.some(
+          ({ feed }) => feed.id === result.entry?.feed.id,
+        )
+          ? current.feeds.map((entry) =>
+              entry.feed.id === result.entry?.feed.id
+                ? result.entry!
+                : entry,
+            )
+          : [...current.feeds, result.entry];
+
+        return {
+          ...current,
+          activeGeneration:
+            result.activeGeneration ?? current.activeGeneration,
+          feeds,
+        };
+      },
+    );
+  };
   const mutation = useMutation({
     mutationFn: () => generatePrimaryFeed(endpoint),
     onSuccess: (data) => {
       if (scope) {
         queryClient.setQueryData(feedKeys.primary(scope, endpoint), data);
+        void queryClient.invalidateQueries({
+          queryKey: feedKeys.additional(scope, additionalEndpoint),
+        });
       }
       setFeedback(null);
     },
@@ -181,32 +675,161 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       });
     },
   });
+  const additionalGenerateMutation = useMutation({
+    mutationFn: (request: {
+      countryCode: string;
+      formId: string;
+      locale: string;
+      marketId: string;
+      retryFeedId: string | null;
+    }) =>
+      request.retryFeedId
+        ? refreshAdditionalFeed(request.retryFeedId, additionalEndpoint)
+        : generateAdditionalFeed(
+            {
+              countryCode: request.countryCode,
+              locale: request.locale,
+              marketId: request.marketId,
+            },
+            additionalEndpoint,
+          ),
+    onSuccess: (result, request) => {
+      applyAdditionalActionResult(result);
+      const pendingFeedId =
+        (result.ok ? result.entry?.feed.id : null) ??
+        request.retryFeedId;
+      setAdditionalForms((forms) =>
+        forms.map((form) =>
+          form.id === request.formId
+            ? { ...form, error: null, pendingFeedId }
+            : form,
+        ),
+      );
+      setFeedback(null);
+      void invalidateFeedQueries();
+      shopify.toast.show("Additional Market feed generation started.");
+    },
+    onError: (error, request) => {
+      setAdditionalForms((forms) =>
+        forms.map((form) =>
+          form.id === request.formId
+            ? {
+                ...form,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "The additional feed couldn't be generated.",
+              }
+          : form,
+        ),
+      );
+      void invalidateFeedQueries();
+    },
+  });
+  const additionalRefreshMutation = useMutation({
+    mutationFn: (feedId: string) =>
+      refreshAdditionalFeed(feedId, additionalEndpoint),
+    onSuccess: (result) => {
+      applyAdditionalActionResult(result);
+      setFeedback(null);
+      void invalidateFeedQueries();
+      shopify.toast.show("Feed refresh started.");
+    },
+    onError: (error) => {
+      setFeedback({
+        message:
+          error instanceof Error
+            ? error.message
+            : "The feed refresh couldn't be started.",
+        tone: "critical",
+      });
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (feedId: string) =>
+      deleteAdditionalFeed(feedId, additionalEndpoint),
+    onSuccess: () => {
+      setFeedback(null);
+      setDeleteTarget(null);
+      void invalidateFeedQueries();
+      shopify.toast.show("Additional Market feed deleted.");
+    },
+    onError: (error) => {
+      setFeedback({
+        message:
+          error instanceof Error
+            ? error.message
+            : "The additional feed couldn't be deleted.",
+        tone: "critical",
+      });
+    },
+  });
   const queryData = query.data;
   const refetchFeed = query.refetch;
 
   useEffect(() => {
-    if (active && !wasActive.current && queryData) {
-      void refetchFeed();
+    if (active && !wasActive.current) {
+      if (queryData) void refetchFeed();
+      if (additionalQuery.data) void refetchAdditionalFeeds();
     }
     wasActive.current = active;
-  }, [active, queryData, refetchFeed]);
+  }, [
+    active,
+    additionalQuery.data,
+    queryData,
+    refetchAdditionalFeeds,
+    refetchFeed,
+  ]);
 
-  const data = queryData?.ok ? queryData : null;
+  const data = isSuccessfulFeedData(queryData) ? queryData : null;
   const feed = data?.feed ?? null;
   const market = data?.market ?? null;
+  const additionalData =
+    additionalQuery.data && additionalQuery.data.ok === true
+      ? additionalQuery.data
+      : null;
+  const additionalFeeds = useMemo(
+    () => additionalData?.feeds ?? [],
+    [additionalData],
+  );
+  const visibleAdditionalFeeds = useMemo(
+    () => visibleAdditionalFeedEntries(additionalFeeds, additionalForms),
+    [additionalFeeds, additionalForms],
+  );
   const backendUnavailable = Boolean(data?.backendUnavailable);
-  const generationInProgress = Boolean(
+  const primaryGenerationInProgress = Boolean(
     feed && pendingStatuses.has(feed.status),
   );
+  const generationInProgress = Boolean(
+    primaryGenerationInProgress ||
+      data?.activeGeneration ||
+      additionalData?.activeGeneration ||
+      additionalFeeds.some(({ feed: candidate }) =>
+        pendingStatuses.has(candidate.status),
+      ),
+  );
+  const generationLocked =
+    generationInProgress ||
+    mutation.isPending ||
+    additionalGenerateMutation.isPending ||
+    additionalRefreshMutation.isPending;
+  const activeGeneration =
+    additionalData?.activeGeneration ?? data?.activeGeneration ?? null;
   const successfulFeed = Boolean(
     feed?.gcsObjectName && feed.lastRefreshedAt,
   );
   const progress = feed ? generationProgress(feed) : null;
 
+  useEffect(() => {
+    setAdditionalForms((forms) =>
+      reconcileAdditionalMarketForms(forms, additionalFeeds),
+    );
+  }, [additionalFeeds]);
+
   const generate = async () => {
     if (
       !market ||
-      generationInProgress ||
+      generationLocked ||
       mutation.isPending
     ) {
       return;
@@ -255,6 +878,75 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     }
   };
 
+  const copyAdditionalFeed = async (entry: AdditionalFeedEntry) => {
+    try {
+      await navigator.clipboard.writeText(entry.feed.publicUrl);
+      setFeedback(null);
+      shopify.toast.show("Feed URL copied to the clipboard.");
+    } catch {
+      setFeedback({
+        message: "The Feed URL couldn't be copied. Select and copy it manually.",
+        tone: "critical",
+      });
+    }
+  };
+
+  const updateAdditionalForm = (
+    formId: string,
+    update: Partial<AdditionalMarketFormState>,
+  ) => {
+    setAdditionalForms((forms) =>
+      reconcileAdditionalMarketForms(
+        forms.map((form) =>
+          form.id === formId ? { ...form, ...update } : form,
+        ),
+        additionalFeeds,
+      ),
+    );
+  };
+
+  const generateAdditional = (form: AdditionalMarketFormState) => {
+    if (!form.market) {
+      updateAdditionalForm(form.id, {
+        error: "Choose a market and country.",
+      });
+      return;
+    }
+    if (!form.language) {
+      updateAdditionalForm(form.id, {
+        error: "Choose a language.",
+      });
+      return;
+    }
+    if (
+      selectedAdditionalFormCombinations(
+        additionalForms,
+        form.id,
+      ).has(additionalFormCombinationKey(form.market, form.language))
+    ) {
+      updateAdditionalForm(form.id, {
+        error:
+          "Another open form already uses this Market, country, and language.",
+      });
+      return;
+    }
+    if (generationLocked) {
+      updateAdditionalForm(form.id, {
+        error: "Wait for the current XML feed generation to finish.",
+      });
+      return;
+    }
+
+    updateAdditionalForm(form.id, { error: null });
+    additionalGenerateMutation.mutate({
+      countryCode: form.market.countryCode,
+      formId: form.id,
+      locale: form.language.locale,
+      marketId: form.market.marketId,
+      retryFeedId: form.pendingFeedId,
+    });
+  };
+
   return (
     <div className={styles.feeds}>
       <div className={styles.header}>
@@ -281,6 +973,26 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           <s-button
             loading={query.isFetching ? true : undefined}
             onClick={() => void query.refetch()}
+            variant="secondary"
+          >
+            Try again
+          </s-button>
+        </s-banner>
+      ) : null}
+
+      {additionalQuery.isError ? (
+        <s-banner
+          heading="Additional Market feeds couldn't be loaded"
+          tone="critical"
+        >
+          <s-paragraph>
+            {additionalQuery.error instanceof Error
+              ? additionalQuery.error.message
+              : "The feed service is unavailable."}
+          </s-paragraph>
+          <s-button
+            loading={additionalQuery.isFetching ? true : undefined}
+            onClick={() => void additionalQuery.refetch()}
             variant="secondary"
           >
             Try again
@@ -329,7 +1041,10 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                   <span className={styles.primaryLabel}>Primary feed</span>
                   {feed ? (
                     <span className={styles.statusStack}>
-                      <StatusBadge status={feed.status} />
+                      <StatusBadge
+                        requiresRefresh={feed.requiresRefresh}
+                        status={feed.status}
+                      />
                       {progress ? (
                         <span className={styles.progressText}>{progress}</span>
                       ) : null}
@@ -356,9 +1071,15 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                 </s-table-cell>
                 <s-table-cell>
                   {successfulFeed && feed ? (
-                    <span className={styles.feedUrl} title={feed.publicUrl}>
+                    <a
+                      className={styles.feedUrl}
+                      href={feed.publicUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                      title={feed.publicUrl}
+                    >
                       {feed.publicUrl}
-                    </span>
+                    </a>
                   ) : (
                     <span className={styles.secondaryText}>
                       Available after generation
@@ -397,7 +1118,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                         <s-button
                           accessibilityLabel="Refresh Primary Feed"
                           disabled={
-                            generationInProgress ||
+                            generationLocked ||
                             query.isFetching ||
                             mutation.isPending
                               ? true
@@ -405,7 +1126,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                           }
                           icon="refresh"
                           loading={
-                            generationInProgress ||
+                            primaryGenerationInProgress ||
                             query.isFetching ||
                             mutation.isPending
                               ? true
@@ -421,14 +1142,17 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                           variant="secondary"
                         />
                       </>
-                    ) : generationInProgress ? (
+                    ) : primaryGenerationInProgress ? (
                       <s-button disabled loading variant="secondary">
                         Generating
                       </s-button>
                     ) : (
                       <s-button
                         disabled={
-                          !market || query.isFetching || mutation.isPending
+                          !market ||
+                          generationLocked ||
+                          query.isFetching ||
+                          mutation.isPending
                             ? true
                             : undefined
                         }
@@ -447,7 +1171,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                     )}
                   </div>
                   <span aria-live="polite" className={styles.visuallyHidden}>
-                    {generationInProgress ? progress : ""}
+                    {primaryGenerationInProgress ? progress : ""}
                   </span>
                 </s-table-cell>
               </s-table-row>
@@ -455,6 +1179,375 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           </s-table-body>
         </s-table>
       </s-section>
+
+      <s-section>
+        <div className={styles.additionalHeader}>
+          <div>
+            <s-heading>Additional Market feeds</s-heading>
+            <s-paragraph color="subdued">
+              Create localized Google feeds for specific Shopify Markets,
+              countries, currencies, and languages.
+            </s-paragraph>
+          </div>
+          <s-button
+            disabled={
+              additionalData?.backendUnavailable || generationLocked
+                ? true
+                : undefined
+            }
+            onClick={() => {
+              nextFormId.current += 1;
+              setAdditionalForms((forms) => [
+                ...forms,
+                createAdditionalMarketForm(
+                  `additional-market-${nextFormId.current}`,
+                ),
+              ]);
+            }}
+            variant="primary"
+          >
+            + Add Market
+          </s-button>
+        </div>
+
+        {additionalQuery.isPending && !additionalData ? (
+          <s-table>
+            <s-table-header-row>
+              <s-table-header format="base" listSlot="primary">
+                <span className={styles.tableHeader}>Feed</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="labeled">
+                <span className={styles.tableHeader}>Market</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="labeled">
+                <span className={styles.tableHeader}>Feed URL</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="labeled">
+                <span className={styles.tableHeader}>Last refresh</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="inline">
+                <span className={styles.tableHeader}>Actions</span>
+              </s-table-header>
+            </s-table-header-row>
+            <s-table-body>
+              <LoadingRow />
+            </s-table-body>
+          </s-table>
+        ) : visibleAdditionalFeeds.length === 0 ? (
+          <div className={styles.emptyState}>
+            <s-heading>No additional market feeds</s-heading>
+            <s-paragraph color="subdued">
+              Create localized Google feeds for specific Shopify Markets,
+              countries, currencies, and languages.
+            </s-paragraph>
+          </div>
+        ) : (
+          <s-table>
+            <s-table-header-row>
+              <s-table-header format="base" listSlot="primary">
+                <span className={styles.tableHeader}>Feed</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="labeled">
+                <span className={styles.tableHeader}>Market</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="labeled">
+                <span className={styles.tableHeader}>Feed URL</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="labeled">
+                <span className={styles.tableHeader}>Last refresh</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="inline">
+                <span className={styles.tableHeader}>Actions</span>
+              </s-table-header>
+            </s-table-header-row>
+            <s-table-body>
+              {visibleAdditionalFeeds.map((entry) => {
+                const candidate = entry.feed;
+                const candidatePending = pendingStatuses.has(candidate.status);
+                const candidateReady = Boolean(
+                  candidate.gcsObjectName && candidate.lastRefreshedAt,
+                );
+                const candidateProgress = generationProgress(candidate);
+
+                return (
+                  <s-table-row key={candidate.id}>
+                    <s-table-cell>
+                      <span className={styles.primaryLabel}>
+                        Additional feed
+                      </span>
+                      <span className={styles.statusStack}>
+                        <StatusBadge
+                          requiresRefresh={candidate.requiresRefresh}
+                          status={candidate.status}
+                        />
+                        {candidateProgress ? (
+                          <span className={styles.progressText}>
+                            {candidateProgress}
+                          </span>
+                        ) : null}
+                        {candidate.status === "FAILED" &&
+                        candidate.lastError ? (
+                          <span className={styles.rowError}>
+                            {candidate.lastError}
+                          </span>
+                        ) : null}
+                      </span>
+                    </s-table-cell>
+                    <s-table-cell>
+                      <span className={styles.primaryLabel}>
+                        {entry.market.name}
+                      </span>
+                      <span className={styles.marketDetails}>
+                        {[
+                          entry.market.countryName ??
+                            entry.market.countryCode,
+                          entry.market.currencyCode,
+                          entry.market.locale.toUpperCase(),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </s-table-cell>
+                    <s-table-cell>
+                      {candidateReady ? (
+                        <a
+                          className={styles.feedUrl}
+                          href={candidate.publicUrl}
+                          rel="noreferrer"
+                          target="_blank"
+                          title={candidate.publicUrl}
+                        >
+                          {candidate.publicUrl}
+                        </a>
+                      ) : (
+                        <span className={styles.secondaryText}>
+                          Available after generation
+                        </span>
+                      )}
+                    </s-table-cell>
+                    <s-table-cell>
+                      {candidate.lastRefreshedAt ? (
+                        <>
+                          <span className={styles.primaryLabel}>
+                            {formatRefreshDate(
+                              candidate.lastRefreshedAt,
+                              scope?.locale ?? null,
+                            )}
+                          </span>
+                          <span className={styles.secondaryText}>
+                            {formatFileSize(candidate.fileSizeBytes) ??
+                              "Size unavailable"}
+                          </span>
+                        </>
+                      ) : (
+                        <span className={styles.secondaryText}>
+                          Never generated
+                        </span>
+                      )}
+                    </s-table-cell>
+                    <s-table-cell>
+                      <div className={styles.actions}>
+                        {candidateReady ? (
+                          <>
+                            <s-button
+                              accessibilityLabel={`Open ${entry.market.name} ${entry.market.countryName ?? ""} ${entry.market.locale} feed in a new tab`}
+                              icon="external"
+                              onClick={() => {
+                                const opened = window.open(
+                                  candidate.publicUrl,
+                                  "_blank",
+                                  "noopener,noreferrer",
+                                );
+                                if (opened) opened.opener = null;
+                              }}
+                              variant="secondary"
+                            />
+                            <s-button
+                              accessibilityLabel={`Refresh ${entry.market.name} ${entry.market.locale} feed`}
+                              disabled={
+                                generationLocked ||
+                                additionalRefreshMutation.isPending
+                                  ? true
+                                  : undefined
+                              }
+                              icon="refresh"
+                              loading={
+                                candidatePending ||
+                                (additionalRefreshMutation.isPending &&
+                                  additionalRefreshMutation.variables ===
+                                    candidate.id)
+                                  ? true
+                                  : undefined
+                              }
+                              onClick={() =>
+                                additionalRefreshMutation.mutate(candidate.id)
+                              }
+                              variant="secondary"
+                            />
+                            <s-button
+                              accessibilityLabel={`Copy ${entry.market.name} ${entry.market.locale} feed URL`}
+                              icon="clipboard"
+                              onClick={() =>
+                                void copyAdditionalFeed(entry)
+                              }
+                              variant="secondary"
+                            />
+                          </>
+                        ) : candidatePending ? (
+                          <s-button disabled loading variant="secondary">
+                            Generating
+                          </s-button>
+                        ) : (
+                          <s-button
+                            disabled={
+                              generationLocked ||
+                              additionalRefreshMutation.isPending
+                                ? true
+                                : undefined
+                            }
+                            onClick={() =>
+                              additionalRefreshMutation.mutate(candidate.id)
+                            }
+                            variant="primary"
+                          >
+                            Retry generation
+                          </s-button>
+                        )}
+                        <s-button
+                          accessibilityLabel={`Delete ${entry.market.name} ${entry.market.countryName ?? ""} ${entry.market.locale} feed`}
+                          command="--show"
+                          commandFor="delete-additional-feed-modal"
+                          disabled={
+                            candidatePending || deleteMutation.isPending
+                              ? true
+                              : undefined
+                          }
+                          icon="delete"
+                          onClick={() => setDeleteTarget(entry)}
+                          tone="critical"
+                          variant="secondary"
+                        />
+                      </div>
+                    </s-table-cell>
+                  </s-table-row>
+                );
+              })}
+            </s-table-body>
+          </s-table>
+        )}
+
+        {additionalForms.length > 0 && marketOptionsQuery.isError ? (
+          <div className={styles.inlineError}>
+            <span className={styles.formError} role="alert">
+              Shopify Markets could not be loaded.
+            </span>
+            <s-button
+              onClick={() => void marketOptionsQuery.refetch()}
+              variant="secondary"
+            >
+              Retry
+            </s-button>
+          </div>
+        ) : null}
+
+        {additionalForms.length > 0 &&
+        marketOptionsQuery.data?.ok &&
+        marketOptionsQuery.data.options.length === 0 ? (
+          <s-text color="subdued">
+            Every available Market, country, and language combination already
+            has a feed.
+          </s-text>
+        ) : null}
+
+        <div className={styles.additionalFormList}>
+          {additionalForms.map((form) => {
+            const pendingEntry = form.pendingFeedId
+              ? additionalFeeds.find(
+                  ({ feed: candidate }) =>
+                    candidate.id === form.pendingFeedId,
+                )
+              : null;
+            const isGenerating =
+              (additionalGenerateMutation.isPending &&
+                additionalGenerateMutation.variables?.formId === form.id) ||
+              Boolean(
+                pendingEntry &&
+                  pendingStatuses.has(pendingEntry.feed.status),
+              ) ||
+              activeGeneration?.feedId === form.pendingFeedId;
+
+            return (
+              <AdditionalMarketForm
+                active={active}
+                endpoint={additionalEndpoint}
+                form={form}
+                forms={additionalForms}
+                generationLocked={generationLocked}
+                isGenerating={isGenerating}
+                key={form.id}
+                marketError={marketOptionsQuery.isError}
+                marketLoading={marketOptionsQuery.isPending}
+                marketOptions={
+                  marketOptionsQuery.data?.ok
+                    ? marketOptionsQuery.data.options
+                    : []
+                }
+                onGenerate={generateAdditional}
+                onRemove={(formId) =>
+                  setAdditionalForms((forms) =>
+                    forms.filter(({ id }) => id !== formId),
+                  )
+                }
+                onUpdate={updateAdditionalForm}
+                queryScope={queryScope}
+                scopeReady={Boolean(scope)}
+              />
+            );
+          })}
+        </div>
+      </s-section>
+
+      <s-modal
+        heading="Delete additional Market feed?"
+        id="delete-additional-feed-modal"
+        onHide={() => setDeleteTarget(null)}
+      >
+        <s-paragraph>
+          {deleteTarget
+            ? `Delete ${deleteTarget.market.name} / ${deleteTarget.market.countryName ?? deleteTarget.market.countryCode} / ${deleteTarget.market.languageName ?? deleteTarget.market.locale.toUpperCase()}?`
+            : "Delete this additional Market feed?"}
+        </s-paragraph>
+        <s-paragraph color="subdued">
+          Its XML file will be removed from cloud storage and the public URL
+          will stop working. This cannot be undone.
+        </s-paragraph>
+        <s-button
+          command="--hide"
+          commandFor="delete-additional-feed-modal"
+          disabled={
+            !deleteTarget || deleteMutation.isPending ? true : undefined
+          }
+          loading={deleteMutation.isPending ? true : undefined}
+          onClick={() => {
+            if (deleteTarget) {
+              deleteMutation.mutate(deleteTarget.feed.id);
+            }
+          }}
+          slot="primary-action"
+          tone="critical"
+          variant="primary"
+        >
+          Delete feed
+        </s-button>
+        <s-button
+          command="--hide"
+          commandFor="delete-additional-feed-modal"
+          slot="secondary-actions"
+          variant="secondary"
+        >
+          Cancel
+        </s-button>
+      </s-modal>
     </div>
   );
 }

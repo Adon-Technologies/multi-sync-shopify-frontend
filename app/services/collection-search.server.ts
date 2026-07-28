@@ -8,6 +8,7 @@ import {
 } from "./shopify-admin.server";
 
 const COLLECTION_SEARCH_LIMIT = 20;
+const COLLECTION_LOOKUP_LIMIT = 250;
 const COLLECTIONS_QUERY = `#graphql
   query ConfigurationCollections(
     $after: String
@@ -42,6 +43,10 @@ interface CollectionsQuery {
   };
 }
 
+interface CollectionNodesQuery {
+  nodes: Array<SelectedCollection | null>;
+}
+
 export interface CollectionSearchPage {
   collections: SelectedCollection[];
   pageInfo: {
@@ -49,6 +54,15 @@ export interface CollectionSearchPage {
     hasNextPage: boolean;
   };
   search: string;
+}
+
+export class CollectionVerificationError extends Error {
+  constructor() {
+    super(
+      "One or more selected collections no longer belong to this Shopify store.",
+    );
+    this.name = "CollectionVerificationError";
+  }
 }
 
 function buildCollectionSearch(search: string) {
@@ -81,4 +95,45 @@ export async function searchShopCollections(
     pageInfo: data.collections.pageInfo,
     search,
   };
+}
+
+const COLLECTION_NODES_QUERY = `#graphql
+  query ConfigurationCollectionNodes($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on Collection {
+        id
+        title
+      }
+    }
+  }
+`;
+
+export async function verifyShopCollections(
+  admin: AdminGraphQLClient,
+  collections: SelectedCollection[],
+) {
+  const verified = new Map<string, SelectedCollection>();
+
+  for (
+    let index = 0;
+    index < collections.length;
+    index += COLLECTION_LOOKUP_LIMIT
+  ) {
+    const page = collections.slice(index, index + COLLECTION_LOOKUP_LIMIT);
+    const data = await queryShopifyAdmin<CollectionNodesQuery>(
+      admin,
+      COLLECTION_NODES_QUERY,
+      { ids: page.map(({ id }) => id) },
+    );
+
+    for (const collection of data.nodes) {
+      if (collection) verified.set(collection.id, collection);
+    }
+  }
+
+  if (verified.size !== collections.length) {
+    throw new CollectionVerificationError();
+  }
+
+  return collections.map(({ id }) => verified.get(id)!);
 }

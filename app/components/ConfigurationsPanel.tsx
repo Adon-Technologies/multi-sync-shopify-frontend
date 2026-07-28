@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useAppBridge } from "@shopify/app-bridge-react";
+import { SaveBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { AttributeRulesCard } from "./AttributeRulesCard";
+import type { PublicConfiguration } from "../services/configuration.server";
 import {
   collectionsQueryOptions,
   configurationQueryOptions,
@@ -24,7 +26,26 @@ import styles from "../styles/configurations.module.css";
 
 interface ConfigurationsPanelProps {
   active: boolean;
+  onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
   scope: ConfigurationQueryScope | null;
+}
+
+function configurationForm(
+  configuration: PublicConfiguration,
+): ConfigurationInput {
+  return {
+    alertsEmail: configuration.alertsEmail,
+    countryCode: configuration.countryCode,
+    colorOptions: configuration.colorOptions,
+    sizeOptions: configuration.sizeOptions,
+    excludedCollections: configuration.excludedCollections,
+    excludedTitleTerms: configuration.excludedTitleTerms,
+    showSalePriceInGoogleFeed: configuration.showSalePriceInGoogleFeed,
+  };
+}
+
+function configurationFingerprint(configuration: ConfigurationInput) {
+  return JSON.stringify(configuration);
 }
 
 function ConfigurationSkeleton() {
@@ -272,6 +293,7 @@ function OptionNameSelector({
 
 export function ConfigurationsPanel({
   active,
+  onUnsavedChangesChange,
   scope,
 }: ConfigurationsPanelProps) {
   const shopify = useAppBridge();
@@ -281,6 +303,7 @@ export function ConfigurationsPanel({
     sessionId: "pending-session",
   };
   const [form, setForm] = useState<ConfigurationInput | null>(null);
+  const [savedForm, setSavedForm] = useState<ConfigurationInput | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ConfigurationFieldErrors>({});
   const [feedback, setFeedback] = useState<{
     message: string;
@@ -314,18 +337,14 @@ export function ConfigurationsPanel({
   });
 
   useEffect(() => {
-    if (!form && configurationQuery.data?.configuration) {
-      const configuration = configurationQuery.data.configuration;
-      setForm({
-        alertsEmail: configuration.alertsEmail,
-        countryCode: configuration.countryCode,
-        colorOptions: configuration.colorOptions,
-        sizeOptions: configuration.sizeOptions,
-        excludedCollections: configuration.excludedCollections,
-        excludedTitleTerms: configuration.excludedTitleTerms,
-      });
+    if (!form && !savedForm && configurationQuery.data?.configuration) {
+      const initialForm = configurationForm(
+        configurationQuery.data.configuration,
+      );
+      setForm(initialForm);
+      setSavedForm(initialForm);
     }
-  }, [configurationQuery.data, form]);
+  }, [configurationQuery.data, form, savedForm]);
 
   useEffect(() => {
     const normalizedSearch = normalizeConfigurationText(collectionSearch);
@@ -454,21 +473,25 @@ export function ConfigurationsPanel({
       setFeedback(null);
       const result = await saveMutation.mutateAsync(validated);
       const configuration = result.configuration;
-      setForm({
-        alertsEmail: configuration.alertsEmail,
-        countryCode: configuration.countryCode,
-        colorOptions: configuration.colorOptions,
-        sizeOptions: configuration.sizeOptions,
-        excludedCollections: configuration.excludedCollections,
-        excludedTitleTerms: configuration.excludedTitleTerms,
-      });
+      const nextForm = configurationForm(configuration);
+      setForm(nextForm);
+      setSavedForm(nextForm);
       queryClient.setQueryData(
         configurationQueryOptions(scope).queryKey,
         (current: typeof configurationQuery.data) =>
           current ? { ...current, configuration } : current,
       );
 
-      shopify.toast.show("Configuration saved successfully.");
+      if (result.feedRefreshRequired) {
+        void queryClient.invalidateQueries({
+          queryKey: ["feeds", scope.shop, scope.sessionId],
+        });
+        shopify.toast.show(
+          "Configuration saved. Refresh the XML feed to apply the pricing change.",
+        );
+      } else {
+        shopify.toast.show("Configuration saved successfully.");
+      }
     } catch (error) {
       if (error instanceof ConfigurationRequestError) {
         setFieldErrors(error.fields ?? {});
@@ -482,10 +505,54 @@ export function ConfigurationsPanel({
     }
   };
 
+  const discard = () => {
+    if (!savedForm || saveMutation.isPending) return;
+    setForm(savedForm);
+    setFieldErrors({});
+    setFeedback(null);
+    setTitleTerm("");
+  };
+
   const isLoading = !form && configurationQuery.isPending;
+  const hasUnsavedChanges =
+    form !== null &&
+    savedForm !== null &&
+    configurationFingerprint(form) !== configurationFingerprint(savedForm);
+
+  useEffect(() => {
+    onUnsavedChangesChange?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges, onUnsavedChangesChange]);
+
+  useEffect(
+    () => () => {
+      onUnsavedChangesChange?.(false);
+    },
+    [onUnsavedChangesChange],
+  );
 
   return (
     <div className={styles.configurations}>
+      <SaveBar
+        discardConfirmation={false}
+        id="configuration-contextual-save-bar"
+        open={hasUnsavedChanges}
+      >
+        <button
+          disabled={!form || saveMutation.isPending}
+          loading={saveMutation.isPending}
+          onClick={save}
+          variant="primary"
+        >
+          Save
+        </button>
+        <button
+          disabled={saveMutation.isPending}
+          onClick={discard}
+        >
+          Discard
+        </button>
+      </SaveBar>
+
       <div className={styles.header}>
         <div>
           <s-heading>Configurations</s-heading>
@@ -494,15 +561,6 @@ export function ConfigurationsPanel({
             exclusions.
           </s-paragraph>
         </div>
-        <s-button
-          accessibilityLabel="Save complete configuration"
-          disabled={!form || saveMutation.isPending}
-          loading={saveMutation.isPending ? true : undefined}
-          onClick={save}
-          variant="primary"
-        >
-          Save
-        </s-button>
       </div>
 
       {configurationQuery.isError ? (
@@ -823,8 +881,39 @@ export function ConfigurationsPanel({
                 </>
               )}
             </div>
+
+            <div className={`${styles.feature} ${styles.pricingFeature}`}>
+              {isLoading ? (
+                <ConfigurationSkeleton />
+              ) : (
+                <s-checkbox
+                  checked={form?.showSalePriceInGoogleFeed ?? false}
+                  details="When enabled, Google receives the original price plus sale_price. When disabled, only the final current price is sent."
+                  error={fieldErrors.showSalePriceInGoogleFeed}
+                  label="Show sale price in Google feed"
+                  onChange={(event) =>
+                    updateForm(
+                      "showSalePriceInGoogleFeed",
+                      event.currentTarget.checked,
+                    )
+                  }
+                />
+              )}
+            </div>
           </div>
         </s-section>
+
+        {scope ? (
+          <AttributeRulesCard
+            configuration={configurationQuery.data?.configuration ?? null}
+            initialJobs={configurationQuery.data?.ruleJobs ?? null}
+            scope={scope}
+          />
+        ) : (
+          <s-section heading="Gender & Age Rules">
+            <ConfigurationSkeleton />
+          </s-section>
+        )}
       </div>
     </div>
   );

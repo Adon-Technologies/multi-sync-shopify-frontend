@@ -28,11 +28,11 @@ function signature(
   accessToken: string,
   timestamp: string,
   method: string,
-  pathname: string,
+  requestTarget: string,
   body: string,
 ) {
   return createHmac("sha256", accessToken)
-    .update(`${timestamp}.${method.toUpperCase()}.${pathname}.${body}`)
+    .update(`${timestamp}.${method.toUpperCase()}.${requestTarget}.${body}`)
     .digest("hex");
 }
 
@@ -53,6 +53,15 @@ export async function requestFeedBackend<TResponse>(
 
   const timestamp = Date.now().toString();
   const body = input === undefined ? "" : JSON.stringify(input);
+  const requestUrl = new URL(
+    pathname,
+    "http://multi-sync.internal",
+  );
+  requestUrl.searchParams.sort();
+  const canonicalQuery = requestUrl.searchParams.toString();
+  const canonicalTarget = `${requestUrl.pathname}${
+    canonicalQuery ? `?${canonicalQuery}` : ""
+  }`;
   let response: Response;
 
   try {
@@ -66,7 +75,7 @@ export async function requestFeedBackend<TResponse>(
           store.accessToken,
           timestamp,
           method,
-          pathname,
+          canonicalTarget,
           body,
         ),
         "x-multi-sync-timestamp": timestamp,

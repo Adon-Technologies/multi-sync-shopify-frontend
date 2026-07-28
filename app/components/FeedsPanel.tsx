@@ -40,6 +40,7 @@ import {
 } from "../services/feed-query";
 import { shouldPollPrimaryFeed } from "../services/feed-generation-state";
 import styles from "../styles/feeds.module.css";
+import { AutomaticRefreshCard } from "./AutomaticRefreshCard";
 
 interface FeedsPanelProps {
   active: boolean;
@@ -586,6 +587,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   const nextFormId = useRef(0);
   const [deleteTarget, setDeleteTarget] =
     useState<AdditionalFeedEntry | null>(null);
+  const [automaticWorkActive, setAutomaticWorkActive] = useState(false);
   const wasActive = useRef(false);
   const endpoint = "/app/feed-data";
   const additionalEndpoint = "/app/additional-feeds";
@@ -809,6 +811,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       ),
   );
   const generationLocked =
+    automaticWorkActive ||
     generationInProgress ||
     mutation.isPending ||
     additionalGenerateMutation.isPending ||
@@ -1014,7 +1017,8 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       ) : null}
 
       <s-section>
-        <s-table>
+        <div className={styles.feedTable}>
+          <s-table>
           <s-table-header-row>
             <s-table-header format="base" listSlot="primary">
               <span className={styles.tableHeader}>Feed</span>
@@ -1038,7 +1042,11 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
             ) : (
               <s-table-row>
                 <s-table-cell>
-                  <span className={styles.primaryLabel}>Primary feed</span>
+                  <span
+                    className={`${styles.primaryLabel} ${styles.feedName}`}
+                  >
+                    Primary feed
+                  </span>
                   {feed ? (
                     <span className={styles.statusStack}>
                       <StatusBadge
@@ -1177,7 +1185,8 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
               </s-table-row>
             )}
           </s-table-body>
-        </s-table>
+          </s-table>
+        </div>
       </s-section>
 
       <s-section>
@@ -1211,8 +1220,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
         </div>
 
         {additionalQuery.isPending && !additionalData ? (
-          <s-table>
-            <s-table-header-row>
+          <div className={styles.feedTable}>
+            <s-table>
+              <s-table-header-row>
               <s-table-header format="base" listSlot="primary">
                 <span className={styles.tableHeader}>Feed</span>
               </s-table-header>
@@ -1228,11 +1238,12 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
               <s-table-header format="base" listSlot="inline">
                 <span className={styles.tableHeader}>Actions</span>
               </s-table-header>
-            </s-table-header-row>
-            <s-table-body>
-              <LoadingRow />
-            </s-table-body>
-          </s-table>
+              </s-table-header-row>
+              <s-table-body>
+                <LoadingRow />
+              </s-table-body>
+            </s-table>
+          </div>
         ) : visibleAdditionalFeeds.length === 0 ? (
           <div className={styles.emptyState}>
             <s-heading>No additional market feeds</s-heading>
@@ -1242,8 +1253,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
             </s-paragraph>
           </div>
         ) : (
-          <s-table>
-            <s-table-header-row>
+          <div className={styles.feedTable}>
+            <s-table>
+              <s-table-header-row>
               <s-table-header format="base" listSlot="primary">
                 <span className={styles.tableHeader}>Feed</span>
               </s-table-header>
@@ -1259,8 +1271,8 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
               <s-table-header format="base" listSlot="inline">
                 <span className={styles.tableHeader}>Actions</span>
               </s-table-header>
-            </s-table-header-row>
-            <s-table-body>
+              </s-table-header-row>
+              <s-table-body>
               {visibleAdditionalFeeds.map((entry) => {
                 const candidate = entry.feed;
                 const candidatePending = pendingStatuses.has(candidate.status);
@@ -1272,7 +1284,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                 return (
                   <s-table-row key={candidate.id}>
                     <s-table-cell>
-                      <span className={styles.primaryLabel}>
+                      <span
+                        className={`${styles.primaryLabel} ${styles.feedName}`}
+                      >
                         Additional feed
                       </span>
                       <span className={styles.statusStack}>
@@ -1418,7 +1432,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                           command="--show"
                           commandFor="delete-additional-feed-modal"
                           disabled={
-                            candidatePending || deleteMutation.isPending
+                            generationLocked ||
+                            candidatePending ||
+                            deleteMutation.isPending
                               ? true
                               : undefined
                           }
@@ -1432,8 +1448,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                   </s-table-row>
                 );
               })}
-            </s-table-body>
-          </s-table>
+              </s-table-body>
+            </s-table>
+          </div>
         )}
 
         {additionalForms.length > 0 && marketOptionsQuery.isError ? (
@@ -1507,6 +1524,17 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
         </div>
       </s-section>
 
+      <AutomaticRefreshCard
+        active={active}
+        key={
+          scope
+            ? `${scope.shop}:${scope.sessionId}`
+            : "pending-feed-refresh-schedule"
+        }
+        onActivityChange={setAutomaticWorkActive}
+        scope={scope}
+      />
+
       <s-modal
         heading="Delete additional Market feed?"
         id="delete-additional-feed-modal"
@@ -1525,7 +1553,11 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           command="--hide"
           commandFor="delete-additional-feed-modal"
           disabled={
-            !deleteTarget || deleteMutation.isPending ? true : undefined
+            !deleteTarget ||
+            generationLocked ||
+            deleteMutation.isPending
+              ? true
+              : undefined
           }
           loading={deleteMutation.isPending ? true : undefined}
           onClick={() => {

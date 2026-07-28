@@ -39,17 +39,18 @@ enum StoreStatus {
 }
 
 model Store {
-  id                     String             @id @default(auto()) @map("_id") @db.ObjectId
-  shopDomain             String             @unique
+  id                     String               @id @default(auto()) @map("_id") @db.ObjectId
+  shopDomain             String               @unique
   accessToken            String?
-  status                 StoreStatus        @default(INSTALLED)
-  installedAt            DateTime           @default(now())
+  status                 StoreStatus          @default(INSTALLED)
+  installedAt            DateTime             @default(now())
   uninstalledAt          DateTime?
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
   configuration          Configuration?
   xmlLinks               XmlLink[]
   attributeRuleJobs      AttributeRuleJob[]
+  feedRefreshSchedule    FeedRefreshSchedule?
   feedGenerationFeedId   String?
   feedGenerationLockedAt DateTime?
 
@@ -181,11 +182,121 @@ enum XmlFeedType {
   ADDITIONAL
 }
 
+enum AutomaticRefreshStatus {
+  NEVER_RUN
+  QUEUED
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
+enum FeedRefreshSource {
+  MANUAL
+  AUTOMATIC
+}
+
+enum FeedRefreshRunStatus {
+  QUEUED
+  PROCESSING
+  SUCCESS
+  PARTIALLY_FAILED
+  FAILED
+}
+
+enum FeedRefreshRunItemStatus {
+  QUEUED
+  PROCESSING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model FeedRefreshSchedule {
+  id                      String                 @id @default(auto()) @map("_id") @db.ObjectId
+  storeId                 String                 @unique @db.ObjectId
+  store                   Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customAutomaticRefresh  Boolean                @default(false)
+  customTime              String?
+  customTimezone          String?
+  effectiveTime           String                 @default("00:00")
+  effectiveTimezone       String                 @default("UTC")
+  nextRunAt               DateTime
+  lastClaimedRunAt        DateTime?
+  claimToken              String?
+  claimExpiresAt          DateTime?
+  lastAutomaticStartedAt  DateTime?
+  lastAutomaticFinishedAt DateTime?
+  lastAutomaticStatus     AutomaticRefreshStatus @default(NEVER_RUN)
+  lastAutomaticError      String?
+  scheduleVersion         Int                    @default(1)
+  storeInstalledAt        DateTime
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  runs                    FeedRefreshRun[]
+
+  @@index([nextRunAt])
+  @@index([lastAutomaticStatus])
+  @@index([nextRunAt, claimExpiresAt])
+}
+
+model FeedRefreshRun {
+  id              String               @id @default(auto()) @map("_id") @db.ObjectId
+  storeId         String               @db.ObjectId
+  scheduleId      String               @db.ObjectId
+  schedule        FeedRefreshSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  scheduledFor    DateTime
+  source          FeedRefreshSource
+  status          FeedRefreshRunStatus @default(QUEUED)
+  occurrenceKey   String               @unique
+  scheduleVersion Int
+  totalFeeds      Int                  @default(0)
+  completedFeeds  Int                  @default(0)
+  failedFeeds     Int                  @default(0)
+  queueAttempts   Int                  @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  error           String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  items           FeedRefreshRunItem[]
+
+  @@unique([storeId, scheduledFor, source])
+  @@index([storeId, status])
+  @@index([scheduleId, status])
+}
+
+model FeedRefreshRunItem {
+  id               String                   @id @default(auto()) @map("_id") @db.ObjectId
+  runId            String                   @db.ObjectId
+  run              FeedRefreshRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
+  feedId           String                   @db.ObjectId
+  feedType         XmlFeedType
+  position         Int
+  status           FeedRefreshRunItemStatus @default(QUEUED)
+  bullJobId        String?
+  generationNumber Int?
+  leaseOwner       String?
+  leaseExpiresAt   DateTime?
+  attempts         Int                      @default(0)
+  queuedAt         DateTime                 @default(now())
+  startedAt        DateTime?
+  completedAt      DateTime?
+  error            String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@unique([runId, feedId])
+  @@index([runId, position])
+  @@index([runId, status])
+  @@index([runId, status, leaseExpiresAt])
+  @@index([feedId])
+}
+
 model XmlLink {
-  id                    String        @id @default(auto()) @map("_id") @db.ObjectId
-  storeId               String        @db.ObjectId
-  store                 Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  feedType              XmlFeedType   @default(PRIMARY)
+  id                    String            @id @default(auto()) @map("_id") @db.ObjectId
+  storeId               String            @db.ObjectId
+  store                 Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  feedType              XmlFeedType       @default(PRIMARY)
   marketId              String
   marketName            String
   marketSlug            String?
@@ -197,26 +308,28 @@ model XmlLink {
   locale                String
   languageName          String?
   storefrontUrl         String?
-  token                 String        @unique
+  token                 String            @unique
   publicUrl             String
   gcsObjectName         String?
-  status                XmlFeedStatus @default(NOT_GENERATED)
+  status                XmlFeedStatus     @default(NOT_GENERATED)
+  generationSource      FeedRefreshSource @default(MANUAL)
+  refreshRunId          String?           @db.ObjectId
   lastRefreshedAt       DateTime?
   fileSizeBytes         BigInt?
   lastError             String?
   generationStartedAt   DateTime?
   generationCompletedAt DateTime?
-  generationNumber      Int           @default(0)
-  processedProducts     Int           @default(0)
+  generationNumber      Int               @default(0)
+  processedProducts     Int               @default(0)
   totalProducts         Int?
-  processedVariants     Int           @default(0)
-  generatedItems        Int           @default(0)
-  skippedItems          Int           @default(0)
-  requiresRefresh       Boolean       @default(false)
+  processedVariants     Int               @default(0)
+  generatedItems        Int               @default(0)
+  skippedItems          Int               @default(0)
+  requiresRefresh       Boolean           @default(false)
   leaseOwner            String?
   leaseExpiresAt        DateTime?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
   @@unique([storeId, marketId, countryCode, locale])
   @@index([storeId, feedType])

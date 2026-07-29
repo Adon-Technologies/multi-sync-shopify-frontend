@@ -28,11 +28,14 @@ import {
   normalizeOptionNames,
   normalizeSelectedCollections,
   normalizeCheckoutLinkMode,
+  normalizeInventoryLocationIds,
+  normalizeInventorySourceMode,
   resolveStoredOptionNames,
   type ConfigurationInput,
   type SelectedCollection,
   validateConfigurationInput,
 } from "./configuration-validation";
+import { verifySelectedInventoryLocations } from "./shopify-locations.server";
 import {
   queryShopifyAdmin,
   type AdminGraphQLClient,
@@ -82,6 +85,12 @@ interface StoredConfiguration {
   id: string;
   optionMappingsInitialized: boolean;
   showSalePriceInGoogleFeed: boolean;
+  useProductImageAsMainImage: boolean;
+  includeShippingWeightInGoogleFeed: boolean;
+  excludeOutOfStockItems: boolean;
+  ignoreShopifyInventoryInGoogleFeed: boolean;
+  inventorySourceMode: "ALL_LOCATIONS" | "SELECTED_LOCATIONS";
+  selectedInventoryLocationIds: string[];
   disableUtmParameters: boolean;
   disablePrimaryCurrencyParameter: boolean;
   checkoutLinkMode: "DISABLED" | "CART" | "CHECKOUT";
@@ -167,14 +176,23 @@ function mapConfiguration(
     genderRules: gender.rules,
     genderRulesAppliedVersion: configuration.genderRulesAppliedVersion,
     genderRulesVersion: configuration.genderRulesVersion,
-    showSalePriceInGoogleFeed:
-      configuration.showSalePriceInGoogleFeed,
+    showSalePriceInGoogleFeed: configuration.showSalePriceInGoogleFeed,
+    useProductImageAsMainImage: configuration.useProductImageAsMainImage,
+    includeShippingWeightInGoogleFeed:
+      configuration.includeShippingWeightInGoogleFeed,
+    excludeOutOfStockItems: configuration.excludeOutOfStockItems,
+    ignoreShopifyInventoryInGoogleFeed:
+      configuration.ignoreShopifyInventoryInGoogleFeed,
+    inventorySourceMode: normalizeInventorySourceMode(
+      configuration.inventorySourceMode,
+    ),
+    selectedInventoryLocationIds: normalizeInventoryLocationIds(
+      configuration.selectedInventoryLocationIds,
+    ),
     disableUtmParameters: configuration.disableUtmParameters,
     disablePrimaryCurrencyParameter:
       configuration.disablePrimaryCurrencyParameter,
-    checkoutLinkMode: normalizeCheckoutLinkMode(
-      configuration.checkoutLinkMode,
-    ),
+    checkoutLinkMode: normalizeCheckoutLinkMode(configuration.checkoutLinkMode),
     updatedAt: configuration.updatedAt.toISOString(),
   };
 }
@@ -278,6 +296,12 @@ export async function getConfigurationPageData(
         excludedTitleTerms: [],
         optionMappingsInitialized: true,
         showSalePriceInGoogleFeed: false,
+        useProductImageAsMainImage: false,
+        includeShippingWeightInGoogleFeed: false,
+        excludeOutOfStockItems: false,
+        ignoreShopifyInventoryInGoogleFeed: false,
+        inventorySourceMode: "ALL_LOCATIONS",
+        selectedInventoryLocationIds: [],
         disableUtmParameters: false,
         disablePrimaryCurrencyParameter: false,
         checkoutLinkMode: "DISABLED",
@@ -296,6 +320,7 @@ export async function getConfigurationPageData(
 }
 
 export async function saveConfigurationForShop(
+  admin: AdminGraphQLClient,
   session: { accessToken?: string; shop: string },
   value: unknown,
 ) {
@@ -308,22 +333,37 @@ export async function saveConfigurationForShop(
       ageRulesAppliedVersion: true,
       genderRulesAppliedVersion: true,
       showSalePriceInGoogleFeed: true,
+      useProductImageAsMainImage: true,
+      includeShippingWeightInGoogleFeed: true,
+      excludeOutOfStockItems: true,
+      ignoreShopifyInventoryInGoogleFeed: true,
+      inventorySourceMode: true,
+      selectedInventoryLocationIds: true,
       disableUtmParameters: true,
       disablePrimaryCurrencyParameter: true,
       checkoutLinkMode: true,
     },
   });
-  const nextDiagnosticsRevision = createDiagnosticsConfigurationRevision({
+  const selectedInventoryLocationIds =
+    await verifySelectedInventoryLocations(
+      admin,
+      input.selectedInventoryLocationIds,
+      previousConfiguration?.selectedInventoryLocationIds ?? [],
+    );
+  const verifiedInput = {
     ...input,
-    ageRulesAppliedVersion:
-      previousConfiguration?.ageRulesAppliedVersion ?? 0,
+    selectedInventoryLocationIds,
+  };
+  const nextDiagnosticsRevision = createDiagnosticsConfigurationRevision({
+    ...verifiedInput,
+    ageRulesAppliedVersion: previousConfiguration?.ageRulesAppliedVersion ?? 0,
     genderRulesAppliedVersion:
       previousConfiguration?.genderRulesAppliedVersion ?? 0,
   });
   const configuration = await prisma.configuration.upsert({
     where: { storeId: store.id },
     create: {
-      ...input,
+      ...verifiedInput,
       excludedCollections:
         input.excludedCollections as unknown as Prisma.InputJsonValue,
       diagnosticsRevision: nextDiagnosticsRevision,
@@ -331,7 +371,7 @@ export async function saveConfigurationForShop(
       storeId: store.id,
     },
     update: {
-      ...input,
+      ...verifiedInput,
       colorOption: null,
       excludedCollections:
         input.excludedCollections as unknown as Prisma.InputJsonValue,
@@ -343,11 +383,31 @@ export async function saveConfigurationForShop(
   const feedUrlSettingsChanged =
     previousConfiguration === null
       ? input.showSalePriceInGoogleFeed ||
+        input.useProductImageAsMainImage ||
+        input.includeShippingWeightInGoogleFeed ||
+        input.excludeOutOfStockItems ||
+        input.ignoreShopifyInventoryInGoogleFeed ||
+        input.inventorySourceMode !== "ALL_LOCATIONS" ||
+        input.selectedInventoryLocationIds.length > 0 ||
         input.disableUtmParameters ||
         input.disablePrimaryCurrencyParameter ||
         input.checkoutLinkMode !== "DISABLED"
       : previousConfiguration.showSalePriceInGoogleFeed !==
           input.showSalePriceInGoogleFeed ||
+        previousConfiguration.useProductImageAsMainImage !==
+          input.useProductImageAsMainImage ||
+        previousConfiguration.includeShippingWeightInGoogleFeed !==
+          input.includeShippingWeightInGoogleFeed ||
+        previousConfiguration.excludeOutOfStockItems !==
+          input.excludeOutOfStockItems ||
+        previousConfiguration.ignoreShopifyInventoryInGoogleFeed !==
+          input.ignoreShopifyInventoryInGoogleFeed ||
+        previousConfiguration.inventorySourceMode !==
+          input.inventorySourceMode ||
+        [...previousConfiguration.selectedInventoryLocationIds]
+          .sort()
+          .join("\u0000") !==
+          [...input.selectedInventoryLocationIds].sort().join("\u0000") ||
         previousConfiguration.disableUtmParameters !==
           input.disableUtmParameters ||
         previousConfiguration.disablePrimaryCurrencyParameter !==
@@ -447,18 +507,17 @@ export async function getAttributeRuleJobStatuses(
     where: { storeId },
   });
   return {
-    age: mapAttributeRuleJob(
-      jobs.find(({ kind }) => kind === "AGE") ?? null,
-    ),
+    age: mapAttributeRuleJob(jobs.find(({ kind }) => kind === "AGE") ?? null),
     gender: mapAttributeRuleJob(
       jobs.find(({ kind }) => kind === "GENDER") ?? null,
     ),
   };
 }
 
-export async function getAttributeRuleJobStatusesForShop(
-  session: { accessToken?: string; shop: string },
-) {
+export async function getAttributeRuleJobStatusesForShop(session: {
+  accessToken?: string;
+  shop: string;
+}) {
   const store = await upsertInstalledStore(session);
   return getAttributeRuleJobStatuses(store.id);
 }
@@ -469,10 +528,9 @@ function assertAttributeRuleScopes(scope: string | undefined) {
   }
 }
 
-async function verifiedRules<T extends GenderRulesConfiguration | AgeRulesConfiguration>(
-  admin: AdminGraphQLClient,
-  configuration: T,
-): Promise<T> {
+async function verifiedRules<
+  T extends GenderRulesConfiguration | AgeRulesConfiguration,
+>(admin: AdminGraphQLClient, configuration: T): Promise<T> {
   const collections = configuration.rules.flatMap((rule) => rule.collections);
   let verified: SelectedCollection[];
   try {
@@ -490,9 +548,7 @@ async function verifiedRules<T extends GenderRulesConfiguration | AgeRulesConfig
     ...configuration,
     rules: configuration.rules.map((rule) => ({
       ...rule,
-      collections: rule.collections.map(
-        ({ id }) => verifiedById.get(id)!,
-      ),
+      collections: rule.collections.map(({ id }) => verifiedById.get(id)!),
     })),
   } as T;
 }
@@ -514,8 +570,7 @@ export async function saveAttributeRulesForShop(
     kind === "gender"
       ? await verifiedRules(admin, validateGenderRules(value))
       : await verifiedRules(admin, validateAgeRules(value));
-  const prismaKind: AttributeRuleKind =
-    kind === "gender" ? "GENDER" : "AGE";
+  const prismaKind: AttributeRuleKind = kind === "gender" ? "GENDER" : "AGE";
 
   const result = await prisma.$transaction(async (transaction) => {
     const configuration =
@@ -523,23 +578,19 @@ export async function saveAttributeRulesForShop(
         ? await transaction.configuration.update({
             where: { storeId: store.id },
             data: {
-              defaultGender: (
-                validated as GenderRulesConfiguration
-              ).defaultGender,
-              genderRules:
-                validated.rules as unknown as Prisma.InputJsonValue,
+              defaultGender: (validated as GenderRulesConfiguration)
+                .defaultGender,
+              genderRules: validated.rules as unknown as Prisma.InputJsonValue,
               genderRulesVersion: { increment: 1 },
             },
           })
         : await transaction.configuration.update({
             where: { storeId: store.id },
             data: {
-              ageRules:
-                validated.rules as unknown as Prisma.InputJsonValue,
+              ageRules: validated.rules as unknown as Prisma.InputJsonValue,
               ageRulesVersion: { increment: 1 },
-              defaultAgeGroup: (
-                validated as AgeRulesConfiguration
-              ).defaultAgeGroup,
+              defaultAgeGroup: (validated as AgeRulesConfiguration)
+                .defaultAgeGroup,
             },
           });
     const ruleVersion =
@@ -606,8 +657,7 @@ export async function retryAttributeRulesForShop(
     );
   }
 
-  const prismaKind: AttributeRuleKind =
-    kind === "gender" ? "GENDER" : "AGE";
+  const prismaKind: AttributeRuleKind = kind === "gender" ? "GENDER" : "AGE";
   const ruleVersion =
     kind === "gender"
       ? configuration.genderRulesVersion

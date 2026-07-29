@@ -1,10 +1,4 @@
-import {
-  type UIEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
   useInfiniteQuery,
@@ -14,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 
 import type { AutomaticRefreshStatus } from "../routes/app.feed-refresh-schedule";
+import { useHydrated } from "../hooks/useHydrated";
 import {
   DEFAULT_FEED_REFRESH_SCHEDULE,
   feedRefreshDraftFingerprint,
@@ -115,11 +110,7 @@ function statusLabel(status: AutomaticRefreshStatus) {
   }
 }
 
-function AutomaticStatusBadge({
-  status,
-}: {
-  status: AutomaticRefreshStatus;
-}) {
+function AutomaticStatusBadge({ status }: { status: AutomaticRefreshStatus }) {
   const tone =
     status === "SUCCESS"
       ? "success"
@@ -144,7 +135,10 @@ function timeSelectionFrom(value: string): TimeSelection {
 
 function ScheduleLoadingState() {
   return (
-    <div className={styles.scheduleLoading} aria-label="Loading refresh schedule">
+    <div
+      className={styles.scheduleLoading}
+      aria-label="Loading refresh schedule"
+    >
       <span className={`${styles.loadingLine} ${styles.loadingLineWide}`} />
       <span className={styles.loadingLine} />
       <span className={`${styles.loadingLine} ${styles.loadingLineWide}`} />
@@ -206,9 +200,7 @@ function TimeValuePicker({
               >
                 <span className={styles.timeValueOptionContent}>
                   <span>{option.label}</span>
-                  {option.value === value ? (
-                    <s-icon type="check" />
-                  ) : null}
+                  {option.value === value ? <s-icon type="check" /> : null}
                 </span>
               </s-button>
             ))}
@@ -224,6 +216,7 @@ export function AutomaticRefreshCard({
   onActivityChange,
   scope,
 }: AutomaticRefreshCardProps) {
+  const hydrated = useHydrated();
   const shopify = useAppBridge();
   const queryClient = useQueryClient();
   const endpoint = "/app/feed-refresh-schedule";
@@ -236,15 +229,15 @@ export function AutomaticRefreshCard({
     ...feedRefreshScheduleQueryOptions(queryScope, endpoint),
     enabled: active && Boolean(scope),
     refetchInterval: (query) =>
-      active &&
-      isAutomaticRefreshActive(query.state.data?.lastAutomaticStatus)
+      active && isAutomaticRefreshActive(query.state.data?.lastAutomaticStatus)
         ? 2_000
         : false,
     refetchIntervalInBackground: false,
   });
   const [draft, setDraft] = useState<FeedRefreshScheduleDraft | null>(null);
-  const [savedDraft, setSavedDraft] =
-    useState<FeedRefreshScheduleDraft | null>(null);
+  const [savedDraft, setSavedDraft] = useState<FeedRefreshScheduleDraft | null>(
+    null,
+  );
   const [validationError, setValidationError] = useState<string | null>(null);
   const [timeSelection, setTimeSelection] = useState<TimeSelection>(
     timeSelectionFrom("00:00"),
@@ -332,10 +325,7 @@ export function AutomaticRefreshCard({
           queryKey: feedKeys.primary(scope, "/app/feed-data"),
         }),
         queryClient.invalidateQueries({
-          queryKey: feedKeys.additional(
-            scope,
-            "/app/additional-feeds",
-          ),
+          queryKey: feedKeys.additional(scope, "/app/additional-feeds"),
         }),
       ]);
     }
@@ -349,11 +339,7 @@ export function AutomaticRefreshCard({
   ]);
 
   useEffect(() => {
-    if (
-      !active ||
-      !schedule?.nextRunAt ||
-      automaticWorkActive
-    ) {
+    if (!active || !schedule?.nextRunAt || automaticWorkActive) {
       return;
     }
 
@@ -388,9 +374,7 @@ export function AutomaticRefreshCard({
   const visibleTimezones = useMemo(() => {
     const values = [
       ...new Set(
-        timezonesQuery.data?.pages.flatMap(
-          (page) => page.timezones,
-        ) ?? [],
+        timezonesQuery.data?.pages.flatMap((page) => page.timezones) ?? [],
       ),
     ];
     const selected = timezoneSelection;
@@ -399,9 +383,7 @@ export function AutomaticRefreshCard({
       : values;
   }, [timezoneSelection, timezonesQuery.data]);
 
-  const loadMoreTimezonesNearBottom = (
-    event: UIEvent<HTMLDivElement>,
-  ) => {
+  const loadMoreTimezonesNearBottom = (event: UIEvent<HTMLDivElement>) => {
     const results = event.currentTarget;
     const distanceFromBottom =
       results.scrollHeight - results.scrollTop - results.clientHeight;
@@ -518,9 +500,7 @@ export function AutomaticRefreshCard({
       return;
     }
     setDraft((current) =>
-      current
-        ? { ...current, customTimezone: timezoneSelection }
-        : current,
+      current ? { ...current, customTimezone: timezoneSelection } : current,
     );
     setValidationError(null);
   };
@@ -587,9 +567,7 @@ export function AutomaticRefreshCard({
               }`}
               disabled={!draft || saveMutation.isPending}
               onClick={() =>
-                void persistCustomEnabled(
-                  !draft?.customAutomaticRefresh,
-                )
+                void persistCustomEnabled(!draft?.customAutomaticRefresh)
               }
               role="switch"
               type="button"
@@ -601,7 +579,10 @@ export function AutomaticRefreshCard({
         <s-paragraph color="subdued">{subtitle}</s-paragraph>
 
         {scheduleQuery.isError ? (
-          <s-banner heading="Automatic refresh couldn't be loaded" tone="critical">
+          <s-banner
+            heading="Automatic refresh couldn't be loaded"
+            tone="critical"
+          >
             <s-paragraph>
               {scheduleQuery.error instanceof Error
                 ? scheduleQuery.error.message
@@ -623,9 +604,7 @@ export function AutomaticRefreshCard({
           <>
             <div className={styles.scheduleControls}>
               <div className={styles.scheduleField}>
-                <span className={styles.selectorLabel}>
-                  Daily refresh time
-                </span>
+                <span className={styles.selectorLabel}>Daily refresh time</span>
                 <s-clickable
                   accessibilityLabel="Choose the daily refresh time"
                   background="base"
@@ -651,9 +630,7 @@ export function AutomaticRefreshCard({
                     justifyContent="space-between"
                   >
                     <s-text
-                      color={
-                        draft.customAutomaticRefresh ? "base" : "subdued"
-                      }
+                      color={draft.customAutomaticRefresh ? "base" : "subdued"}
                     >
                       {formatTime12(displayedTime)}
                     </s-text>
@@ -689,9 +666,7 @@ export function AutomaticRefreshCard({
                     justifyContent="space-between"
                   >
                     <s-text
-                      color={
-                        draft.customAutomaticRefresh ? "base" : "subdued"
-                      }
+                      color={draft.customAutomaticRefresh ? "base" : "subdued"}
                     >
                       {draft.customTimezone ?? "Choose timezone"}
                     </s-text>
@@ -707,10 +682,7 @@ export function AutomaticRefreshCard({
 
             <dl aria-live="polite" className={styles.scheduleStatus}>
               <div className={styles.scheduleStatusRow}>
-                <span
-                  aria-hidden="true"
-                  className={styles.scheduleStatusIcon}
-                >
+                <span aria-hidden="true" className={styles.scheduleStatusIcon}>
                   <s-icon size="base" tone="neutral" type="calendar" />
                 </span>
                 <dt>Next refresh</dt>
@@ -725,10 +697,7 @@ export function AutomaticRefreshCard({
                 </dd>
               </div>
               <div className={styles.scheduleStatusRow}>
-                <span
-                  aria-hidden="true"
-                  className={styles.scheduleStatusIcon}
-                >
+                <span aria-hidden="true" className={styles.scheduleStatusIcon}>
                   <s-icon size="base" tone="neutral" type="clock" />
                 </span>
                 <dt>Last automatic refresh</dt>
@@ -740,14 +709,10 @@ export function AutomaticRefreshCard({
                       scope?.locale ?? null,
                     )}
                   </span>
-                 
                 </dd>
               </div>
               <div className={styles.scheduleStatusRow}>
-                <span
-                  aria-hidden="true"
-                  className={styles.scheduleStatusIcon}
-                >
+                <span aria-hidden="true" className={styles.scheduleStatusIcon}>
                   <s-icon
                     size="base"
                     tone={
@@ -776,9 +741,7 @@ export function AutomaticRefreshCard({
                 </span>
                 <dt>Last status</dt>
                 <dd>
-                  <AutomaticStatusBadge
-                    status={schedule.lastAutomaticStatus}
-                  />
+                  <AutomaticStatusBadge status={schedule.lastAutomaticStatus} />
                 </dd>
               </div>
             </dl>
@@ -788,9 +751,7 @@ export function AutomaticRefreshCard({
                 disabled={
                   saveMutation.isPending ||
                   feedRefreshDraftFingerprint(draft) ===
-                    feedRefreshDraftFingerprint(
-                      DEFAULT_FEED_REFRESH_SCHEDULE,
-                    )
+                    feedRefreshDraftFingerprint(DEFAULT_FEED_REFRESH_SCHEDULE)
                     ? true
                     : undefined
                 }
@@ -801,9 +762,7 @@ export function AutomaticRefreshCard({
                 Reset
               </s-button>
               <s-button
-                disabled={
-                  !isDirty || saveMutation.isPending ? true : undefined
-                }
+                disabled={!isDirty || saveMutation.isPending ? true : undefined}
                 loading={saveMutation.isPending ? true : undefined}
                 onClick={() => void save()}
                 variant="primary"
@@ -815,7 +774,11 @@ export function AutomaticRefreshCard({
         ) : null}
       </s-stack>
 
-      <s-modal heading="Choose daily refresh time" id={timeModalId}>
+      <s-modal
+        accessibilityLabel="Daily automatic refresh time selection"
+        heading="Choose daily refresh time"
+        id={timeModalId}
+      >
         <s-paragraph color="subdued">
           Select the local time when the daily refresh should be scheduled.
         </s-paragraph>
@@ -877,12 +840,17 @@ export function AutomaticRefreshCard({
       </s-modal>
 
       <s-modal
+        accessibilityLabel="Automatic refresh timezone selection"
         heading="Choose timezone"
         id={timezoneModalId}
-        onHide={() => {
-          setTimezoneModalOpen(false);
-          setTimezoneSearch("");
-        }}
+        onHide={
+          hydrated
+            ? () => {
+                setTimezoneModalOpen(false);
+                setTimezoneSearch("");
+              }
+            : undefined
+        }
       >
         <div className={styles.timezoneModalContent}>
           <s-search-field
@@ -898,10 +866,7 @@ export function AutomaticRefreshCard({
           >
             {timezonesQuery.isPending ? (
               <div className={styles.inlineLoading}>
-                <s-spinner
-                  accessibilityLabel="Loading timezones"
-                  size="base"
-                />
+                <s-spinner accessibilityLabel="Loading timezones" size="base" />
               </div>
             ) : timezonesQuery.isError && !timezonesQuery.data ? (
               <div className={styles.inlineError}>
@@ -926,9 +891,7 @@ export function AutomaticRefreshCard({
                   labelAccessibilityVisibility="exclusive"
                   name="automatic-refresh-timezone"
                   onChange={(event) =>
-                    setTimezoneSelection(
-                      event.currentTarget.values[0] ?? "",
-                    )
+                    setTimezoneSelection(event.currentTarget.values[0] ?? "")
                   }
                   values={[timezoneSelection]}
                 >
@@ -947,15 +910,11 @@ export function AutomaticRefreshCard({
                   ))}
                 </s-choice-list>
                 {timezonesQuery.isFetchingNextPage ? (
-                  <div
-                    aria-live="polite"
-                    className={styles.timezonePageStatus}
-                  >
+                  <div aria-live="polite" className={styles.timezonePageStatus}>
                     <s-spinner
                       accessibilityLabel="Loading more IANA timezones"
                       size="base"
                     />
-                    
                   </div>
                 ) : timezonesQuery.isFetchNextPageError ? (
                   <div className={styles.timezonePageStatus}>
@@ -963,9 +922,7 @@ export function AutomaticRefreshCard({
                       More timezones could not be loaded.
                     </span>
                     <s-button
-                      onClick={() =>
-                        void timezonesQuery.fetchNextPage()
-                      }
+                      onClick={() => void timezonesQuery.fetchNextPage()}
                       variant="secondary"
                     >
                       Retry

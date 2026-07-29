@@ -3,13 +3,16 @@ export interface SelectedCollection {
   title: string;
 }
 
-export const CHECKOUT_LINK_MODES = [
-  "DISABLED",
-  "CART",
-  "CHECKOUT",
-] as const;
+export const CHECKOUT_LINK_MODES = ["DISABLED", "CART", "CHECKOUT"] as const;
 
 export type CheckoutLinkMode = (typeof CHECKOUT_LINK_MODES)[number];
+
+export const INVENTORY_SOURCE_MODES = [
+  "ALL_LOCATIONS",
+  "SELECTED_LOCATIONS",
+] as const;
+
+export type InventorySourceMode = (typeof INVENTORY_SOURCE_MODES)[number];
 
 export interface ConfigurationInput {
   alertsEmail: string;
@@ -19,6 +22,12 @@ export interface ConfigurationInput {
   excludedCollections: SelectedCollection[];
   excludedTitleTerms: string[];
   showSalePriceInGoogleFeed: boolean;
+  useProductImageAsMainImage: boolean;
+  includeShippingWeightInGoogleFeed: boolean;
+  excludeOutOfStockItems: boolean;
+  ignoreShopifyInventoryInGoogleFeed: boolean;
+  inventorySourceMode: InventorySourceMode;
+  selectedInventoryLocationIds: string[];
   disableUtmParameters: boolean;
   disablePrimaryCurrencyParameter: boolean;
   checkoutLinkMode: CheckoutLinkMode;
@@ -32,6 +41,12 @@ export interface ConfigurationFieldErrors {
   excludedCollections?: string;
   excludedTitleTerms?: string;
   showSalePriceInGoogleFeed?: string;
+  useProductImageAsMainImage?: string;
+  includeShippingWeightInGoogleFeed?: string;
+  excludeOutOfStockItems?: string;
+  ignoreShopifyInventoryInGoogleFeed?: string;
+  inventorySourceMode?: string;
+  selectedInventoryLocationIds?: string;
   disableUtmParameters?: string;
   disablePrimaryCurrencyParameter?: string;
   checkoutLinkMode?: string;
@@ -48,11 +63,13 @@ export class ConfigurationValidationError extends Error {
 }
 
 const SHOPIFY_COLLECTION_ID = /^gid:\/\/shopify\/Collection\/\d+$/;
+const SHOPIFY_LOCATION_ID = /^gid:\/\/shopify\/Location\/\d+$/;
 const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_COLLECTIONS = 100;
 const MAX_OPTION_NAMES = 100;
 const MAX_OPTION_NAME_LENGTH = 100;
 const MAX_TITLE_TERMS = 100;
+const MAX_SELECTED_INVENTORY_LOCATIONS = 250;
 
 export const DEFAULT_COLOR_OPTIONS = ["Color", "Colour"] as const;
 export const DEFAULT_SIZE_OPTIONS = ["Size"] as const;
@@ -89,6 +106,30 @@ export function normalizeOptionNames(values: unknown) {
   }
 
   return names;
+}
+
+export function availableOptionNames(
+  discoveredValues: unknown,
+  selectedValues: unknown,
+  unavailableValues: unknown,
+) {
+  const selected = normalizeOptionNames(selectedValues);
+  const selectedKeys = new Set(
+    selected.map((name) => name.toLocaleLowerCase()),
+  );
+  const unavailableKeys = new Set(
+    normalizeOptionNames(unavailableValues).map((name) =>
+      name.toLocaleLowerCase(),
+    ),
+  );
+
+  return normalizeOptionNames([
+    ...normalizeOptionNames(discoveredValues),
+    ...selected,
+  ]).filter((name) => {
+    const comparable = name.toLocaleLowerCase();
+    return selectedKeys.has(comparable) || !unavailableKeys.has(comparable);
+  });
 }
 
 export function resolveStoredOptionNames(
@@ -170,13 +211,39 @@ export function normalizeSelectedCollections(values: unknown) {
   return collections;
 }
 
-export function normalizeCheckoutLinkMode(
-  value: unknown,
-): CheckoutLinkMode {
+export function normalizeCheckoutLinkMode(value: unknown): CheckoutLinkMode {
   return typeof value === "string" &&
     CHECKOUT_LINK_MODES.includes(value as CheckoutLinkMode)
     ? (value as CheckoutLinkMode)
     : "DISABLED";
+}
+
+export function normalizeInventorySourceMode(
+  value: unknown,
+): InventorySourceMode {
+  return typeof value === "string" &&
+    INVENTORY_SOURCE_MODES.includes(value as InventorySourceMode)
+    ? (value as InventorySourceMode)
+    : "ALL_LOCATIONS";
+}
+
+export function normalizeInventoryLocationIds(values: unknown) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const id = value.trim();
+    if (!SHOPIFY_LOCATION_ID.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+
+  return ids;
 }
 
 export function validateConfigurationInput(value: unknown): ConfigurationInput {
@@ -201,14 +268,23 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
   const excludedTitleTerms = normalizeExcludedTitleTerms(
     input.excludedTitleTerms,
   );
-  const showSalePriceInGoogleFeed =
-    input.showSalePriceInGoogleFeed === true;
+  const showSalePriceInGoogleFeed = input.showSalePriceInGoogleFeed === true;
+  const useProductImageAsMainImage = input.useProductImageAsMainImage === true;
+  const includeShippingWeightInGoogleFeed =
+    input.includeShippingWeightInGoogleFeed === true;
+  const excludeOutOfStockItems = input.excludeOutOfStockItems === true;
+  const ignoreShopifyInventoryInGoogleFeed =
+    input.ignoreShopifyInventoryInGoogleFeed === true;
+  const inventorySourceMode = normalizeInventorySourceMode(
+    input.inventorySourceMode,
+  );
+  const selectedInventoryLocationIds = normalizeInventoryLocationIds(
+    input.selectedInventoryLocationIds,
+  );
   const disableUtmParameters = input.disableUtmParameters === true;
   const disablePrimaryCurrencyParameter =
     input.disablePrimaryCurrencyParameter === true;
-  const checkoutLinkMode = normalizeCheckoutLinkMode(
-    input.checkoutLinkMode,
-  );
+  const checkoutLinkMode = normalizeCheckoutLinkMode(input.checkoutLinkMode);
 
   if (!EMAIL_ADDRESS.test(alertsEmail) || alertsEmail.length > 254) {
     fields.alertsEmail = "Enter a valid email address.";
@@ -284,6 +360,70 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
   }
 
   if (
+    input.useProductImageAsMainImage !== undefined &&
+    typeof input.useProductImageAsMainImage !== "boolean"
+  ) {
+    fields.useProductImageAsMainImage =
+      "Choose which image should be used as the main feed image.";
+  }
+
+  if (
+    input.includeShippingWeightInGoogleFeed !== undefined &&
+    typeof input.includeShippingWeightInGoogleFeed !== "boolean"
+  ) {
+    fields.includeShippingWeightInGoogleFeed =
+      "Choose whether the Google feed should include shipping weight.";
+  }
+
+  if (
+    input.excludeOutOfStockItems !== undefined &&
+    typeof input.excludeOutOfStockItems !== "boolean"
+  ) {
+    fields.excludeOutOfStockItems =
+      "Choose whether out-of-stock variants should be excluded.";
+  }
+
+  if (
+    input.ignoreShopifyInventoryInGoogleFeed !== undefined &&
+    typeof input.ignoreShopifyInventoryInGoogleFeed !== "boolean"
+  ) {
+    fields.ignoreShopifyInventoryInGoogleFeed =
+      "Choose whether Shopify inventory should be ignored.";
+  }
+
+  if (
+    input.inventorySourceMode !== undefined &&
+    (typeof input.inventorySourceMode !== "string" ||
+      !INVENTORY_SOURCE_MODES.includes(
+        input.inventorySourceMode as InventorySourceMode,
+      ))
+  ) {
+    fields.inventorySourceMode = "Choose a valid inventory source.";
+  }
+
+  if (
+    input.selectedInventoryLocationIds !== undefined &&
+    !Array.isArray(input.selectedInventoryLocationIds)
+  ) {
+    fields.selectedInventoryLocationIds =
+      "Select valid Shopify inventory locations.";
+  } else if (
+    Array.isArray(input.selectedInventoryLocationIds) &&
+    input.selectedInventoryLocationIds.length >
+    MAX_SELECTED_INVENTORY_LOCATIONS
+  ) {
+    fields.selectedInventoryLocationIds =
+      `Select no more than ${MAX_SELECTED_INVENTORY_LOCATIONS} inventory locations.`;
+  } else if (
+    Array.isArray(input.selectedInventoryLocationIds) &&
+    selectedInventoryLocationIds.length !==
+    input.selectedInventoryLocationIds.length
+  ) {
+    fields.selectedInventoryLocationIds =
+      "One or more selected inventory locations are invalid.";
+  }
+
+  if (
     input.disableUtmParameters !== undefined &&
     typeof input.disableUtmParameters !== "boolean"
   ) {
@@ -302,9 +442,7 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
   if (
     input.checkoutLinkMode !== undefined &&
     (typeof input.checkoutLinkMode !== "string" ||
-      !CHECKOUT_LINK_MODES.includes(
-        input.checkoutLinkMode as CheckoutLinkMode,
-      ))
+      !CHECKOUT_LINK_MODES.includes(input.checkoutLinkMode as CheckoutLinkMode))
   ) {
     fields.checkoutLinkMode = "Choose a valid checkout link option.";
   }
@@ -321,6 +459,12 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     excludedCollections,
     excludedTitleTerms,
     showSalePriceInGoogleFeed,
+    useProductImageAsMainImage,
+    includeShippingWeightInGoogleFeed,
+    excludeOutOfStockItems,
+    ignoreShopifyInventoryInGoogleFeed,
+    inventorySourceMode,
+    selectedInventoryLocationIds,
     disableUtmParameters,
     disablePrimaryCurrencyParameter,
     checkoutLinkMode,

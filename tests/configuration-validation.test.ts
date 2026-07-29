@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  availableOptionNames,
   DEFAULT_COLOR_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
   normalizeExcludedTitleTerms,
@@ -35,6 +36,25 @@ test("option names are normalized and de-duplicated case-insensitively", () => {
   );
 });
 
+test("Color and Size selectors hide names selected by the other attribute", () => {
+  assert.deepEqual(
+    availableOptionNames(
+      ["Color", "Couleur", "Taille", "SIZE"],
+      ["Color", "Couleur"],
+      ["Size", "Taille"],
+    ),
+    ["Color", "Couleur"],
+  );
+  assert.deepEqual(
+    availableOptionNames(
+      ["Color", "Couleur", "Taille", "Size"],
+      ["Taille", "Size"],
+      ["colour", " COULEUR "],
+    ),
+    ["Color", "Taille", "Size"],
+  );
+});
+
 test("legacy single options migrate without overriding initialized empty arrays", () => {
   assert.deepEqual(
     resolveStoredOptionNames([], " Couleur ", false, DEFAULT_COLOR_OPTIONS),
@@ -64,6 +84,12 @@ test("configuration retains stable collection IDs and normalized store values", 
     ],
     excludedTitleTerms: [" Sample "],
     showSalePriceInGoogleFeed: true,
+    useProductImageAsMainImage: true,
+    includeShippingWeightInGoogleFeed: true,
+    excludeOutOfStockItems: true,
+    ignoreShopifyInventoryInGoogleFeed: false,
+    inventorySourceMode: "ALL_LOCATIONS",
+    selectedInventoryLocationIds: [],
     disableUtmParameters: true,
     disablePrimaryCurrencyParameter: true,
     checkoutLinkMode: "CART",
@@ -82,6 +108,12 @@ test("configuration retains stable collection IDs and normalized store values", 
     ],
     excludedTitleTerms: ["Sample"],
     showSalePriceInGoogleFeed: true,
+    useProductImageAsMainImage: true,
+    includeShippingWeightInGoogleFeed: true,
+    excludeOutOfStockItems: true,
+    ignoreShopifyInventoryInGoogleFeed: false,
+    inventorySourceMode: "ALL_LOCATIONS",
+    selectedInventoryLocationIds: [],
     disableUtmParameters: true,
     disablePrimaryCurrencyParameter: true,
     checkoutLinkMode: "CART",
@@ -110,6 +142,82 @@ test("sale-price feed setting defaults false and validates Boolean values", () =
       }),
     /Correct the highlighted configuration fields/,
   );
+});
+
+test("new Google feed settings default false and validate Boolean values", () => {
+  const base = {
+    alertsEmail: "alerts@example.com",
+    countryCode: "US",
+    colorOptions: ["Color"],
+    excludedCollections: [],
+    excludedTitleTerms: [],
+    sizeOptions: ["Size"],
+  };
+  const defaults = validateConfigurationInput(base);
+
+  assert.equal(defaults.useProductImageAsMainImage, false);
+  assert.equal(defaults.includeShippingWeightInGoogleFeed, false);
+  assert.equal(defaults.excludeOutOfStockItems, false);
+
+  for (const field of [
+    "useProductImageAsMainImage",
+    "includeShippingWeightInGoogleFeed",
+    "excludeOutOfStockItems",
+  ] as const) {
+    assert.throws(
+      () =>
+        validateConfigurationInput({
+          ...base,
+          [field]: "true",
+        }),
+      /Correct the highlighted configuration fields/,
+    );
+  }
+});
+
+test("inventory settings default safely and preserve stable Shopify location IDs", () => {
+  const base = {
+    alertsEmail: "alerts@example.com",
+    countryCode: "US",
+    colorOptions: ["Color"],
+    excludedCollections: [],
+    excludedTitleTerms: [],
+    sizeOptions: ["Size"],
+  };
+  const defaults = validateConfigurationInput(base);
+
+  assert.equal(defaults.ignoreShopifyInventoryInGoogleFeed, false);
+  assert.equal(defaults.inventorySourceMode, "ALL_LOCATIONS");
+  assert.deepEqual(defaults.selectedInventoryLocationIds, []);
+
+  const selected = validateConfigurationInput({
+    ...base,
+    ignoreShopifyInventoryInGoogleFeed: true,
+    inventorySourceMode: "SELECTED_LOCATIONS",
+    selectedInventoryLocationIds: [
+      "gid://shopify/Location/123",
+      "gid://shopify/Location/456",
+    ],
+  });
+
+  assert.equal(selected.ignoreShopifyInventoryInGoogleFeed, true);
+  assert.equal(selected.inventorySourceMode, "SELECTED_LOCATIONS");
+  assert.deepEqual(selected.selectedInventoryLocationIds, [
+    "gid://shopify/Location/123",
+    "gid://shopify/Location/456",
+  ]);
+
+  for (const invalid of [
+    { inventorySourceMode: "SOMEWHERE" },
+    { selectedInventoryLocationIds: ["gid://shopify/Product/123"] },
+    { selectedInventoryLocationIds: ["gid://shopify/Location/123", "gid://shopify/Location/123"] },
+    { ignoreShopifyInventoryInGoogleFeed: "true" },
+  ]) {
+    assert.throws(
+      () => validateConfigurationInput({ ...base, ...invalid }),
+      /Correct the highlighted configuration fields/,
+    );
+  }
 });
 
 test("URL options default safely and validate every persisted setting", () => {

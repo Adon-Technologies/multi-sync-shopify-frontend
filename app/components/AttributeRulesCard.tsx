@@ -33,6 +33,7 @@ import {
   diagnosticsKeys,
   type DiagnosticsQueryScope,
 } from "../services/diagnostics-query";
+import { useHydrated } from "../hooks/useHydrated";
 import styles from "../styles/configurations.module.css";
 
 interface AttributeRulesCardProps {
@@ -98,17 +99,11 @@ function RuleValuePicker({
           gap="small"
           justifyContent="space-between"
         >
-          <s-text color={value ? "base" : "subdued"}>
-            {selectedLabel}
-          </s-text>
+          <s-text color={value ? "base" : "subdued"}>{selectedLabel}</s-text>
           <s-icon color="subdued" type="chevron-down" />
         </s-stack>
       </s-clickable>
-      <s-popover
-        blockSize="260px"
-        id={popoverId}
-        inlineSize="360px"
-      >
+      <s-popover blockSize="260px" id={popoverId} inlineSize="360px">
         <s-box padding="small-200">
           <div className={styles.ruleValueOptions}>
             {choices.map((option) => (
@@ -145,14 +140,14 @@ function RuleCollectionPicker({
   selected,
   unavailableCollectionIds,
 }: RuleCollectionPickerProps) {
+  const hydrated = useHydrated();
   const popoverId = `attribute-rule-collections-${ruleId}`;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
   const [results, setResults] = useState<SelectedCollection[]>([]);
-  const searchRef =
-    useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
   const query = useQuery({
     ...collectionsQueryOptions(scope, debouncedSearch, cursor),
     enabled: open,
@@ -197,8 +192,7 @@ function RuleCollectionPicker({
 
   const selectedIds = new Set(selected.map(({ id }) => id));
   const visible = results.filter(
-    ({ id }) =>
-      !selectedIds.has(id) && !unavailableCollectionIds.has(id),
+    ({ id }) => !selectedIds.has(id) && !unavailableCollectionIds.has(id),
   );
 
   return (
@@ -244,14 +238,22 @@ function RuleCollectionPicker({
         blockSize="340px"
         id={popoverId}
         inlineSize="400px"
-        onHide={() => {
-          setOpen(false);
-          setSearch("");
-        }}
-        onShow={() => {
-          setOpen(true);
-          window.requestAnimationFrame(() => searchRef.current?.focus());
-        }}
+        onHide={
+          hydrated
+            ? () => {
+                setOpen(false);
+                setSearch("");
+              }
+            : undefined
+        }
+        onShow={
+          hydrated
+            ? () => {
+                setOpen(true);
+                window.requestAnimationFrame(() => searchRef.current?.focus());
+              }
+            : undefined
+        }
       >
         <s-box padding="small-200">
           <div className={styles.configurationPopoverContent}>
@@ -276,10 +278,7 @@ function RuleCollectionPicker({
                   <s-text color="subdued">
                     Collections could not be loaded.
                   </s-text>
-                  <s-button
-                    onClick={() => query.refetch()}
-                    variant="secondary"
-                  >
+                  <s-button onClick={() => query.refetch()} variant="secondary">
                     Retry
                   </s-button>
                 </div>
@@ -365,8 +364,7 @@ function RuleJobStatus({
             ? "Queued"
             : job.status === "PROCESSING"
               ? "Applying rules"
-              : job.status.charAt(0) +
-                job.status.slice(1).toLocaleLowerCase()}
+              : job.status.charAt(0) + job.status.slice(1).toLocaleLowerCase()}
         </s-badge>
         {job.status === "PROCESSING" || job.status === "COMPLETED" ? (
           <s-text color="subdued">{progress}</s-text>
@@ -419,8 +417,9 @@ function AttributeRulesEditor({
   const defaultTitle =
     kind === "gender" ? "Default Gender" : "Default Age Group";
   const mutation = useMutation({
-    mutationFn: (configuration: GenderRulesConfiguration | AgeRulesConfiguration) =>
-      saveAttributeRulesRequest(kind, configuration),
+    mutationFn: (
+      configuration: GenderRulesConfiguration | AgeRulesConfiguration,
+    ) => saveAttributeRulesRequest(kind, configuration),
   });
 
   useEffect(() => {
@@ -435,9 +434,7 @@ function AttributeRulesEditor({
           new Set(
             draft.rules
               .filter(({ id }) => id !== rule.id)
-              .flatMap(({ collections }) =>
-                collections.map(({ id }) => id),
-              ),
+              .flatMap(({ collections }) => collections.map(({ id }) => id)),
           ),
         ]),
       ),
@@ -486,7 +483,7 @@ function AttributeRulesEditor({
     } catch (caught) {
       const message =
         caught instanceof AttributeRulesValidationError ||
-          caught instanceof Error
+        caught instanceof Error
           ? caught.message
           : `${title} couldn't be saved. Try again.`;
       setError(message);
@@ -505,6 +502,7 @@ function AttributeRulesEditor({
         Edit {kind === "gender" ? "Gender" : "Age"} Rules
       </s-button>
       <s-modal
+        accessibilityLabel={`${title} editor`}
         heading={title}
         id={modalId}
         padding="none"
@@ -513,9 +511,7 @@ function AttributeRulesEditor({
       >
         <s-box padding="base">
           <div className={styles.rulesModalContent}>
-            {error ? (
-              <s-banner heading={error} tone="critical" />
-            ) : null}
+            {error ? <s-banner heading={error} tone="critical" /> : null}
 
             <div className={styles.rulesSectionBox}>
               <s-heading>{defaultTitle}</s-heading>
@@ -545,8 +541,8 @@ function AttributeRulesEditor({
                 <div>
                   <s-heading>Collection Rules</s-heading>
                   <s-paragraph color="subdued">
-                    Collection rules override the default and any existing
-                    value for products in the selected collections.
+                    Collection rules override the default and any existing value
+                    for products in the selected collections.
                   </s-paragraph>
                 </div>
                 <s-button
@@ -574,9 +570,7 @@ function AttributeRulesEditor({
               <div className={styles.rulesList}>
                 {draft.rules.length === 0 ? (
                   <div className={styles.rulesEmptyState}>
-                    <s-text color="subdued">
-                      No collection rules added.
-                    </s-text>
+                    <s-text color="subdued">No collection rules added.</s-text>
                   </div>
                 ) : (
                   draft.rules.map((rule, index) => {
@@ -613,9 +607,7 @@ function AttributeRulesEditor({
                           }
                           id={`${kind}-${rule.id}`}
                           label={
-                            kind === "gender"
-                              ? "Rule Gender"
-                              : "Rule Age Group"
+                            kind === "gender" ? "Rule Gender" : "Rule Age Group"
                           }
                           onChange={(value) =>
                             updateRule(rule.id, {
@@ -624,8 +616,7 @@ function AttributeRulesEditor({
                           }
                           options={options.filter(
                             ({ value }) =>
-                              value === rule.value ||
-                              !usedValues.has(value),
+                              value === rule.value || !usedValues.has(value),
                           )}
                           value={rule.value}
                         />
@@ -651,7 +642,6 @@ function AttributeRulesEditor({
                 )}
               </div>
             </div>
-
           </div>
         </s-box>
         <s-button
@@ -689,13 +679,13 @@ export function AttributeRulesCard({
     ...attributeRuleStatusQueryOptions(scope),
     initialData: initialJobs ?? undefined,
   });
-  const jobs = statusQuery.data ?? initialJobs ?? {
-    age: null,
-    gender: null,
-  };
+  const jobs = statusQuery.data ??
+    initialJobs ?? {
+      age: null,
+      gender: null,
+    };
   const retryMutation = useMutation({
-    mutationFn: (kind: AttributeRuleKind) =>
-      retryAttributeRulesRequest(kind),
+    mutationFn: (kind: AttributeRuleKind) => retryAttributeRulesRequest(kind),
     onSuccess: (result, kind) => {
       queryClient.setQueryData(
         attributeRuleStatusQueryOptions(scope).queryKey,
@@ -828,8 +818,7 @@ export function AttributeRulesCard({
             label="Gender rules"
             onRetry={() => retryMutation.mutate("gender")}
             retrying={
-              retryMutation.isPending &&
-              retryMutation.variables === "gender"
+              retryMutation.isPending && retryMutation.variables === "gender"
             }
           />
           <RuleJobStatus

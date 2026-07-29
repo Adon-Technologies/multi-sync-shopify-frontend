@@ -29,24 +29,133 @@
   min-width: 0;
 }
 
-.pricingFeature {
-  grid-column: 1 / -1;
-}
-
 .urlOptions {
   display: grid;
   gap: 18px;
 }
 
+.inventoryAvailability {
+  display: grid;
+  gap: 18px;
+}
+
+.inventorySource {
+  display: grid;
+  gap: 14px;
+}
+
+.inventorySourceHeading h3,
+.inventoryLocations h4 {
+  color: #202223;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 20px;
+  margin: 0;
+}
+
+.inventorySourceHeading p {
+  color: #6d7175;
+  font-size: 13px;
+  line-height: 20px;
+  margin: 2px 0 0;
+}
+
+.inventoryLocations {
+  border-top: 1px solid #ebebeb;
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.inventoryLocationList {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.inventoryLocationState {
+  align-items: center;
+  color: #6d7175;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.checkoutLinkDetails {
+  margin: 4px 0 0;
+  color: #616161;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.supportLink,
+.supportLink:visited,
+.supportLink:hover,
+.supportLink:active {
+  color: #000;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.supportLink:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid #005bd3;
+  outline-offset: 2px;
+}
+
 .checkoutLinkSetting {
   display: grid;
-  gap: 8px;
+  gap: 5px;
   max-width: 620px;
+}
+
+.checkoutLinkLabel {
+  color: #303030;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 20px;
+}
+
+.checkoutLinkSetting s-clickable {
+  min-height: 38px;
+}
+
+.checkoutLinkOptions {
+  display: grid;
+  gap: 2px;
+}
+
+.checkoutLinkOptions s-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.checkoutLinkOptionContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.featureHeadingRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.featureHeading {
+  min-width: 0;
 }
 
 .featureHeading h3 {
   color: #202223;
   font-size: 14px;
+  font-weight: 550;
   line-height: 20px;
   margin: 0;
 }
@@ -81,14 +190,23 @@
   width: 100%;
 }
 
-.tags {
+.tags,
+.dialogTags {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
 }
 
-.tags:empty {
+.tags:empty,
+.dialogTags:empty {
   display: none;
+}
+
+.dialogTags {
+  max-height: 116px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1px;
 }
 
 .tag {
@@ -161,6 +279,19 @@
   min-height: 0;
 }
 
+.collectionModalContent {
+  display: grid;
+  gap: 12px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  height: 390px;
+  min-height: 0;
+}
+
+.titleTermsModalContent {
+  display: grid;
+  gap: 16px;
+}
+
 .popoverResults {
   min-height: 0;
   overflow-y: auto;
@@ -218,6 +349,34 @@
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.googleFeedOptions {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.googleFeedOptionsHeading h3 {
+  color: #202223;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 20px;
+  margin: 0;
+}
+
+.googleFeedOptionsHeading p {
+  color: #6d7175;
+  font-size: 13px;
+  line-height: 20px;
+  margin: 2px 0 0;
+}
+
+.googleFeedOptionsGrid {
+  display: grid;
+  gap: 18px 28px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .attributeRulesCard {
@@ -338,7 +497,12 @@
   }
 
   .informationGrid,
-  .features {
+  .features,
+  .inventoryLocationList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .googleFeedOptionsGrid {
     grid-template-columns: minmax(0, 1fr);
   }
 

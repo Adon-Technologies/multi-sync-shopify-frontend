@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type {
   AdditionalFeedActionResponse,
@@ -38,6 +34,7 @@ import {
   refreshAdditionalFeed,
   type FeedQueryScope,
 } from "../services/feed-query";
+import { useHydrated } from "../hooks/useHydrated";
 import { shouldPollPrimaryFeed } from "../services/feed-generation-state";
 import styles from "../styles/feeds.module.css";
 import { AutomaticRefreshCard } from "./AutomaticRefreshCard";
@@ -66,8 +63,8 @@ function hasPendingAdditionalFeeds(
 ) {
   return Boolean(
     data?.ok &&
-      (data.activeGeneration ||
-        data.feeds?.some(({ feed }) => pendingStatuses.has(feed.status))),
+    (data.activeGeneration ||
+      data.feeds?.some(({ feed }) => pendingStatuses.has(feed.status))),
   );
 }
 
@@ -79,10 +76,7 @@ function formatFileSize(value: string | null) {
   let unitIndex = 0;
   let divisor = 1n;
 
-  while (
-    unitIndex < units.length - 1 &&
-    bytes >= divisor * 1_024n
-  ) {
+  while (unitIndex < units.length - 1 && bytes >= divisor * 1_024n) {
     divisor *= 1_024n;
     unitIndex += 1;
   }
@@ -156,9 +150,7 @@ function LoadingRow() {
         <span className={styles.loadingLine} />
       </s-table-cell>
       <s-table-cell>
-        <span
-          className={`${styles.loadingLine} ${styles.loadingLineWide}`}
-        />
+        <span className={`${styles.loadingLine} ${styles.loadingLineWide}`} />
       </s-table-cell>
       <s-table-cell>
         <span className={styles.loadingLine} />
@@ -222,10 +214,10 @@ function AdditionalMarketForm({
   queryScope,
   scopeReady,
 }: AdditionalMarketFormProps) {
+  const hydrated = useHydrated();
   const [marketSearch, setMarketSearch] = useState("");
   const [languageSearch, setLanguageSearch] = useState("");
-  const marketSearchRef =
-    useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const marketSearchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
   const languageSearchRef =
     useRef<HTMLElementTagNameMap["s-search-field"]>(null);
   const marketPopoverId = `${form.id}-market-popover`;
@@ -271,13 +263,7 @@ function AdditionalMarketForm({
       return [form.language, ...available];
     }
     return available;
-  }, [
-    form.id,
-    form.language,
-    form.market,
-    forms,
-    languagesQuery.data,
-  ]);
+  }, [form.id, form.language, form.market, forms, languagesQuery.data]);
   const selectionLocked = isGenerating || Boolean(form.pendingFeedId);
   const normalizedMarketSearch = marketSearch
     .normalize("NFKC")
@@ -306,8 +292,7 @@ function AdditionalMarketForm({
       .toLocaleLowerCase()
       .includes(normalizedLanguageSearch),
   );
-  const marketDisabled =
-    marketLoading || marketError || selectionLocked;
+  const marketDisabled = marketLoading || marketError || selectionLocked;
   const languageDisabled =
     !form.market ||
     languagesQuery.isPending ||
@@ -356,19 +341,25 @@ function AdditionalMarketForm({
             blockSize="340px"
             id={marketPopoverId}
             inlineSize="420px"
-            onHide={() => setMarketSearch("")}
-            onShow={() => {
-              window.requestAnimationFrame(() =>
-                marketSearchRef.current?.focus(),
-              );
-            }}
+            onHide={hydrated ? () => setMarketSearch("") : undefined}
+            onShow={
+              hydrated
+                ? () => {
+                    window.requestAnimationFrame(() =>
+                      marketSearchRef.current?.focus(),
+                    );
+                  }
+                : undefined
+            }
           >
             <s-box padding="small-200">
               <div className={styles.selectorPopoverContent}>
                 <s-search-field
                   label="Search Markets and countries"
                   labelAccessibilityVisibility="exclusive"
-                  onInput={(event) => setMarketSearch(event.currentTarget.value)}
+                  onInput={(event) =>
+                    setMarketSearch(event.currentTarget.value)
+                  }
                   placeholder="Search market or country"
                   ref={marketSearchRef}
                   value={marketSearch}
@@ -450,12 +441,16 @@ function AdditionalMarketForm({
             blockSize="340px"
             id={languagePopoverId}
             inlineSize="420px"
-            onHide={() => setLanguageSearch("")}
-            onShow={() => {
-              window.requestAnimationFrame(() =>
-                languageSearchRef.current?.focus(),
-              );
-            }}
+            onHide={hydrated ? () => setLanguageSearch("") : undefined}
+            onShow={
+              hydrated
+                ? () => {
+                    window.requestAnimationFrame(() =>
+                      languageSearchRef.current?.focus(),
+                    );
+                  }
+                : undefined
+            }
           >
             <s-box padding="small-200">
               <div className={styles.selectorPopoverContent}>
@@ -575,6 +570,7 @@ function AdditionalMarketForm({
 }
 
 export function FeedsPanel({ active, scope }: FeedsPanelProps) {
+  const hydrated = useHydrated();
   const shopify = useAppBridge();
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<{
@@ -585,8 +581,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     AdditionalMarketFormState[]
   >([]);
   const nextFormId = useRef(0);
-  const [deleteTarget, setDeleteTarget] =
-    useState<AdditionalFeedEntry | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdditionalFeedEntry | null>(
+    null,
+  );
   const [automaticWorkActive, setAutomaticWorkActive] = useState(false);
   const wasActive = useRef(false);
   const endpoint = "/app/feed-data";
@@ -600,9 +597,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     ...primaryFeedQueryOptions(queryScope, endpoint),
     enabled: active && Boolean(scope),
     refetchInterval: (currentQuery) =>
-      active && shouldPollPrimaryFeed(currentQuery.state.data)
-        ? 2_000
-        : false,
+      active && shouldPollPrimaryFeed(currentQuery.state.data) ? 2_000 : false,
     refetchIntervalInBackground: false,
   });
   const additionalQuery = useQuery({
@@ -616,12 +611,8 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   });
   const refetchAdditionalFeeds = additionalQuery.refetch;
   const marketOptionsQuery = useQuery({
-    ...additionalMarketOptionsQueryOptions(
-      queryScope,
-      additionalEndpoint,
-    ),
-    enabled:
-      active && Boolean(scope) && additionalForms.length > 0,
+    ...additionalMarketOptionsQueryOptions(queryScope, additionalEndpoint),
+    enabled: active && Boolean(scope) && additionalForms.length > 0,
   });
   const invalidateFeedQueries = async () => {
     if (!scope) return;
@@ -641,16 +632,13 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           ({ feed }) => feed.id === result.entry?.feed.id,
         )
           ? current.feeds.map((entry) =>
-              entry.feed.id === result.entry?.feed.id
-                ? result.entry!
-                : entry,
+              entry.feed.id === result.entry?.feed.id ? result.entry! : entry,
             )
           : [...current.feeds, result.entry];
 
         return {
           ...current,
-          activeGeneration:
-            result.activeGeneration ?? current.activeGeneration,
+          activeGeneration: result.activeGeneration ?? current.activeGeneration,
           feeds,
         };
       },
@@ -698,8 +686,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     onSuccess: (result, request) => {
       applyAdditionalActionResult(result);
       const pendingFeedId =
-        (result.ok ? result.entry?.feed.id : null) ??
-        request.retryFeedId;
+        (result.ok ? result.entry?.feed.id : null) ?? request.retryFeedId;
       setAdditionalForms((forms) =>
         forms.map((form) =>
           form.id === request.formId
@@ -722,7 +709,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                     ? error.message
                     : "The additional feed couldn't be generated.",
               }
-          : form,
+            : form,
         ),
       );
       void invalidateFeedQueries();
@@ -804,11 +791,11 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   );
   const generationInProgress = Boolean(
     primaryGenerationInProgress ||
-      data?.activeGeneration ||
-      additionalData?.activeGeneration ||
-      additionalFeeds.some(({ feed: candidate }) =>
-        pendingStatuses.has(candidate.status),
-      ),
+    data?.activeGeneration ||
+    additionalData?.activeGeneration ||
+    additionalFeeds.some(({ feed: candidate }) =>
+      pendingStatuses.has(candidate.status),
+    ),
   );
   const generationLocked =
     automaticWorkActive ||
@@ -818,9 +805,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     additionalRefreshMutation.isPending;
   const activeGeneration =
     additionalData?.activeGeneration ?? data?.activeGeneration ?? null;
-  const successfulFeed = Boolean(
-    feed?.gcsObjectName && feed.lastRefreshedAt,
-  );
+  const successfulFeed = Boolean(feed?.gcsObjectName && feed.lastRefreshedAt);
   const progress = feed ? generationProgress(feed) : null;
 
   useEffect(() => {
@@ -830,20 +815,13 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   }, [additionalFeeds]);
 
   const generate = async () => {
-    if (
-      !market ||
-      generationLocked ||
-      mutation.isPending
-    ) {
+    if (!market || generationLocked || mutation.isPending) {
       return;
     }
 
     if (backendUnavailable) {
       const refreshed = await query.refetch();
-      if (
-        !refreshed.data?.ok ||
-        refreshed.data.backendUnavailable
-      ) {
+      if (!refreshed.data?.ok || refreshed.data.backendUnavailable) {
         shopify.toast.show(
           "The feed service is unavailable. Please try again later.",
           { isError: true },
@@ -858,11 +836,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
 
   const openFeed = () => {
     if (!feed?.publicUrl) return;
-    const opened = window.open(
-      feed.publicUrl,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    const opened = window.open(feed.publicUrl, "_blank", "noopener,noreferrer");
     if (opened) opened.opener = null;
   };
 
@@ -875,7 +849,8 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       shopify.toast.show("Feed URL copied to the clipboard.");
     } catch {
       setFeedback({
-        message: "The Feed URL couldn't be copied. Select and copy it manually.",
+        message:
+          "The Feed URL couldn't be copied. Select and copy it manually.",
         tone: "critical",
       });
     }
@@ -888,7 +863,8 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       shopify.toast.show("Feed URL copied to the clipboard.");
     } catch {
       setFeedback({
-        message: "The Feed URL couldn't be copied. Select and copy it manually.",
+        message:
+          "The Feed URL couldn't be copied. Select and copy it manually.",
         tone: "critical",
       });
     }
@@ -922,10 +898,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       return;
     }
     if (
-      selectedAdditionalFormCombinations(
-        additionalForms,
-        form.id,
-      ).has(additionalFormCombinationKey(form.market, form.language))
+      selectedAdditionalFormCombinations(additionalForms, form.id).has(
+        additionalFormCombinationKey(form.market, form.language),
+      )
     ) {
       updateAdditionalForm(form.id, {
         error:
@@ -1004,7 +979,10 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       ) : null}
 
       {data?.marketUnavailable && !backendUnavailable ? (
-        <s-banner heading="Shopify Market details may be outdated" tone="warning">
+        <s-banner
+          heading="Shopify Market details may be outdated"
+          tone="warning"
+        >
           The saved Primary Feed is still available, but Shopify didn&apos;t
           return current market details.
         </s-banner>
@@ -1019,171 +997,175 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       <s-section>
         <div className={styles.feedTable}>
           <s-table>
-          <s-table-header-row>
-            <s-table-header format="base" listSlot="primary">
-              <span className={styles.tableHeader}>Feed</span>
-            </s-table-header>
-            <s-table-header format="base" listSlot="labeled">
-              <span className={styles.tableHeader}>Market</span>
-            </s-table-header>
-            <s-table-header format="base" listSlot="labeled">
-              <span className={styles.tableHeader}>Feed URL</span>
-            </s-table-header>
-            <s-table-header format="base" listSlot="labeled">
-              <span className={styles.tableHeader}>Last refresh</span>
-            </s-table-header>
-            <s-table-header format="base" listSlot="inline">
-              <span className={styles.tableHeader}>Actions</span>
-            </s-table-header>
-          </s-table-header-row>
-          <s-table-body>
-            {query.isPending && !data ? (
-              <LoadingRow />
-            ) : (
-              <s-table-row>
-                <s-table-cell>
-                  <span
-                    className={`${styles.primaryLabel} ${styles.feedName}`}
-                  >
-                    Primary feed
-                  </span>
-                  {feed ? (
-                    <span className={styles.statusStack}>
-                      <StatusBadge
-                        requiresRefresh={feed.requiresRefresh}
-                        status={feed.status}
-                      />
-                      {progress ? (
-                        <span className={styles.progressText}>{progress}</span>
-                      ) : null}
-                    </span>
-                  ) : null}
-                </s-table-cell>
-                <s-table-cell>
-                  {market ? (
-                    <>
-                      <span className={styles.primaryLabel}>{market.name}</span>
-                      <span className={styles.marketDetails}>
-                        {[
-                          market.countryName ?? market.countryCode,
-                          market.currencyCode,
-                          market.locale.toLocaleUpperCase(),
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </span>
-                    </>
-                  ) : (
-                    <span className={styles.secondaryText}>Unavailable</span>
-                  )}
-                </s-table-cell>
-                <s-table-cell>
-                  {successfulFeed && feed ? (
-                    <a
-                      className={styles.feedUrl}
-                      href={feed.publicUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                      title={feed.publicUrl}
+            <s-table-header-row>
+              <s-table-header format="base" listSlot="primary">
+                <span className={styles.tableHeader}>Feed</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="labeled">
+                <span className={styles.tableHeader}>Market</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="labeled">
+                <span className={styles.tableHeader}>Feed URL</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="labeled">
+                <span className={styles.tableHeader}>Last refresh</span>
+              </s-table-header>
+              <s-table-header format="base" listSlot="inline">
+                <span className={styles.tableHeader}>Actions</span>
+              </s-table-header>
+            </s-table-header-row>
+            <s-table-body>
+              {query.isPending && !data ? (
+                <LoadingRow />
+              ) : (
+                <s-table-row>
+                  <s-table-cell>
+                    <span
+                      className={`${styles.primaryLabel} ${styles.feedName}`}
                     >
-                      {feed.publicUrl}
-                    </a>
-                  ) : (
-                    <span className={styles.secondaryText}>
-                      Available after generation
+                      Primary feed
                     </span>
-                  )}
-                </s-table-cell>
-                <s-table-cell>
-                  {feed?.lastRefreshedAt ? (
-                    <>
-                      <span className={styles.primaryLabel}>
-                        {formatRefreshDate(
-                          feed.lastRefreshedAt,
-                          scope?.locale ?? null,
-                        )}
-                      </span>
-                      <span className={styles.secondaryText}>
-                        {formatFileSize(feed.fileSizeBytes) ?? "Size unavailable"}
-                      </span>
-                    </>
-                  ) : (
-                    <span className={styles.secondaryText}>
-                      Never generated
-                    </span>
-                  )}
-                </s-table-cell>
-                <s-table-cell>
-                  <div className={styles.actions}>
-                    {successfulFeed && feed ? (
-                      <>
-                        <s-button
-                          accessibilityLabel="Open Primary Feed in a new tab"
-                          icon="external"
-                          onClick={openFeed}
-                          variant="secondary"
+                    {feed ? (
+                      <span className={styles.statusStack}>
+                        <StatusBadge
+                          requiresRefresh={feed.requiresRefresh}
+                          status={feed.status}
                         />
+                        {progress ? (
+                          <span className={styles.progressText}>
+                            {progress}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </s-table-cell>
+                  <s-table-cell>
+                    {market ? (
+                      <>
+                        <span className={styles.primaryLabel}>
+                          {market.name}
+                        </span>
+                        <span className={styles.marketDetails}>
+                          {[
+                            market.countryName ?? market.countryCode,
+                            market.currencyCode,
+                            market.locale.toLocaleUpperCase(),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </>
+                    ) : (
+                      <span className={styles.secondaryText}>Unavailable</span>
+                    )}
+                  </s-table-cell>
+                  <s-table-cell>
+                    {successfulFeed && feed ? (
+                      <a
+                        className={styles.feedUrl}
+                        href={feed.publicUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                        title={feed.publicUrl}
+                      >
+                        {feed.publicUrl}
+                      </a>
+                    ) : (
+                      <span className={styles.secondaryText}>
+                        Available after generation
+                      </span>
+                    )}
+                  </s-table-cell>
+                  <s-table-cell>
+                    {feed?.lastRefreshedAt ? (
+                      <>
+                        <span className={styles.primaryLabel}>
+                          {formatRefreshDate(
+                            feed.lastRefreshedAt,
+                            scope?.locale ?? null,
+                          )}
+                        </span>
+                        <span className={styles.secondaryText}>
+                          {formatFileSize(feed.fileSizeBytes) ??
+                            "Size unavailable"}
+                        </span>
+                      </>
+                    ) : (
+                      <span className={styles.secondaryText}>
+                        Never generated
+                      </span>
+                    )}
+                  </s-table-cell>
+                  <s-table-cell>
+                    <div className={styles.actions}>
+                      {successfulFeed && feed ? (
+                        <>
+                          <s-button
+                            accessibilityLabel="Open Primary Feed in a new tab"
+                            icon="external"
+                            onClick={openFeed}
+                            variant="secondary"
+                          />
+                          <s-button
+                            accessibilityLabel="Refresh Primary Feed"
+                            disabled={
+                              generationLocked ||
+                              query.isFetching ||
+                              mutation.isPending
+                                ? true
+                                : undefined
+                            }
+                            icon="refresh"
+                            loading={
+                              primaryGenerationInProgress || mutation.isPending
+                                ? true
+                                : undefined
+                            }
+                            onClick={() => void generate()}
+                            variant="secondary"
+                          />
+                          <s-button
+                            accessibilityLabel="Copy Primary Feed URL"
+                            icon="clipboard"
+                            onClick={() => void copyFeed()}
+                            variant="secondary"
+                          />
+                        </>
+                      ) : primaryGenerationInProgress ? (
+                        <s-button disabled loading variant="secondary">
+                          Generating
+                        </s-button>
+                      ) : (
                         <s-button
-                          accessibilityLabel="Refresh Primary Feed"
                           disabled={
+                            !market ||
                             generationLocked ||
                             query.isFetching ||
                             mutation.isPending
                               ? true
                               : undefined
                           }
-                          icon="refresh"
                           loading={
-                            primaryGenerationInProgress ||
-                            mutation.isPending
+                            query.isFetching || mutation.isPending
                               ? true
                               : undefined
                           }
                           onClick={() => void generate()}
-                          variant="secondary"
-                        />
-                        <s-button
-                          accessibilityLabel="Copy Primary Feed URL"
-                          icon="clipboard"
-                          onClick={() => void copyFeed()}
-                          variant="secondary"
-                        />
-                      </>
-                    ) : primaryGenerationInProgress ? (
-                      <s-button disabled loading variant="secondary">
-                        Generating
-                      </s-button>
-                    ) : (
-                      <s-button
-                        disabled={
-                          !market ||
-                          generationLocked ||
-                          query.isFetching ||
-                          mutation.isPending
-                            ? true
-                            : undefined
-                        }
-                        loading={
-                          query.isFetching || mutation.isPending
-                            ? true
-                            : undefined
-                        }
-                        onClick={() => void generate()}
-                        variant="primary"
-                      >
-                        {feed?.status === "FAILED"
-                          ? "Retry generation"
-                          : "Generate XML feed"}
-                      </s-button>
-                    )}
-                  </div>
-                  <span aria-live="polite" className={styles.visuallyHidden}>
-                    {primaryGenerationInProgress ? progress : ""}
-                  </span>
-                </s-table-cell>
-              </s-table-row>
-            )}
-          </s-table-body>
+                          variant="primary"
+                        >
+                          {feed?.status === "FAILED"
+                            ? "Retry generation"
+                            : "Generate XML feed"}
+                        </s-button>
+                      )}
+                    </div>
+                    <span aria-live="polite" className={styles.visuallyHidden}>
+                      {primaryGenerationInProgress ? progress : ""}
+                    </span>
+                  </s-table-cell>
+                </s-table-row>
+              )}
+            </s-table-body>
           </s-table>
         </div>
       </s-section>
@@ -1222,21 +1204,21 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           <div className={styles.feedTable}>
             <s-table>
               <s-table-header-row>
-              <s-table-header format="base" listSlot="primary">
-                <span className={styles.tableHeader}>Feed</span>
-              </s-table-header>
-              <s-table-header format="base" listSlot="labeled">
-                <span className={styles.tableHeader}>Market</span>
-              </s-table-header>
-              <s-table-header format="base" listSlot="labeled">
-                <span className={styles.tableHeader}>Feed URL</span>
-              </s-table-header>
-              <s-table-header format="base" listSlot="labeled">
-                <span className={styles.tableHeader}>Last refresh</span>
-              </s-table-header>
-              <s-table-header format="base" listSlot="inline">
-                <span className={styles.tableHeader}>Actions</span>
-              </s-table-header>
+                <s-table-header format="base" listSlot="primary">
+                  <span className={styles.tableHeader}>Feed</span>
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  <span className={styles.tableHeader}>Market</span>
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  <span className={styles.tableHeader}>Feed URL</span>
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  <span className={styles.tableHeader}>Last refresh</span>
+                </s-table-header>
+                <s-table-header format="base" listSlot="inline">
+                  <span className={styles.tableHeader}>Actions</span>
+                </s-table-header>
               </s-table-header-row>
               <s-table-body>
                 <LoadingRow />
@@ -1255,198 +1237,198 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           <div className={styles.feedTable}>
             <s-table>
               <s-table-header-row>
-              <s-table-header format="base" listSlot="primary">
-                <span className={styles.tableHeader}>Feed</span>
-              </s-table-header>
-              <s-table-header format="base" listSlot="labeled">
-                <span className={styles.tableHeader}>Market</span>
-              </s-table-header>
-              <s-table-header format="base" listSlot="labeled">
-                <span className={styles.tableHeader}>Feed URL</span>
-              </s-table-header>
-              <s-table-header format="base" listSlot="labeled">
-                <span className={styles.tableHeader}>Last refresh</span>
-              </s-table-header>
-              <s-table-header format="base" listSlot="inline">
-                <span className={styles.tableHeader}>Actions</span>
-              </s-table-header>
+                <s-table-header format="base" listSlot="primary">
+                  <span className={styles.tableHeader}>Feed</span>
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  <span className={styles.tableHeader}>Market</span>
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  <span className={styles.tableHeader}>Feed URL</span>
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  <span className={styles.tableHeader}>Last refresh</span>
+                </s-table-header>
+                <s-table-header format="base" listSlot="inline">
+                  <span className={styles.tableHeader}>Actions</span>
+                </s-table-header>
               </s-table-header-row>
               <s-table-body>
-              {visibleAdditionalFeeds.map((entry) => {
-                const candidate = entry.feed;
-                const candidatePending = pendingStatuses.has(candidate.status);
-                const candidateReady = Boolean(
-                  candidate.gcsObjectName && candidate.lastRefreshedAt,
-                );
-                const candidateProgress = generationProgress(candidate);
+                {visibleAdditionalFeeds.map((entry) => {
+                  const candidate = entry.feed;
+                  const candidatePending = pendingStatuses.has(
+                    candidate.status,
+                  );
+                  const candidateReady = Boolean(
+                    candidate.gcsObjectName && candidate.lastRefreshedAt,
+                  );
+                  const candidateProgress = generationProgress(candidate);
 
-                return (
-                  <s-table-row key={candidate.id}>
-                    <s-table-cell>
-                      <span
-                        className={`${styles.primaryLabel} ${styles.feedName}`}
-                      >
-                        Additional feed
-                      </span>
-                      <span className={styles.statusStack}>
-                        <StatusBadge
-                          requiresRefresh={candidate.requiresRefresh}
-                          status={candidate.status}
-                        />
-                        {candidateProgress ? (
-                          <span className={styles.progressText}>
-                            {candidateProgress}
-                          </span>
-                        ) : null}
-                        {candidate.status === "FAILED" &&
-                        candidate.lastError ? (
-                          <span className={styles.rowError}>
-                            {candidate.lastError}
-                          </span>
-                        ) : null}
-                      </span>
-                    </s-table-cell>
-                    <s-table-cell>
-                      <span className={styles.primaryLabel}>
-                        {entry.market.name}
-                      </span>
-                      <span className={styles.marketDetails}>
-                        {[
-                          entry.market.countryName ??
-                            entry.market.countryCode,
-                          entry.market.currencyCode,
-                          entry.market.locale.toUpperCase(),
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </span>
-                    </s-table-cell>
-                    <s-table-cell>
-                      {candidateReady ? (
-                        <a
-                          className={styles.feedUrl}
-                          href={candidate.publicUrl}
-                          rel="noreferrer"
-                          target="_blank"
-                          title={candidate.publicUrl}
+                  return (
+                    <s-table-row key={candidate.id}>
+                      <s-table-cell>
+                        <span
+                          className={`${styles.primaryLabel} ${styles.feedName}`}
                         >
-                          {candidate.publicUrl}
-                        </a>
-                      ) : (
-                        <span className={styles.secondaryText}>
-                          Available after generation
+                          Additional feed
                         </span>
-                      )}
-                    </s-table-cell>
-                    <s-table-cell>
-                      {candidate.lastRefreshedAt ? (
-                        <>
-                          <span className={styles.primaryLabel}>
-                            {formatRefreshDate(
-                              candidate.lastRefreshedAt,
-                              scope?.locale ?? null,
-                            )}
-                          </span>
-                          <span className={styles.secondaryText}>
-                            {formatFileSize(candidate.fileSizeBytes) ??
-                              "Size unavailable"}
-                          </span>
-                        </>
-                      ) : (
-                        <span className={styles.secondaryText}>
-                          Never generated
+                        <span className={styles.statusStack}>
+                          <StatusBadge
+                            requiresRefresh={candidate.requiresRefresh}
+                            status={candidate.status}
+                          />
+                          {candidateProgress ? (
+                            <span className={styles.progressText}>
+                              {candidateProgress}
+                            </span>
+                          ) : null}
+                          {candidate.status === "FAILED" &&
+                          candidate.lastError ? (
+                            <span className={styles.rowError}>
+                              {candidate.lastError}
+                            </span>
+                          ) : null}
                         </span>
-                      )}
-                    </s-table-cell>
-                    <s-table-cell>
-                      <div className={styles.actions}>
+                      </s-table-cell>
+                      <s-table-cell>
+                        <span className={styles.primaryLabel}>
+                          {entry.market.name}
+                        </span>
+                        <span className={styles.marketDetails}>
+                          {[
+                            entry.market.countryName ??
+                              entry.market.countryCode,
+                            entry.market.currencyCode,
+                            entry.market.locale.toUpperCase(),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </s-table-cell>
+                      <s-table-cell>
                         {candidateReady ? (
+                          <a
+                            className={styles.feedUrl}
+                            href={candidate.publicUrl}
+                            rel="noreferrer"
+                            target="_blank"
+                            title={candidate.publicUrl}
+                          >
+                            {candidate.publicUrl}
+                          </a>
+                        ) : (
+                          <span className={styles.secondaryText}>
+                            Available after generation
+                          </span>
+                        )}
+                      </s-table-cell>
+                      <s-table-cell>
+                        {candidate.lastRefreshedAt ? (
                           <>
+                            <span className={styles.primaryLabel}>
+                              {formatRefreshDate(
+                                candidate.lastRefreshedAt,
+                                scope?.locale ?? null,
+                              )}
+                            </span>
+                            <span className={styles.secondaryText}>
+                              {formatFileSize(candidate.fileSizeBytes) ??
+                                "Size unavailable"}
+                            </span>
+                          </>
+                        ) : (
+                          <span className={styles.secondaryText}>
+                            Never generated
+                          </span>
+                        )}
+                      </s-table-cell>
+                      <s-table-cell>
+                        <div className={styles.actions}>
+                          {candidateReady ? (
+                            <>
+                              <s-button
+                                accessibilityLabel={`Open ${entry.market.name} ${entry.market.countryName ?? ""} ${entry.market.locale} feed in a new tab`}
+                                icon="external"
+                                onClick={() => {
+                                  const opened = window.open(
+                                    candidate.publicUrl,
+                                    "_blank",
+                                    "noopener,noreferrer",
+                                  );
+                                  if (opened) opened.opener = null;
+                                }}
+                                variant="secondary"
+                              />
+                              <s-button
+                                accessibilityLabel={`Refresh ${entry.market.name} ${entry.market.locale} feed`}
+                                disabled={
+                                  generationLocked ||
+                                  additionalRefreshMutation.isPending
+                                    ? true
+                                    : undefined
+                                }
+                                icon="refresh"
+                                loading={
+                                  candidatePending ||
+                                  (additionalRefreshMutation.isPending &&
+                                    additionalRefreshMutation.variables ===
+                                      candidate.id)
+                                    ? true
+                                    : undefined
+                                }
+                                onClick={() =>
+                                  additionalRefreshMutation.mutate(candidate.id)
+                                }
+                                variant="secondary"
+                              />
+                              <s-button
+                                accessibilityLabel={`Copy ${entry.market.name} ${entry.market.locale} feed URL`}
+                                icon="clipboard"
+                                onClick={() => void copyAdditionalFeed(entry)}
+                                variant="secondary"
+                              />
+                            </>
+                          ) : candidatePending ? (
+                            <s-button disabled loading variant="secondary">
+                              Generating
+                            </s-button>
+                          ) : (
                             <s-button
-                              accessibilityLabel={`Open ${entry.market.name} ${entry.market.countryName ?? ""} ${entry.market.locale} feed in a new tab`}
-                              icon="external"
-                              onClick={() => {
-                                const opened = window.open(
-                                  candidate.publicUrl,
-                                  "_blank",
-                                  "noopener,noreferrer",
-                                );
-                                if (opened) opened.opener = null;
-                              }}
-                              variant="secondary"
-                            />
-                            <s-button
-                              accessibilityLabel={`Refresh ${entry.market.name} ${entry.market.locale} feed`}
                               disabled={
                                 generationLocked ||
                                 additionalRefreshMutation.isPending
                                   ? true
                                   : undefined
                               }
-                              icon="refresh"
-                              loading={
-                                candidatePending ||
-                                (additionalRefreshMutation.isPending &&
-                                  additionalRefreshMutation.variables ===
-                                    candidate.id)
-                                  ? true
-                                  : undefined
-                              }
                               onClick={() =>
                                 additionalRefreshMutation.mutate(candidate.id)
                               }
-                              variant="secondary"
-                            />
-                            <s-button
-                              accessibilityLabel={`Copy ${entry.market.name} ${entry.market.locale} feed URL`}
-                              icon="clipboard"
-                              onClick={() =>
-                                void copyAdditionalFeed(entry)
-                              }
-                              variant="secondary"
-                            />
-                          </>
-                        ) : candidatePending ? (
-                          <s-button disabled loading variant="secondary">
-                            Generating
-                          </s-button>
-                        ) : (
+                              variant="primary"
+                            >
+                              Retry generation
+                            </s-button>
+                          )}
                           <s-button
+                            accessibilityLabel={`Delete ${entry.market.name} ${entry.market.countryName ?? ""} ${entry.market.locale} feed`}
+                            command="--show"
+                            commandFor="delete-additional-feed-modal"
                             disabled={
                               generationLocked ||
-                              additionalRefreshMutation.isPending
+                              candidatePending ||
+                              deleteMutation.isPending
                                 ? true
                                 : undefined
                             }
-                            onClick={() =>
-                              additionalRefreshMutation.mutate(candidate.id)
-                            }
-                            variant="primary"
-                          >
-                            Retry generation
-                          </s-button>
-                        )}
-                        <s-button
-                          accessibilityLabel={`Delete ${entry.market.name} ${entry.market.countryName ?? ""} ${entry.market.locale} feed`}
-                          command="--show"
-                          commandFor="delete-additional-feed-modal"
-                          disabled={
-                            generationLocked ||
-                            candidatePending ||
-                            deleteMutation.isPending
-                              ? true
-                              : undefined
-                          }
-                          icon="delete"
-                          onClick={() => setDeleteTarget(entry)}
-                          tone="critical"
-                          variant="secondary"
-                        />
-                      </div>
-                    </s-table-cell>
-                  </s-table-row>
-                );
-              })}
+                            icon="delete"
+                            onClick={() => setDeleteTarget(entry)}
+                            tone="critical"
+                            variant="secondary"
+                          />
+                        </div>
+                      </s-table-cell>
+                    </s-table-row>
+                  );
+                })}
               </s-table-body>
             </s-table>
           </div>
@@ -1479,16 +1461,14 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           {additionalForms.map((form) => {
             const pendingEntry = form.pendingFeedId
               ? additionalFeeds.find(
-                  ({ feed: candidate }) =>
-                    candidate.id === form.pendingFeedId,
+                  ({ feed: candidate }) => candidate.id === form.pendingFeedId,
                 )
               : null;
             const isGenerating =
               (additionalGenerateMutation.isPending &&
                 additionalGenerateMutation.variables?.formId === form.id) ||
               Boolean(
-                pendingEntry &&
-                  pendingStatuses.has(pendingEntry.feed.status),
+                pendingEntry && pendingStatuses.has(pendingEntry.feed.status),
               ) ||
               activeGeneration?.feedId === form.pendingFeedId;
 
@@ -1535,9 +1515,10 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       />
 
       <s-modal
+        accessibilityLabel="Delete additional Market feed confirmation"
         heading="Delete additional Market feed?"
         id="delete-additional-feed-modal"
-        onHide={() => setDeleteTarget(null)}
+        onHide={hydrated ? () => setDeleteTarget(null) : undefined}
       >
         <s-paragraph>
           {deleteTarget
@@ -1552,9 +1533,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           command="--hide"
           commandFor="delete-additional-feed-modal"
           disabled={
-            !deleteTarget ||
-            generationLocked ||
-            deleteMutation.isPending
+            !deleteTarget || generationLocked || deleteMutation.isPending
               ? true
               : undefined
           }

@@ -52,6 +52,44 @@ export function ensureAttributeRuleConfigurationFields() {
             q: { checkoutLinkMode: { $exists: false } },
             u: { $set: { checkoutLinkMode: "DISABLED" } },
           },
+          {
+            multi: true,
+            q: { useProductImageAsMainImage: { $exists: false } },
+            u: { $set: { useProductImageAsMainImage: false } },
+          },
+          {
+            multi: true,
+            q: {
+              includeShippingWeightInGoogleFeed: { $exists: false },
+            },
+            u: {
+              $set: { includeShippingWeightInGoogleFeed: false },
+            },
+          },
+          {
+            multi: true,
+            q: { excludeOutOfStockItems: { $exists: false } },
+            u: { $set: { excludeOutOfStockItems: false } },
+          },
+          {
+            multi: true,
+            q: {
+              ignoreShopifyInventoryInGoogleFeed: { $exists: false },
+            },
+            u: {
+              $set: { ignoreShopifyInventoryInGoogleFeed: false },
+            },
+          },
+          {
+            multi: true,
+            q: { inventorySourceMode: { $exists: false } },
+            u: { $set: { inventorySourceMode: "ALL_LOCATIONS" } },
+          },
+          {
+            multi: true,
+            q: { selectedInventoryLocationIds: { $exists: false } },
+            u: { $set: { selectedInventoryLocationIds: [] } },
+          },
         ],
       })
       .then(() => undefined)

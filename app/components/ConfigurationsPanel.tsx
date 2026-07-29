@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SaveBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PiEye } from "react-icons/pi";
 
 import { AttributeRulesCard } from "./AttributeRulesCard";
+import { useHydrated } from "../hooks/useHydrated";
 import type { PublicConfiguration } from "../services/configuration.server";
 import {
   collectionsQueryOptions,
   configurationQueryOptions,
   ConfigurationRequestError,
   saveConfigurationRequest,
+  shopifyLocationsQueryOptions,
   type ConfigurationQueryScope,
   variantOptionNamesQueryOptions,
 } from "../services/configuration-query";
 import {
+  availableOptionNames,
   ConfigurationValidationError,
   normalizeConfigurationText,
   normalizeExcludedTitleTerms,
@@ -30,6 +34,15 @@ interface ConfigurationsPanelProps {
   scope: ConfigurationQueryScope | null;
 }
 
+const checkoutLinkModeOptions: ReadonlyArray<{
+  label: string;
+  value: ConfigurationInput["checkoutLinkMode"];
+}> = [
+  { label: "Disabled", value: "DISABLED" },
+  { label: "Link to cart", value: "CART" },
+  { label: "Link to checkout", value: "CHECKOUT" },
+];
+
 function configurationForm(
   configuration: PublicConfiguration,
 ): ConfigurationInput {
@@ -41,6 +54,15 @@ function configurationForm(
     excludedCollections: configuration.excludedCollections,
     excludedTitleTerms: configuration.excludedTitleTerms,
     showSalePriceInGoogleFeed: configuration.showSalePriceInGoogleFeed,
+    useProductImageAsMainImage: configuration.useProductImageAsMainImage,
+    includeShippingWeightInGoogleFeed:
+      configuration.includeShippingWeightInGoogleFeed,
+    excludeOutOfStockItems: configuration.excludeOutOfStockItems,
+    ignoreShopifyInventoryInGoogleFeed:
+      configuration.ignoreShopifyInventoryInGoogleFeed,
+    inventorySourceMode: configuration.inventorySourceMode,
+    selectedInventoryLocationIds:
+      configuration.selectedInventoryLocationIds,
     disableUtmParameters: configuration.disableUtmParameters,
     disablePrimaryCurrencyParameter:
       configuration.disablePrimaryCurrencyParameter,
@@ -68,16 +90,37 @@ function ConfigurationSkeleton() {
 function FeatureHeading({
   subtitle,
   title,
+  viewAccessibilityLabel,
+  viewDisabled,
+  viewTarget,
 }: {
   subtitle: string;
   title: string;
+  viewAccessibilityLabel: string;
+  viewDisabled?: boolean;
+  viewTarget: string;
 }) {
   return (
-    <div className={styles.featureHeading}>
-      <h3>{title}</h3>
-      <p>{subtitle}</p>
+    <div className={styles.featureHeadingRow}>
+      <div className={styles.featureHeading}>
+        <h3>{title}</h3>
+        <p>{subtitle}</p>
+      </div>
+      <s-button
+        accessibilityLabel={viewAccessibilityLabel}
+        command="--show"
+        commandFor={viewTarget}
+        disabled={viewDisabled ? true : undefined}
+        variant="secondary"
+      >
+        <PiEye aria-hidden="true" focusable="false" size={17} />
+      </s-button>
     </div>
   );
+}
+
+function optionNameModalId(attribute: "Color" | "Size") {
+  return `configuration-${attribute.toLocaleLowerCase()}-option-names`;
 }
 
 function OptionNameSelector({
@@ -86,6 +129,7 @@ function OptionNameSelector({
   onChange,
   placeholder,
   scope,
+  unavailableOptions,
   value,
 }: {
   attribute: "Color" | "Size";
@@ -93,9 +137,11 @@ function OptionNameSelector({
   onChange: (value: string[]) => void;
   placeholder: string;
   scope: ConfigurationQueryScope;
+  unavailableOptions: string[];
   value: string[];
 }) {
-  const modalId = `configuration-${attribute.toLocaleLowerCase()}-option-names`;
+  const hydrated = useHydrated();
+  const modalId = optionNameModalId(attribute);
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [draftValue, setDraftValue] = useState<string[]>(value);
@@ -107,8 +153,12 @@ function OptionNameSelector({
     normalizeConfigurationText(search).toLocaleLowerCase();
   const availableOptions = useMemo(
     () =>
-      normalizeOptionNames([...(optionNamesQuery.data ?? []), ...draftValue]),
-    [draftValue, optionNamesQuery.data],
+      availableOptionNames(
+        optionNamesQuery.data ?? [],
+        draftValue,
+        unavailableOptions,
+      ),
+    [draftValue, optionNamesQuery.data, unavailableOptions],
   );
   const visibleOptions = availableOptions.filter((option) =>
     normalizeConfigurationText(option)
@@ -141,31 +191,6 @@ function OptionNameSelector({
 
   return (
     <div className={styles.optionField}>
-      <div className={styles.tags}>
-        {value.map((option) => (
-          <span className={styles.tag} key={option.toLocaleLowerCase()}>
-            <span>{option}</span>
-            <button
-              aria-label={`Remove ${option} from ${attribute}`}
-              onClick={() =>
-                onChange(
-                  value.filter(
-                    (current) =>
-                      normalizeConfigurationText(
-                        current,
-                      ).toLocaleLowerCase() !==
-                      normalizeConfigurationText(option).toLocaleLowerCase(),
-                  ),
-                )
-              }
-              type="button"
-            >
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
-
       <s-clickable
         accessibilityLabel={`Select ${attribute} option names`}
         background="base"
@@ -200,14 +225,19 @@ function OptionNameSelector({
       ) : null}
 
       <s-modal
-        heading={`Select ${attribute} option names`}
+        accessibilityLabel={`${attribute} option selection`}
+        heading={`${attribute} options`}
         id={modalId}
-        onHide={() => setIsOpen(false)}
-        onShow={() => {
-          setDraftValue(value);
-          setSearch("");
-          setIsOpen(true);
-        }}
+        onHide={hydrated ? () => setIsOpen(false) : undefined}
+        onShow={
+          hydrated
+            ? () => {
+                setDraftValue(value);
+                setSearch("");
+                setIsOpen(true);
+              }
+            : undefined
+        }
         padding="none"
         size="base"
       >
@@ -217,6 +247,27 @@ function OptionNameSelector({
               Select the Shopify variant option names that should be treated as{" "}
               {attribute}.
             </s-paragraph>
+            {draftValue.length > 0 ? (
+              <div
+                aria-label={`Selected ${attribute} option names`}
+                className={styles.dialogTags}
+              >
+                {draftValue.map((option) => (
+                  <s-clickable-chip
+                    accessibilityLabel={`${option}, selected ${attribute} option`}
+                    key={normalizeConfigurationText(option).toLocaleLowerCase()}
+                    onRemove={
+                      hydrated ? () => toggleOption(option, false) : undefined
+                    }
+                    removable
+                  >
+                    {option}
+                  </s-clickable-chip>
+                ))}
+              </div>
+            ) : (
+              <s-text color="subdued">No selections</s-text>
+            )}
             <div className={styles.optionModalToolbar}>
               <s-search-field
                 label={`Search ${attribute} option names`}
@@ -295,11 +346,417 @@ function OptionNameSelector({
   );
 }
 
+const COLLECTIONS_MODAL_ID = "configuration-excluded-collections";
+const TITLE_TERMS_MODAL_ID = "configuration-excluded-product-titles";
+
+function CollectionSelector({
+  error,
+  onChange,
+  scope,
+  value,
+}: {
+  error?: string;
+  onChange: (value: SelectedCollection[]) => void;
+  scope: ConfigurationQueryScope;
+  value: SelectedCollection[];
+}) {
+  const hydrated = useHydrated();
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [results, setResults] = useState<SelectedCollection[]>([]);
+  const [draftValue, setDraftValue] = useState<SelectedCollection[]>(value);
+  const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const collectionsQuery = useQuery({
+    ...collectionsQueryOptions(scope, debouncedSearch, cursor),
+    enabled: isOpen,
+  });
+
+  useEffect(() => {
+    const normalizedSearch = normalizeConfigurationText(search);
+    if (!normalizedSearch) {
+      setDebouncedSearch("");
+      return;
+    }
+
+    const timer = window.setTimeout(
+      () => setDebouncedSearch(normalizedSearch),
+      300,
+    );
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setCursor(null);
+    setResults([]);
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    const page = collectionsQuery.data;
+    if (
+      !page ||
+      normalizeConfigurationText(page.search) !==
+        normalizeConfigurationText(debouncedSearch)
+    ) {
+      return;
+    }
+
+    setResults((current) => {
+      const next = cursor ? [...current] : [];
+      const seen = new Set(next.map((collection) => collection.id));
+      for (const collection of page.collections) {
+        if (!seen.has(collection.id)) {
+          seen.add(collection.id);
+          next.push(collection);
+        }
+      }
+      return next;
+    });
+  }, [collectionsQuery.data, cursor, debouncedSearch]);
+
+  const visibleCollections = results.filter(
+    (collection) =>
+      !draftValue.some((selected) => selected.id === collection.id),
+  );
+
+  return (
+    <div className={styles.combobox}>
+      <s-clickable
+        accessibilityLabel="Edit excluded collections"
+        background="base"
+        border="small-100"
+        borderColor="base"
+        borderRadius="base"
+        borderStyle="solid"
+        command="--show"
+        commandFor={COLLECTIONS_MODAL_ID}
+        inlineSize="100%"
+        padding="small-200 base"
+      >
+        <s-stack
+          alignItems="center"
+          direction="inline"
+          gap="small"
+          justifyContent="space-between"
+        >
+          <s-text color={value.length > 0 ? "base" : "subdued"}>
+            {value.length > 0
+              ? `${value.length} collection${value.length === 1 ? "" : "s"} selected`
+              : "Type to search collection"}
+          </s-text>
+          <s-icon color="subdued" type="select" />
+        </s-stack>
+      </s-clickable>
+
+      {error ? (
+        <span className={styles.fieldError} role="alert">
+          {error}
+        </span>
+      ) : null}
+
+      <s-modal
+        accessibilityLabel="Excluded collection selection"
+        heading="Excluded collections"
+        id={COLLECTIONS_MODAL_ID}
+        onHide={hydrated ? () => setIsOpen(false) : undefined}
+        onShow={
+          hydrated
+            ? () => {
+                setDraftValue(value);
+                setSearch("");
+                setDebouncedSearch("");
+                setCursor(null);
+                setResults([]);
+                setIsOpen(true);
+                window.requestAnimationFrame(() => searchRef.current?.focus());
+              }
+            : undefined
+        }
+        padding="none"
+        size="base"
+      >
+        <s-box padding="base">
+          <div className={styles.collectionModalContent}>
+            {draftValue.length > 0 ? (
+              <div
+                aria-label="Selected excluded collections"
+                className={styles.dialogTags}
+              >
+                {draftValue.map((collection) => (
+                  <s-clickable-chip
+                    accessibilityLabel={`${collection.title}, excluded collection`}
+                    key={collection.id}
+                    onRemove={
+                      hydrated
+                        ? () =>
+                            setDraftValue((current) =>
+                              current.filter(
+                                (candidate) => candidate.id !== collection.id,
+                              ),
+                            )
+                        : undefined
+                    }
+                    removable
+                  >
+                    {collection.title}
+                  </s-clickable-chip>
+                ))}
+              </div>
+            ) : (
+              <s-text color="subdued">No collections selected</s-text>
+            )}
+
+            <s-search-field
+              label="Search store collections"
+              labelAccessibilityVisibility="exclusive"
+              onInput={(event) => setSearch(event.currentTarget.value)}
+              placeholder="Type to search collection"
+              ref={searchRef}
+              value={search}
+            />
+
+            <div className={styles.popoverResults}>
+              {collectionsQuery.isPending && results.length === 0 ? (
+                <div className={styles.collectionState}>
+                  <s-spinner
+                    accessibilityLabel="Loading collections"
+                    size="base"
+                  />
+                </div>
+              ) : collectionsQuery.isError ? (
+                <div className={styles.collectionState}>
+                  <s-text color="subdued">
+                    Collections could not be loaded.
+                  </s-text>
+                  <s-button
+                    onClick={() => collectionsQuery.refetch()}
+                    variant="secondary"
+                  >
+                    Retry
+                  </s-button>
+                </div>
+              ) : visibleCollections.length === 0 ? (
+                <div className={styles.collectionState}>
+                  <s-text color="subdued">No collections found.</s-text>
+                </div>
+              ) : (
+                <s-stack direction="block" gap="small-100">
+                  {visibleCollections.map((collection) => (
+                    <s-button
+                      icon="collection"
+                      key={collection.id}
+                      onClick={() =>
+                        setDraftValue((current) => [...current, collection])
+                      }
+                      variant="tertiary"
+                    >
+                      {collection.title}
+                    </s-button>
+                  ))}
+                </s-stack>
+              )}
+            </div>
+
+            {collectionsQuery.data?.pageInfo.hasNextPage ? (
+              <s-button
+                disabled={collectionsQuery.isFetching}
+                loading={collectionsQuery.isFetching ? true : undefined}
+                onClick={() =>
+                  setCursor(collectionsQuery.data?.pageInfo.endCursor ?? null)
+                }
+                variant="secondary"
+              >
+                Load more
+              </s-button>
+            ) : null}
+          </div>
+        </s-box>
+        <s-button
+          command="--hide"
+          commandFor={COLLECTIONS_MODAL_ID}
+          onClick={() => onChange(draftValue)}
+          slot="primary-action"
+          variant="primary"
+        >
+          Confirm
+        </s-button>
+        <s-button
+          command="--hide"
+          commandFor={COLLECTIONS_MODAL_ID}
+          slot="secondary-actions"
+          variant="secondary"
+        >
+          Cancel
+        </s-button>
+      </s-modal>
+    </div>
+  );
+}
+
+function TitleTermsSelector({
+  error,
+  onChange,
+  value,
+}: {
+  error?: string;
+  onChange: (value: string[]) => void;
+  value: string[];
+}) {
+  const hydrated = useHydrated();
+  const [draftValue, setDraftValue] = useState<string[]>(value);
+  const [term, setTerm] = useState("");
+  const [termError, setTermError] = useState<string | undefined>();
+
+  const addTerm = () => {
+    const normalizedTerm = normalizeConfigurationText(term);
+    if (!normalizedTerm) {
+      setTermError("Enter a word or phrase before adding it.");
+      return;
+    }
+
+    const next = normalizeExcludedTitleTerms([...draftValue, term]);
+    setDraftValue(next);
+    setTerm("");
+    setTermError(undefined);
+  };
+
+  return (
+    <div className={styles.optionField}>
+      <s-clickable
+        accessibilityLabel="Edit excluded product titles"
+        background="base"
+        border="small-100"
+        borderColor="base"
+        borderRadius="base"
+        borderStyle="solid"
+        command="--show"
+        commandFor={TITLE_TERMS_MODAL_ID}
+        inlineSize="100%"
+        padding="small-200 base"
+      >
+        <s-stack
+          alignItems="center"
+          direction="inline"
+          gap="small"
+          justifyContent="space-between"
+        >
+          <s-text color={value.length > 0 ? "base" : "subdued"}>
+            {value.length > 0
+              ? `${value.length} title term${value.length === 1 ? "" : "s"} selected`
+              : "Type a product title and press Enter"}
+          </s-text>
+          <s-icon color="subdued" type="select" />
+        </s-stack>
+      </s-clickable>
+
+      {error ? (
+        <span className={styles.fieldError} role="alert">
+          {error}
+        </span>
+      ) : null}
+
+      <s-modal
+        accessibilityLabel="Excluded product title selection"
+        heading="Excluded product titles"
+        id={TITLE_TERMS_MODAL_ID}
+        onShow={
+          hydrated
+            ? () => {
+                setDraftValue(value);
+                setTerm("");
+                setTermError(undefined);
+              }
+            : undefined
+        }
+        padding="none"
+        size="base"
+      >
+        <s-box padding="base">
+          <div className={styles.titleTermsModalContent}>
+            {draftValue.length > 0 ? (
+              <div
+                aria-label="Selected excluded product titles"
+                className={styles.dialogTags}
+              >
+                {draftValue.map((titleTerm) => (
+                  <s-clickable-chip
+                    accessibilityLabel={`${titleTerm}, excluded product title`}
+                    key={titleTerm.toLocaleLowerCase()}
+                    onRemove={
+                      hydrated
+                        ? () =>
+                            setDraftValue((current) =>
+                              current.filter(
+                                (candidate) => candidate !== titleTerm,
+                              ),
+                            )
+                        : undefined
+                    }
+                    removable
+                  >
+                    {titleTerm}
+                  </s-clickable-chip>
+                ))}
+              </div>
+            ) : (
+              <s-text color="subdued">No title terms selected</s-text>
+            )}
+
+            <form
+              className={styles.termInput}
+              onSubmit={(event) => {
+                event.preventDefault();
+                addTerm();
+              }}
+            >
+              <s-text-field
+                error={termError}
+                label="Product titles"
+                labelAccessibilityVisibility="exclusive"
+                maxLength={100}
+                name="excludedTitleTermDraft"
+                onInput={(event) => {
+                  setTerm(event.currentTarget.value);
+                  setTermError(undefined);
+                }}
+                placeholder="Type a product title and press Enter"
+                value={term}
+              />
+              <s-button onClick={addTerm} variant="secondary">
+                Add
+              </s-button>
+            </form>
+          </div>
+        </s-box>
+        <s-button
+          command="--hide"
+          commandFor={TITLE_TERMS_MODAL_ID}
+          onClick={() => onChange(normalizeExcludedTitleTerms(draftValue))}
+          slot="primary-action"
+          variant="primary"
+        >
+          Confirm
+        </s-button>
+        <s-button
+          command="--hide"
+          commandFor={TITLE_TERMS_MODAL_ID}
+          slot="secondary-actions"
+          variant="secondary"
+        >
+          Cancel
+        </s-button>
+      </s-modal>
+    </div>
+  );
+}
+
 export function ConfigurationsPanel({
   active,
   onUnsavedChangesChange,
   scope,
 }: ConfigurationsPanelProps) {
+  const isHydrated = useHydrated();
   const shopify = useAppBridge();
   const queryClient = useQueryClient();
   const queryScope = scope ?? {
@@ -314,28 +771,16 @@ export function ConfigurationsPanel({
     message: string;
     tone: "critical";
   } | null>(null);
-  const [collectionSearch, setCollectionSearch] = useState("");
-  const [debouncedCollectionSearch, setDebouncedCollectionSearch] =
-    useState("");
-  const [collectionCursor, setCollectionCursor] = useState<string | null>(null);
-  const [collectionResults, setCollectionResults] = useState<
-    SelectedCollection[]
-  >([]);
-  const [collectionOpen, setCollectionOpen] = useState(false);
-  const collectionSearchRef =
-    useRef<HTMLElementTagNameMap["s-search-field"]>(null);
-  const [titleTerm, setTitleTerm] = useState("");
   const configurationQuery = useQuery({
     ...configurationQueryOptions(queryScope),
     enabled: Boolean(scope) && active,
   });
-  const collectionsQuery = useQuery({
-    ...collectionsQueryOptions(
-      queryScope,
-      debouncedCollectionSearch,
-      collectionCursor,
-    ),
-    enabled: Boolean(scope) && active && collectionOpen,
+  const locationsQuery = useQuery({
+    ...shopifyLocationsQueryOptions(queryScope),
+    enabled:
+      Boolean(scope) &&
+      active &&
+      form?.inventorySourceMode === "SELECTED_LOCATIONS",
   });
   const saveMutation = useMutation({
     mutationFn: (value: ConfigurationInput) => saveConfigurationRequest(value),
@@ -351,59 +796,6 @@ export function ConfigurationsPanel({
     }
   }, [configurationQuery.data, form, savedForm]);
 
-  useEffect(() => {
-    const normalizedSearch = normalizeConfigurationText(collectionSearch);
-
-    if (!normalizedSearch) {
-      setDebouncedCollectionSearch("");
-      return;
-    }
-
-    const timer = window.setTimeout(
-      () => setDebouncedCollectionSearch(normalizedSearch),
-      300,
-    );
-    return () => window.clearTimeout(timer);
-  }, [collectionSearch]);
-
-  useEffect(() => {
-    setCollectionCursor(null);
-    setCollectionResults([]);
-  }, [debouncedCollectionSearch]);
-
-  useEffect(() => {
-    const page = collectionsQuery.data;
-
-    if (
-      !page ||
-      normalizeConfigurationText(page.search) !==
-        normalizeConfigurationText(debouncedCollectionSearch)
-    ) {
-      return;
-    }
-
-    setCollectionResults((current) => {
-      const next = collectionCursor ? [...current] : [];
-      const seen = new Set(next.map((collection) => collection.id));
-
-      for (const collection of page.collections) {
-        if (!seen.has(collection.id)) {
-          seen.add(collection.id);
-          next.push(collection);
-        }
-      }
-
-      return next;
-    });
-  }, [collectionCursor, collectionsQuery.data, debouncedCollectionSearch]);
-
-  const visibleCollections = collectionResults.filter(
-    (collection) =>
-      !form?.excludedCollections.some(
-        (selected) => selected.id === collection.id,
-      ),
-  );
-
   const updateForm = <TKey extends keyof ConfigurationInput>(
     key: TKey,
     value: ConfigurationInput[TKey],
@@ -411,50 +803,6 @@ export function ConfigurationsPanel({
     setForm((current) => (current ? { ...current, [key]: value } : current));
     setFieldErrors((current) => ({ ...current, [key]: undefined }));
     setFeedback(null);
-  };
-
-  const selectCollection = (collection: SelectedCollection) => {
-    if (!form) {
-      return;
-    }
-
-    updateForm("excludedCollections", [
-      ...form.excludedCollections,
-      collection,
-    ]);
-  };
-
-  const removeCollection = (id: string) => {
-    if (form) {
-      updateForm(
-        "excludedCollections",
-        form.excludedCollections.filter((collection) => collection.id !== id),
-      );
-    }
-  };
-
-  const addTitleTerm = () => {
-    if (!form) {
-      return;
-    }
-
-    const nextTerms = normalizeExcludedTitleTerms([
-      ...form.excludedTitleTerms,
-      titleTerm,
-    ]);
-
-    if (nextTerms.length === form.excludedTitleTerms.length) {
-      if (!normalizeConfigurationText(titleTerm)) {
-        setFieldErrors((current) => ({
-          ...current,
-          excludedTitleTerms: "Enter a word or phrase before adding it.",
-        }));
-      }
-      return;
-    }
-
-    updateForm("excludedTitleTerms", nextTerms);
-    setTitleTerm("");
   };
 
   const save = async () => {
@@ -523,7 +871,6 @@ export function ConfigurationsPanel({
     setForm(savedForm);
     setFieldErrors({});
     setFeedback(null);
-    setTitleTerm("");
   };
 
   const isLoading = !form && configurationQuery.isPending;
@@ -531,6 +878,27 @@ export function ConfigurationsPanel({
     form !== null &&
     savedForm !== null &&
     configurationFingerprint(form) !== configurationFingerprint(savedForm);
+  const availableLocationIds = useMemo(
+    () => new Set((locationsQuery.data ?? []).map(({ id }) => id)),
+    [locationsQuery.data],
+  );
+  const unavailableSelectedLocationIds = useMemo(
+    () =>
+      (form?.selectedInventoryLocationIds ?? []).filter(
+        (id) => !availableLocationIds.has(id),
+      ),
+    [availableLocationIds, form?.selectedInventoryLocationIds],
+  );
+
+  const setInventoryLocationSelected = (id: string, selected: boolean) => {
+    const current = form?.selectedInventoryLocationIds ?? [];
+    updateForm(
+      "selectedInventoryLocationIds",
+      selected
+        ? [...new Set([...current, id])]
+        : current.filter((candidate) => candidate !== id),
+    );
+  };
 
   useEffect(() => {
     onUnsavedChangesChange?.(hasUnsavedChanges);
@@ -545,26 +913,27 @@ export function ConfigurationsPanel({
 
   return (
     <div className={styles.configurations}>
-      <SaveBar
-        discardConfirmation={false}
-        id="configuration-contextual-save-bar"
-        open={hasUnsavedChanges}
-      >
-        <button
-          disabled={!form || isSaving || saveMutation.isPending}
-          loading={isSaving || saveMutation.isPending}
-          onClick={save}
-          variant="primary"
+      {isHydrated ? (
+        <SaveBar
+          id="configuration-contextual-save-bar"
+          open={hasUnsavedChanges}
         >
-          {isSaving || saveMutation.isPending ? "Saving…" : "Save"}
-        </button>
-        <button
-          disabled={isSaving || saveMutation.isPending}
-          onClick={discard}
-        >
-          Discard
-        </button>
-      </SaveBar>
+          <button
+            disabled={!form || isSaving || saveMutation.isPending}
+            loading={isSaving || saveMutation.isPending ? true : undefined}
+            onClick={save}
+            variant="primary"
+          >
+            {isSaving || saveMutation.isPending ? "Saving…" : "Save"}
+          </button>
+          <button
+            disabled={isSaving || saveMutation.isPending}
+            onClick={discard}
+          >
+            Discard
+          </button>
+        </SaveBar>
+      ) : null}
 
       <div className={styles.header}>
         <div>
@@ -639,6 +1008,9 @@ export function ConfigurationsPanel({
               <FeatureHeading
                 subtitle="Select color option"
                 title="Color option"
+                viewAccessibilityLabel="View and edit Color options"
+                viewDisabled={isLoading}
+                viewTarget={optionNameModalId("Color")}
               />
               {isLoading ? (
                 <ConfigurationSkeleton />
@@ -649,6 +1021,7 @@ export function ConfigurationsPanel({
                   onChange={(value) => updateForm("colorOptions", value)}
                   placeholder="Choose color"
                   scope={queryScope}
+                  unavailableOptions={form?.sizeOptions ?? []}
                   value={form?.colorOptions ?? []}
                 />
               )}
@@ -658,6 +1031,9 @@ export function ConfigurationsPanel({
               <FeatureHeading
                 subtitle="Select size option"
                 title="Size option"
+                viewAccessibilityLabel="View and edit Size options"
+                viewDisabled={isLoading}
+                viewTarget={optionNameModalId("Size")}
               />
               {isLoading ? (
                 <ConfigurationSkeleton />
@@ -668,6 +1044,7 @@ export function ConfigurationsPanel({
                   onChange={(value) => updateForm("sizeOptions", value)}
                   placeholder="Choose size"
                   scope={queryScope}
+                  unavailableOptions={form?.colorOptions ?? []}
                   value={form?.sizeOptions ?? []}
                 />
               )}
@@ -677,157 +1054,19 @@ export function ConfigurationsPanel({
               <FeatureHeading
                 subtitle="Collections"
                 title="Exclude collection"
+                viewAccessibilityLabel="View and edit excluded collections"
+                viewDisabled={isLoading}
+                viewTarget={COLLECTIONS_MODAL_ID}
               />
               {isLoading ? (
                 <ConfigurationSkeleton />
               ) : (
-                <>
-                  <div className={styles.tags}>
-                    {form?.excludedCollections.map((collection) => (
-                      <span className={styles.tag} key={collection.id}>
-                        <span>{collection.title}</span>
-                        <button
-                          aria-label={`Remove ${collection.title}`}
-                          onClick={() => removeCollection(collection.id)}
-                          type="button"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <div className={styles.combobox}>
-                    <s-clickable
-                      accessibilityLabel="Search collections to exclude"
-                      background="base"
-                      border="small-100"
-                      borderColor="base"
-                      borderRadius="base"
-                      borderStyle="solid"
-                      commandFor="configuration-collection-popover"
-                      inlineSize="100%"
-                      padding="small-200 base"
-                    >
-                      <s-stack
-                        alignItems="center"
-                        direction="inline"
-                        gap="small"
-                        justifyContent="space-between"
-                      >
-                        <s-stack
-                          alignItems="center"
-                          direction="inline"
-                          gap="small"
-                        >
-                          <s-icon color="subdued" type="search" />
-                          <s-text color="subdued">
-                            Type to search collection
-                          </s-text>
-                        </s-stack>
-                        <s-icon color="subdued" type="chevron-down" />
-                      </s-stack>
-                    </s-clickable>
-
-                    {fieldErrors.excludedCollections ? (
-                      <span className={styles.fieldError} role="alert">
-                        {fieldErrors.excludedCollections}
-                      </span>
-                    ) : null}
-
-                    <s-popover
-                      blockSize="340px"
-                      id="configuration-collection-popover"
-                      inlineSize="360px"
-                      onHide={() => setCollectionOpen(false)}
-                      onShow={() => {
-                        setCollectionOpen(true);
-                        window.requestAnimationFrame(() =>
-                          collectionSearchRef.current?.focus(),
-                        );
-                      }}
-                    >
-                      <s-box padding="small-200">
-                        <div className={styles.configurationPopoverContent}>
-                          <s-search-field
-                            label="Search store collections"
-                            labelAccessibilityVisibility="exclusive"
-                            onInput={(event) => {
-                              const value = event.currentTarget.value;
-                              setCollectionSearch(value);
-                              if (!normalizeConfigurationText(value)) {
-                                setDebouncedCollectionSearch("");
-                              }
-                            }}
-                            placeholder="Type to search collection"
-                            ref={collectionSearchRef}
-                            value={collectionSearch}
-                          />
-
-                          <div className={styles.popoverResults}>
-                            {collectionsQuery.isPending &&
-                            collectionResults.length === 0 ? (
-                              <div className={styles.collectionState}>
-                                <s-spinner
-                                  accessibilityLabel="Loading collections"
-                                  size="base"
-                                />
-                              </div>
-                            ) : collectionsQuery.isError ? (
-                              <div className={styles.collectionState}>
-                                <s-text color="subdued">
-                                  Collections could not be loaded.
-                                </s-text>
-                                <s-button
-                                  onClick={() => collectionsQuery.refetch()}
-                                  variant="secondary"
-                                >
-                                  Retry
-                                </s-button>
-                              </div>
-                            ) : visibleCollections.length === 0 ? (
-                              <div className={styles.collectionState}>
-                                <s-text color="subdued">
-                                  No collections found.
-                                </s-text>
-                              </div>
-                            ) : (
-                              <s-stack direction="block" gap="small-100">
-                                {visibleCollections.map((collection) => (
-                                  <s-button
-                                    icon="collection"
-                                    key={collection.id}
-                                    onClick={() => selectCollection(collection)}
-                                    variant="tertiary"
-                                  >
-                                    {collection.title}
-                                  </s-button>
-                                ))}
-                              </s-stack>
-                            )}
-                          </div>
-
-                          {collectionsQuery.data?.pageInfo.hasNextPage ? (
-                            <s-button
-                              disabled={collectionsQuery.isFetching}
-                              loading={
-                                collectionsQuery.isFetching ? true : undefined
-                              }
-                              onClick={() =>
-                                setCollectionCursor(
-                                  collectionsQuery.data?.pageInfo.endCursor ??
-                                    null,
-                                )
-                              }
-                              variant="secondary"
-                            >
-                              Load more
-                            </s-button>
-                          ) : null}
-                        </div>
-                      </s-box>
-                    </s-popover>
-                  </div>
-                </>
+                <CollectionSelector
+                  error={fieldErrors.excludedCollections}
+                  onChange={(value) => updateForm("excludedCollections", value)}
+                  scope={queryScope}
+                  value={form?.excludedCollections ?? []}
+                />
               )}
             </div>
 
@@ -835,84 +1074,255 @@ export function ConfigurationsPanel({
               <FeatureHeading
                 subtitle="Product titles"
                 title="Exclude product by title"
+                viewAccessibilityLabel="View and edit excluded product titles"
+                viewDisabled={isLoading}
+                viewTarget={TITLE_TERMS_MODAL_ID}
               />
               {isLoading ? (
                 <ConfigurationSkeleton />
               ) : (
-                <>
-                  <div className={styles.tags}>
-                    {form?.excludedTitleTerms.map((term) => (
-                      <span
-                        className={styles.tag}
-                        key={term.toLocaleLowerCase()}
-                      >
-                        <span>{term}</span>
-                        <button
-                          aria-label={`Remove ${term}`}
-                          onClick={() =>
-                            updateForm(
-                              "excludedTitleTerms",
-                              form.excludedTitleTerms.filter(
-                                (current) => current !== term,
-                              ),
-                            )
-                          }
-                          type="button"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <form
-                    className={styles.termInput}
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      addTitleTerm();
-                    }}
-                  >
-                    <s-text-field
-                      error={fieldErrors.excludedTitleTerms}
-                      label="Product titles"
-                      labelAccessibilityVisibility="exclusive"
-                      maxLength={100}
-                      name="excludedTitleTerm"
-                      onInput={(event) => {
-                        setTitleTerm(event.currentTarget.value);
-                        setFieldErrors((current) => ({
-                          ...current,
-                          excludedTitleTerms: undefined,
-                        }));
-                      }}
-                      placeholder="Type a product title and press Enter"
-                      value={titleTerm}
-                    />
-                    <s-button onClick={addTitleTerm} variant="secondary">
-                      Add
-                    </s-button>
-                  </form>
-                </>
+                <TitleTermsSelector
+                  error={fieldErrors.excludedTitleTerms}
+                  onChange={(value) => updateForm("excludedTitleTerms", value)}
+                  value={form?.excludedTitleTerms ?? []}
+                />
               )}
             </div>
 
-            <div className={`${styles.feature} ${styles.pricingFeature}`}>
+            <div className={styles.googleFeedOptions}>
+              <div className={styles.googleFeedOptionsHeading}>
+                <h3>Google feed options</h3>
+                <p>Control optional product data in generated XML feeds.</p>
+              </div>
               {isLoading ? (
-                <ConfigurationSkeleton />
+                <div className={styles.googleFeedOptionsGrid}>
+                  <ConfigurationSkeleton />
+                  <ConfigurationSkeleton />
+                  <ConfigurationSkeleton />
+                  <ConfigurationSkeleton />
+                </div>
               ) : (
+                <div className={styles.googleFeedOptionsGrid}>
+                  <s-checkbox
+                    checked={form?.showSalePriceInGoogleFeed ?? false}
+                    details="When enabled, Google receives the original price plus sale_price. When disabled, only the final current price is sent."
+                    error={fieldErrors.showSalePriceInGoogleFeed}
+                    label="Show sale price in Google feed"
+                    onChange={(event) =>
+                      updateForm(
+                        "showSalePriceInGoogleFeed",
+                        event.currentTarget.checked,
+                      )
+                    }
+                  />
+                  <s-checkbox
+                    checked={form?.includeShippingWeightInGoogleFeed ?? false}
+                    details="When enabled, variants with a valid Shopify weight include shipping_weight in the XML."
+                    error={fieldErrors.includeShippingWeightInGoogleFeed}
+                    label="Include shipping weight in Google feed"
+                    onChange={(event) =>
+                      updateForm(
+                        "includeShippingWeightInGoogleFeed",
+                        event.currentTarget.checked,
+                      )
+                    }
+                  />
+                  <s-checkbox
+                    checked={form?.useProductImageAsMainImage ?? false}
+                    details="The main product image is the image which is usually shown on the category page."
+                    error={fieldErrors.useProductImageAsMainImage}
+                    label="Use product image as main image"
+                    onChange={(event) =>
+                      updateForm(
+                        "useProductImageAsMainImage",
+                        event.currentTarget.checked,
+                      )
+                    }
+                  />
+                  <s-checkbox
+                    checked={form?.excludeOutOfStockItems ?? false}
+                    details="When enabled, out-of-stock variants are excluded. This is ignored when Shopify inventory is not tracked or selling can continue."
+                    disabled={
+                      form?.ignoreShopifyInventoryInGoogleFeed
+                        ? true
+                        : undefined
+                    }
+                    error={fieldErrors.excludeOutOfStockItems}
+                    label="Exclude out of stock items"
+                    onChange={(event) =>
+                      updateForm(
+                        "excludeOutOfStockItems",
+                        event.currentTarget.checked,
+                      )
+                    }
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </s-section>
+
+        <s-section heading="Inventory & Availability">
+          <div className={styles.inventoryAvailability}>
+            <s-paragraph color="subdued">
+              Control how Shopify inventory becomes Google feed availability.
+            </s-paragraph>
+
+            {isLoading ? (
+              <>
+                <ConfigurationSkeleton />
+                <ConfigurationSkeleton />
+              </>
+            ) : (
+              <>
                 <s-checkbox
-                  checked={form?.showSalePriceInGoogleFeed ?? false}
-                  details="When enabled, Google receives the original price plus sale_price. When disabled, only the final current price is sent."
-                  error={fieldErrors.showSalePriceInGoogleFeed}
-                  label="Show sale price in Google feed"
+                  checked={
+                    form?.ignoreShopifyInventoryInGoogleFeed ?? false
+                  }
+                  details="When enabled, active products are sent to Google as in stock even if Shopify inventory is 0. Use only if your storefront also remains purchasable."
+                  error={
+                    fieldErrors.ignoreShopifyInventoryInGoogleFeed
+                  }
+                  label="Ignore Shopify inventory in Google feed"
                   onChange={(event) =>
                     updateForm(
-                      "showSalePriceInGoogleFeed",
+                      "ignoreShopifyInventoryInGoogleFeed",
                       event.currentTarget.checked,
                     )
                   }
                 />
-              )}
-            </div>
+
+                {form?.ignoreShopifyInventoryInGoogleFeed ? (
+                  <s-banner
+                    heading="Google may compare feed availability with your website"
+                    tone="warning"
+                  >
+                    Out-of-stock exclusion is ignored while this option is
+                    enabled.
+                  </s-banner>
+                ) : null}
+
+                <div className={styles.inventorySource}>
+                  <div className={styles.inventorySourceHeading}>
+                    <h3>Inventory source</h3>
+                    <p>
+                      Choose which Shopify locations are used to calculate
+                      variant availability.
+                    </p>
+                  </div>
+
+                  <s-choice-list
+                    error={fieldErrors.inventorySourceMode}
+                    label="Inventory source"
+                    labelAccessibilityVisibility="exclusive"
+                    name="inventory-source-mode"
+                    onChange={(event) =>
+                      updateForm(
+                        "inventorySourceMode",
+                        event.currentTarget.values[0] ===
+                          "SELECTED_LOCATIONS"
+                          ? "SELECTED_LOCATIONS"
+                          : "ALL_LOCATIONS",
+                      )
+                    }
+                    values={[
+                      form?.inventorySourceMode ?? "ALL_LOCATIONS",
+                    ]}
+                  >
+                    <s-choice value="ALL_LOCATIONS">
+                      All Shopify locations
+                    </s-choice>
+                    <s-choice value="SELECTED_LOCATIONS">
+                      Selected locations
+                    </s-choice>
+                  </s-choice-list>
+
+                  {form?.inventorySourceMode === "SELECTED_LOCATIONS" ? (
+                    <div className={styles.inventoryLocations}>
+                      <h4>Locations to count</h4>
+
+                      {locationsQuery.isPending ? (
+                        <div
+                          aria-live="polite"
+                          className={styles.inventoryLocationState}
+                        >
+                          <s-spinner
+                            accessibilityLabel="Loading Shopify locations"
+                            size="base"
+                          />
+                          <span>Loading Shopify locations…</span>
+                        </div>
+                      ) : locationsQuery.isError ? (
+                        <div
+                          className={styles.inventoryLocationState}
+                          role="alert"
+                        >
+                          <span>Shopify locations couldn&apos;t be loaded.</span>
+                          <s-button
+                            onClick={() => void locationsQuery.refetch()}
+                            variant="secondary"
+                          >
+                            Retry
+                          </s-button>
+                        </div>
+                      ) : (locationsQuery.data?.length ?? 0) === 0 &&
+                        unavailableSelectedLocationIds.length === 0 ? (
+                        <div className={styles.inventoryLocationState}>
+                          No active Shopify locations are available.
+                        </div>
+                      ) : (
+                        <div className={styles.inventoryLocationList}>
+                          {locationsQuery.data?.map((location) => (
+                            <s-checkbox
+                              checked={
+                                form.selectedInventoryLocationIds.includes(
+                                  location.id,
+                                )
+                              }
+                              key={location.id}
+                              label={location.name}
+                              onChange={(event) =>
+                                setInventoryLocationSelected(
+                                  location.id,
+                                  event.currentTarget.checked,
+                                )
+                              }
+                            />
+                          ))}
+
+                          {unavailableSelectedLocationIds.map((id) => (
+                            <s-checkbox
+                              checked
+                              details="This saved location is no longer active or accessible. Uncheck it to remove it."
+                              key={id}
+                              label={`Unavailable location (${id.split("/").at(-1) ?? id})`}
+                              onChange={(event) =>
+                                setInventoryLocationSelected(
+                                  id,
+                                  event.currentTarget.checked,
+                                )
+                              }
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {fieldErrors.selectedInventoryLocationIds ? (
+                        <span className={styles.fieldError} role="alert">
+                          {fieldErrors.selectedInventoryLocationIds}
+                        </span>
+                      ) : null}
+
+                      {form.selectedInventoryLocationIds.length === 0 ? (
+                        <s-paragraph color="subdued">
+                          If empty, inventory from all locations will be used.
+                        </s-paragraph>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            )}
           </div>
         </s-section>
 
@@ -945,9 +1355,7 @@ export function ConfigurationsPanel({
                 />
 
                 <s-checkbox
-                  checked={
-                    form?.disablePrimaryCurrencyParameter ?? false
-                  }
+                  checked={form?.disablePrimaryCurrencyParameter ?? false}
                   details="Shopify Market feeds always keep the currency parameter so market pricing keeps working."
                   error={fieldErrors.disablePrimaryCurrencyParameter}
                   label="Do not add currency parameter to main feed product links"
@@ -960,40 +1368,92 @@ export function ConfigurationsPanel({
                 />
 
                 <div className={styles.checkoutLinkSetting}>
-                  <s-select
-                    details="This will include a checkout URL in your product data which gives online shoppers the option to go directly to checkout in Free Listings."
-                    error={fieldErrors.checkoutLinkMode}
-                    label="Add checkout link URL"
-                    onChange={(event) =>
-                      updateForm(
-                        "checkoutLinkMode",
-                        event.currentTarget.value as
-                          | "DISABLED"
-                          | "CART"
-                          | "CHECKOUT",
-                      )
-                    }
-                    value={form?.checkoutLinkMode ?? "DISABLED"}
+                  <span className={styles.checkoutLinkLabel}>
+                    Add checkout link URL
+                  </span>
+                  <s-clickable
+                    accessibilityLabel="Choose checkout link URL behavior"
+                    background="base"
+                    border="small-100"
+                    borderColor="base"
+                    borderRadius="base"
+                    borderStyle="solid"
+                    command="--show"
+                    commandFor="checkout-link-mode-popover"
+                    inlineSize="100%"
+                    padding="small-200 base"
                   >
-                    <s-option value="DISABLED">Disabled</s-option>
-                    <s-option value="CART">Link to cart</s-option>
-                    <s-option value="CHECKOUT">Link to checkout</s-option>
-                  </s-select>
+                    <s-stack
+                      alignItems="center"
+                      direction="inline"
+                      gap="small"
+                      justifyContent="space-between"
+                    >
+                      <s-text>
+                        {checkoutLinkModeOptions.find(
+                          ({ value }) =>
+                            value === (form?.checkoutLinkMode ?? "DISABLED"),
+                        )?.label ?? "Disabled"}
+                      </s-text>
+                      <s-icon color="subdued" type="chevron-down" />
+                    </s-stack>
+                  </s-clickable>
 
-                  <s-stack direction="inline" gap="base">
-                    <s-link
+                  {fieldErrors.checkoutLinkMode ? (
+                    <span className={styles.fieldError} role="alert">
+                      {fieldErrors.checkoutLinkMode}
+                    </span>
+                  ) : null}
+
+                  <s-popover id="checkout-link-mode-popover" inlineSize="360px">
+                    <s-box padding="small-200">
+                      <div className={styles.checkoutLinkOptions}>
+                        {checkoutLinkModeOptions.map((option) => (
+                          <s-button
+                            command="--hide"
+                            commandFor="checkout-link-mode-popover"
+                            key={option.value}
+                            onClick={() =>
+                              updateForm("checkoutLinkMode", option.value)
+                            }
+                            variant="tertiary"
+                          >
+                            <span className={styles.checkoutLinkOptionContent}>
+                              <span>{option.label}</span>
+                              {option.value ===
+                              (form?.checkoutLinkMode ?? "DISABLED") ? (
+                                <s-icon type="check" />
+                              ) : null}
+                            </span>
+                          </s-button>
+                        ))}
+                      </div>
+                    </s-box>
+                  </s-popover>
+
+                  <p className={styles.checkoutLinkDetails}>
+                    This will include a checkout URL in your product data which
+                    gives online shoppers the option to go directly to checkout
+                    in Free listings. See{" "}
+                    <a
+                      className={styles.supportLink}
                       href="https://support.google.com/merchants/answer/13580733"
+                      rel="noreferrer"
                       target="_blank"
                     >
                       Google Merchant support
-                    </s-link>
-                    <s-link
-                      href="https://help.shopify.com/en/manual/checkout-settings/cart-permalink"
+                    </a>{" "}
+                    and{" "}
+                    <a
+                      className={styles.supportLink}
+                      href="https://help.shopify.com/en/manual/products/details/cart-permalink"
+                      rel="noreferrer"
                       target="_blank"
                     >
                       Shopify help
-                    </s-link>
-                  </s-stack>
+                    </a>
+                    .
+                  </p>
                 </div>
               </>
             )}

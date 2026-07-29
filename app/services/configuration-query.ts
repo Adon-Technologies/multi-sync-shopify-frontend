@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import type { CollectionSearchPage } from "./collection-search.server";
+import type { ShopifyInventoryLocation } from "./shopify-locations.server";
 import type {
   PublicAttributeRuleJob,
   PublicAttributeRuleJobs,
@@ -39,6 +40,12 @@ interface OptionNamesResponse {
   ok: true;
   intent: "option-names";
   optionNames: string[];
+}
+
+interface LocationsResponse {
+  ok: true;
+  intent: "locations";
+  locations: ShopifyInventoryLocation[];
 }
 
 interface SaveConfigurationResponse {
@@ -99,6 +106,10 @@ export const configurationKeys = {
     { shop, sessionId }: ConfigurationQueryScope,
     endpoint = defaultEndpoint,
   ) => ["configuration-option-names", shop, sessionId, endpoint] as const,
+  locations: (
+    { shop, sessionId }: ConfigurationQueryScope,
+    endpoint = defaultEndpoint,
+  ) => ["shopify-locations", shop, sessionId, endpoint] as const,
   ruleStatus: (
     { shop, sessionId }: ConfigurationQueryScope,
     endpoint = defaultEndpoint,
@@ -239,6 +250,29 @@ export function variantOptionNamesQueryOptions(
       });
       const payload = await readJson<OptionNamesResponse>(response);
       return payload.optionNames;
+    },
+  });
+}
+
+export function shopifyLocationsQueryOptions(
+  scope: ConfigurationQueryScope,
+  endpoint = defaultEndpoint,
+) {
+  const params = new URLSearchParams({ intent: "locations" });
+
+  return queryOptions({
+    ...sessionCacheOptions,
+    staleTime: 5 * 60 * 1_000,
+    queryKey: configurationKeys.locations(scope, endpoint),
+    queryFn: async ({ signal }): Promise<ShopifyInventoryLocation[]> => {
+      const response = await fetch(`${endpoint}?${params}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      const payload = await readJson<LocationsResponse>(response);
+      return payload.locations;
     },
   });
 }

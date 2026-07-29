@@ -41,6 +41,10 @@ function configurationForm(
     excludedCollections: configuration.excludedCollections,
     excludedTitleTerms: configuration.excludedTitleTerms,
     showSalePriceInGoogleFeed: configuration.showSalePriceInGoogleFeed,
+    disableUtmParameters: configuration.disableUtmParameters,
+    disablePrimaryCurrencyParameter:
+      configuration.disablePrimaryCurrencyParameter,
+    checkoutLinkMode: configuration.checkoutLinkMode,
   };
 }
 
@@ -304,6 +308,7 @@ export function ConfigurationsPanel({
   };
   const [form, setForm] = useState<ConfigurationInput | null>(null);
   const [savedForm, setSavedForm] = useState<ConfigurationInput | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<ConfigurationFieldErrors>({});
   const [feedback, setFeedback] = useState<{
     message: string;
@@ -453,10 +458,11 @@ export function ConfigurationsPanel({
   };
 
   const save = async () => {
-    if (!scope || !form || saveMutation.isPending) {
+    if (!scope || !form || isSaving || saveMutation.isPending) {
       return;
     }
 
+    setIsSaving(true);
     let validated: ConfigurationInput;
     try {
       validated = validateConfigurationInput(form);
@@ -465,7 +471,9 @@ export function ConfigurationsPanel({
       if (error instanceof ConfigurationValidationError) {
         setFieldErrors(error.fields);
         setFeedback({ message: error.message, tone: "critical" });
+        shopify.toast.show(error.message, { isError: true });
       }
+      setIsSaving(false);
       return;
     }
 
@@ -487,7 +495,7 @@ export function ConfigurationsPanel({
           queryKey: ["feeds", scope.shop, scope.sessionId],
         });
         shopify.toast.show(
-          "Configuration saved. Refresh the XML feed to apply the pricing change.",
+          "Configuration saved. Refresh the XML feed to apply the feed settings.",
         );
       } else {
         shopify.toast.show("Configuration saved successfully.");
@@ -496,17 +504,22 @@ export function ConfigurationsPanel({
       if (error instanceof ConfigurationRequestError) {
         setFieldErrors(error.fields ?? {});
         setFeedback({ message: error.message, tone: "critical" });
+        shopify.toast.show(error.message, { isError: true });
       } else {
+        const message = "Configuration couldn't be saved. Try again.";
         setFeedback({
-          message: "Configuration couldn't be saved. Try again.",
+          message,
           tone: "critical",
         });
+        shopify.toast.show(message, { isError: true });
       }
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const discard = () => {
-    if (!savedForm || saveMutation.isPending) return;
+    if (!savedForm || isSaving || saveMutation.isPending) return;
     setForm(savedForm);
     setFieldErrors({});
     setFeedback(null);
@@ -538,15 +551,15 @@ export function ConfigurationsPanel({
         open={hasUnsavedChanges}
       >
         <button
-          disabled={!form || saveMutation.isPending}
-          loading={saveMutation.isPending}
+          disabled={!form || isSaving || saveMutation.isPending}
+          loading={isSaving || saveMutation.isPending}
           onClick={save}
           variant="primary"
         >
-          Save
+          {isSaving || saveMutation.isPending ? "Saving…" : "Save"}
         </button>
         <button
-          disabled={saveMutation.isPending}
+          disabled={isSaving || saveMutation.isPending}
           onClick={discard}
         >
           Discard
@@ -900,6 +913,90 @@ export function ConfigurationsPanel({
                 />
               )}
             </div>
+          </div>
+        </s-section>
+
+        <s-section heading="URL Options">
+          <div className={styles.urlOptions}>
+            <s-paragraph color="subdued">
+              Control tracking, currency, and checkout URLs used in the final
+              XML feed.
+            </s-paragraph>
+
+            {isLoading ? (
+              <>
+                <ConfigurationSkeleton />
+                <ConfigurationSkeleton />
+                <ConfigurationSkeleton />
+              </>
+            ) : (
+              <>
+                <s-checkbox
+                  checked={form?.disableUtmParameters ?? false}
+                  details="By default, links include Google Shopping UTM parameters for analytics tracking."
+                  error={fieldErrors.disableUtmParameters}
+                  label="Do not add UTM parameters to product links"
+                  onChange={(event) =>
+                    updateForm(
+                      "disableUtmParameters",
+                      event.currentTarget.checked,
+                    )
+                  }
+                />
+
+                <s-checkbox
+                  checked={
+                    form?.disablePrimaryCurrencyParameter ?? false
+                  }
+                  details="Shopify Market feeds always keep the currency parameter so market pricing keeps working."
+                  error={fieldErrors.disablePrimaryCurrencyParameter}
+                  label="Do not add currency parameter to main feed product links"
+                  onChange={(event) =>
+                    updateForm(
+                      "disablePrimaryCurrencyParameter",
+                      event.currentTarget.checked,
+                    )
+                  }
+                />
+
+                <div className={styles.checkoutLinkSetting}>
+                  <s-select
+                    details="This will include a checkout URL in your product data which gives online shoppers the option to go directly to checkout in Free Listings."
+                    error={fieldErrors.checkoutLinkMode}
+                    label="Add checkout link URL"
+                    onChange={(event) =>
+                      updateForm(
+                        "checkoutLinkMode",
+                        event.currentTarget.value as
+                          | "DISABLED"
+                          | "CART"
+                          | "CHECKOUT",
+                      )
+                    }
+                    value={form?.checkoutLinkMode ?? "DISABLED"}
+                  >
+                    <s-option value="DISABLED">Disabled</s-option>
+                    <s-option value="CART">Link to cart</s-option>
+                    <s-option value="CHECKOUT">Link to checkout</s-option>
+                  </s-select>
+
+                  <s-stack direction="inline" gap="base">
+                    <s-link
+                      href="https://support.google.com/merchants/answer/13580733"
+                      target="_blank"
+                    >
+                      Google Merchant support
+                    </s-link>
+                    <s-link
+                      href="https://help.shopify.com/en/manual/checkout-settings/cart-permalink"
+                      target="_blank"
+                    >
+                      Shopify help
+                    </s-link>
+                  </s-stack>
+                </div>
+              </>
+            )}
           </div>
         </s-section>
 

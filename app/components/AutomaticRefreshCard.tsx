@@ -779,12 +779,6 @@ export function AutomaticRefreshCard({
                   <AutomaticStatusBadge
                     status={schedule.lastAutomaticStatus}
                   />
-                  {schedule.lastAutomaticStatus === "FAILED" &&
-                  schedule.lastAutomaticError ? (
-                    <span className={styles.scheduleError}>
-                      {schedule.lastAutomaticError}
-                    </span>
-                  ) : null}
                 </dd>
               </div>
             </dl>

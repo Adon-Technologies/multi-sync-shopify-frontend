@@ -3,6 +3,14 @@ export interface SelectedCollection {
   title: string;
 }
 
+export const CHECKOUT_LINK_MODES = [
+  "DISABLED",
+  "CART",
+  "CHECKOUT",
+] as const;
+
+export type CheckoutLinkMode = (typeof CHECKOUT_LINK_MODES)[number];
+
 export interface ConfigurationInput {
   alertsEmail: string;
   countryCode: string;
@@ -11,6 +19,9 @@ export interface ConfigurationInput {
   excludedCollections: SelectedCollection[];
   excludedTitleTerms: string[];
   showSalePriceInGoogleFeed: boolean;
+  disableUtmParameters: boolean;
+  disablePrimaryCurrencyParameter: boolean;
+  checkoutLinkMode: CheckoutLinkMode;
 }
 
 export interface ConfigurationFieldErrors {
@@ -21,6 +32,9 @@ export interface ConfigurationFieldErrors {
   excludedCollections?: string;
   excludedTitleTerms?: string;
   showSalePriceInGoogleFeed?: string;
+  disableUtmParameters?: string;
+  disablePrimaryCurrencyParameter?: string;
+  checkoutLinkMode?: string;
 }
 
 export class ConfigurationValidationError extends Error {
@@ -156,6 +170,15 @@ export function normalizeSelectedCollections(values: unknown) {
   return collections;
 }
 
+export function normalizeCheckoutLinkMode(
+  value: unknown,
+): CheckoutLinkMode {
+  return typeof value === "string" &&
+    CHECKOUT_LINK_MODES.includes(value as CheckoutLinkMode)
+    ? (value as CheckoutLinkMode)
+    : "DISABLED";
+}
+
 export function validateConfigurationInput(value: unknown): ConfigurationInput {
   const fields: ConfigurationFieldErrors = {};
   const input: Record<string, unknown> =
@@ -180,6 +203,12 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
   );
   const showSalePriceInGoogleFeed =
     input.showSalePriceInGoogleFeed === true;
+  const disableUtmParameters = input.disableUtmParameters === true;
+  const disablePrimaryCurrencyParameter =
+    input.disablePrimaryCurrencyParameter === true;
+  const checkoutLinkMode = normalizeCheckoutLinkMode(
+    input.checkoutLinkMode,
+  );
 
   if (!EMAIL_ADDRESS.test(alertsEmail) || alertsEmail.length > 254) {
     fields.alertsEmail = "Enter a valid email address.";
@@ -254,6 +283,32 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
       "Choose whether the Google feed should include sale prices.";
   }
 
+  if (
+    input.disableUtmParameters !== undefined &&
+    typeof input.disableUtmParameters !== "boolean"
+  ) {
+    fields.disableUtmParameters =
+      "Choose whether product links should include UTM parameters.";
+  }
+
+  if (
+    input.disablePrimaryCurrencyParameter !== undefined &&
+    typeof input.disablePrimaryCurrencyParameter !== "boolean"
+  ) {
+    fields.disablePrimaryCurrencyParameter =
+      "Choose whether the Primary feed should include its currency parameter.";
+  }
+
+  if (
+    input.checkoutLinkMode !== undefined &&
+    (typeof input.checkoutLinkMode !== "string" ||
+      !CHECKOUT_LINK_MODES.includes(
+        input.checkoutLinkMode as CheckoutLinkMode,
+      ))
+  ) {
+    fields.checkoutLinkMode = "Choose a valid checkout link option.";
+  }
+
   if (Object.keys(fields).length > 0) {
     throw new ConfigurationValidationError(fields);
   }
@@ -266,5 +321,8 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     excludedCollections,
     excludedTitleTerms,
     showSalePriceInGoogleFeed,
+    disableUtmParameters,
+    disablePrimaryCurrencyParameter,
+    checkoutLinkMode,
   };
 }

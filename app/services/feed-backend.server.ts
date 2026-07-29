@@ -8,6 +8,9 @@ const backendBaseUrl = (
 
 interface FeedSession {
   accessToken?: string;
+  expires?: Date;
+  refreshToken?: string;
+  refreshTokenExpires?: Date;
   shop: string;
 }
 
@@ -72,7 +75,8 @@ export async function requestFeedBackend<TResponse>(
         ...(body ? { "Content-Type": "application/json" } : {}),
         "x-multi-sync-shop": store.shopDomain,
         "x-multi-sync-signature": signature(
-          store.accessToken,
+          process.env.MULTI_SYNC_INTERNAL_SECRET?.trim() ||
+            store.accessToken,
           timestamp,
           method,
           canonicalTarget,

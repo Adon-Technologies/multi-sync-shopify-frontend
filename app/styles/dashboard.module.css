@@ -20,6 +20,9 @@
 
 .tab {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: 0 0 auto;
   min-height: 44px;
   padding: 10px 12px;
@@ -35,6 +38,12 @@
   transition:
     background-color 120ms ease,
     color 120ms ease;
+}
+
+.tabIcon {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
 }
 
 .tab:hover {

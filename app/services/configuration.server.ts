@@ -27,6 +27,7 @@ import {
   DEFAULT_SIZE_OPTIONS,
   normalizeOptionNames,
   normalizeSelectedCollections,
+  normalizeCheckoutLinkMode,
   resolveStoredOptionNames,
   type ConfigurationInput,
   type SelectedCollection,
@@ -81,6 +82,9 @@ interface StoredConfiguration {
   id: string;
   optionMappingsInitialized: boolean;
   showSalePriceInGoogleFeed: boolean;
+  disableUtmParameters: boolean;
+  disablePrimaryCurrencyParameter: boolean;
+  checkoutLinkMode: "DISABLED" | "CART" | "CHECKOUT";
   sizeOption: string | null;
   sizeOptions: string[];
   storeId: string;
@@ -165,6 +169,12 @@ function mapConfiguration(
     genderRulesVersion: configuration.genderRulesVersion,
     showSalePriceInGoogleFeed:
       configuration.showSalePriceInGoogleFeed,
+    disableUtmParameters: configuration.disableUtmParameters,
+    disablePrimaryCurrencyParameter:
+      configuration.disablePrimaryCurrencyParameter,
+    checkoutLinkMode: normalizeCheckoutLinkMode(
+      configuration.checkoutLinkMode,
+    ),
     updatedAt: configuration.updatedAt.toISOString(),
   };
 }
@@ -268,6 +278,9 @@ export async function getConfigurationPageData(
         excludedTitleTerms: [],
         optionMappingsInitialized: true,
         showSalePriceInGoogleFeed: false,
+        disableUtmParameters: false,
+        disablePrimaryCurrencyParameter: false,
+        checkoutLinkMode: "DISABLED",
         sizeOptions: [...DEFAULT_SIZE_OPTIONS],
         storeId: store.id,
       },
@@ -295,6 +308,9 @@ export async function saveConfigurationForShop(
       ageRulesAppliedVersion: true,
       genderRulesAppliedVersion: true,
       showSalePriceInGoogleFeed: true,
+      disableUtmParameters: true,
+      disablePrimaryCurrencyParameter: true,
+      checkoutLinkMode: true,
     },
   });
   const nextDiagnosticsRevision = createDiagnosticsConfigurationRevision({
@@ -324,13 +340,21 @@ export async function saveConfigurationForShop(
       sizeOption: null,
     },
   });
-  const pricingChanged =
+  const feedUrlSettingsChanged =
     previousConfiguration === null
-      ? input.showSalePriceInGoogleFeed
+      ? input.showSalePriceInGoogleFeed ||
+        input.disableUtmParameters ||
+        input.disablePrimaryCurrencyParameter ||
+        input.checkoutLinkMode !== "DISABLED"
       : previousConfiguration.showSalePriceInGoogleFeed !==
-        input.showSalePriceInGoogleFeed;
+          input.showSalePriceInGoogleFeed ||
+        previousConfiguration.disableUtmParameters !==
+          input.disableUtmParameters ||
+        previousConfiguration.disablePrimaryCurrencyParameter !==
+          input.disablePrimaryCurrencyParameter ||
+        previousConfiguration.checkoutLinkMode !== input.checkoutLinkMode;
 
-  if (pricingChanged) {
+  if (feedUrlSettingsChanged) {
     await prisma.xmlLink.updateMany({
       where: {
         gcsObjectName: { not: null },

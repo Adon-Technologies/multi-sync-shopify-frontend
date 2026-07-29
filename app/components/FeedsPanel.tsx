@@ -1135,7 +1135,6 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                           icon="refresh"
                           loading={
                             primaryGenerationInProgress ||
-                            query.isFetching ||
                             mutation.isPending
                               ? true
                               : undefined

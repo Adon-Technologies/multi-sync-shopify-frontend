@@ -8,6 +8,10 @@ import {
 import { Await } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useQuery } from "@tanstack/react-query";
+import { HiHome } from "react-icons/hi2";
+import { IoMdSettings } from "react-icons/io";
+import { SiGoogleanalytics } from "react-icons/si";
+import { TbFileTypeXml } from "react-icons/tb";
 
 import { InlineLoadingValue, SectionError } from "./DashboardStates";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
@@ -23,10 +27,10 @@ import type { FeedQueryScope } from "../services/feed-query";
 import styles from "../styles/dashboard.module.css";
 
 const tabs = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "feeds", label: "Feeds" },
-  { id: "diagnostics", label: "Diagnostics" },
-  { id: "configurations", label: "Configurations" },
+  { icon: HiHome, id: "dashboard", label: "Dashboard" },
+  { icon: TbFileTypeXml, id: "feeds", label: "Feeds" },
+  { icon: SiGoogleanalytics, id: "diagnostics", label: "Diagnostics" },
+  { icon: IoMdSettings, id: "configurations", label: "Configurations" },
 ] as const;
 
 export type DashboardTabId = (typeof tabs)[number]["id"];
@@ -478,6 +482,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
       <div aria-label="Main sections" className={styles.tabList} role="tablist">
         {tabs.map((tab, index) => {
           const isActive = activeTab === tab.id;
+          const TabIcon = tab.icon;
 
           return (
             <button
@@ -495,7 +500,8 @@ export function DashboardTabs(props: DashboardTabsProps) {
               tabIndex={isActive ? 0 : -1}
               type="button"
             >
-              {tab.label}
+              <TabIcon aria-hidden="true" className={styles.tabIcon} />
+              <span>{tab.label}</span>
             </button>
           );
         })}

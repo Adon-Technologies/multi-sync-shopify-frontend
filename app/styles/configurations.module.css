@@ -33,6 +33,17 @@
   grid-column: 1 / -1;
 }
 
+.urlOptions {
+  display: grid;
+  gap: 18px;
+}
+
+.checkoutLinkSetting {
+  display: grid;
+  gap: 8px;
+  max-width: 620px;
+}
+
 .featureHeading h3 {
   color: #202223;
   font-size: 14px;

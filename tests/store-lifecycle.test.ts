@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildInstalledStoreUpdate,
+  buildStoreTokenUpdate,
   buildUninstalledStoreUpdate,
   normalizeShopDomain,
 } from "../app/services/store-lifecycle.ts";
@@ -38,7 +39,60 @@ test("uninstall invalidates the token without deleting the record", () => {
 
   assert.deepEqual(buildUninstalledStoreUpdate(uninstalledAt), {
     accessToken: null,
+    accessTokenExpiresAt: null,
+    refreshToken: null,
+    refreshTokenExpiresAt: null,
     status: "UNINSTALLED",
+    tokenRefreshLockId: null,
+    tokenRefreshLockedAt: null,
     uninstalledAt,
   });
+});
+
+test("newer Shopify session tokens replace older background-worker tokens", () => {
+  const update = buildStoreTokenUpdate(
+    {
+      accessToken: "old-access",
+      accessTokenExpiresAt: new Date("2026-07-29T10:00:00.000Z"),
+      refreshToken: "old-refresh",
+      refreshTokenExpiresAt: new Date("2026-10-27T09:00:00.000Z"),
+      status: "INSTALLED",
+    },
+    {
+      accessToken: "new-access",
+      expires: new Date("2026-07-29T11:00:00.000Z"),
+      refreshToken: "new-refresh",
+      refreshTokenExpires: new Date("2026-10-27T10:00:00.000Z"),
+    },
+  );
+
+  assert.deepEqual(update, {
+    accessToken: "new-access",
+    accessTokenExpiresAt: new Date("2026-07-29T11:00:00.000Z"),
+    refreshToken: "new-refresh",
+    refreshTokenExpiresAt: new Date("2026-10-27T10:00:00.000Z"),
+    tokenRefreshLockId: null,
+    tokenRefreshLockedAt: null,
+  });
+});
+
+test("an older browser session cannot roll back a worker-refreshed token", () => {
+  assert.deepEqual(
+    buildStoreTokenUpdate(
+      {
+        accessToken: "worker-access",
+        accessTokenExpiresAt: new Date("2026-07-29T12:00:00.000Z"),
+        refreshToken: "worker-refresh",
+        refreshTokenExpiresAt: new Date("2026-10-27T11:00:00.000Z"),
+        status: "INSTALLED",
+      },
+      {
+        accessToken: "older-browser-access",
+        expires: new Date("2026-07-29T11:00:00.000Z"),
+        refreshToken: "invalidated-browser-refresh",
+        refreshTokenExpires: new Date("2026-10-27T10:00:00.000Z"),
+      },
+    ),
+    {},
+  );
 });

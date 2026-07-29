@@ -64,6 +64,9 @@ test("configuration retains stable collection IDs and normalized store values", 
     ],
     excludedTitleTerms: [" Sample "],
     showSalePriceInGoogleFeed: true,
+    disableUtmParameters: true,
+    disablePrimaryCurrencyParameter: true,
+    checkoutLinkMode: "CART",
   });
 
   assert.deepEqual(configuration, {
@@ -79,6 +82,9 @@ test("configuration retains stable collection IDs and normalized store values", 
     ],
     excludedTitleTerms: ["Sample"],
     showSalePriceInGoogleFeed: true,
+    disableUtmParameters: true,
+    disablePrimaryCurrencyParameter: true,
+    checkoutLinkMode: "CART",
   });
 });
 
@@ -101,6 +107,55 @@ test("sale-price feed setting defaults false and validates Boolean values", () =
       validateConfigurationInput({
         ...base,
         showSalePriceInGoogleFeed: "true",
+      }),
+    /Correct the highlighted configuration fields/,
+  );
+});
+
+test("URL options default safely and validate every persisted setting", () => {
+  const base = {
+    alertsEmail: "alerts@example.com",
+    countryCode: "US",
+    colorOptions: ["Color"],
+    excludedCollections: [],
+    excludedTitleTerms: [],
+    sizeOptions: ["Size"],
+  };
+  const defaults = validateConfigurationInput(base);
+
+  assert.equal(defaults.disableUtmParameters, false);
+  assert.equal(defaults.disablePrimaryCurrencyParameter, false);
+  assert.equal(defaults.checkoutLinkMode, "DISABLED");
+  assert.equal(
+    validateConfigurationInput({
+      ...base,
+      checkoutLinkMode: "CHECKOUT",
+      disablePrimaryCurrencyParameter: true,
+      disableUtmParameters: true,
+    }).checkoutLinkMode,
+    "CHECKOUT",
+  );
+  assert.throws(
+    () =>
+      validateConfigurationInput({
+        ...base,
+        disableUtmParameters: "true",
+      }),
+    /Correct the highlighted configuration fields/,
+  );
+  assert.throws(
+    () =>
+      validateConfigurationInput({
+        ...base,
+        disablePrimaryCurrencyParameter: 1,
+      }),
+    /Correct the highlighted configuration fields/,
+  );
+  assert.throws(
+    () =>
+      validateConfigurationInput({
+        ...base,
+        checkoutLinkMode: "DIRECT",
       }),
     /Correct the highlighted configuration fields/,
   );

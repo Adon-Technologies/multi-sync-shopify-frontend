@@ -4,8 +4,13 @@
   margin: 0 auto;
 }
 
+:global(html) {
+  scrollbar-gutter: stable both-edges;
+}
+
 .tabList {
   display: flex;
+  justify-content: safe center;
   gap: 4px;
   min-width: 0;
   overflow-x: auto;

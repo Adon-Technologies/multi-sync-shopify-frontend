@@ -66,32 +66,28 @@ export default function Index() {
   const refresh = () => refreshFetcher.submit(null, { method: "post" });
 
   return (
-    <s-page heading="Multi Sync" inlineSize="large">
-      <DashboardTabs
-        diagnosticsScope={diagnosticsScope}
-        feedScope={feedScope}
-        initialTab={initialTab}
-        isRefreshing={isRefreshing}
-        onRefresh={refresh}
-        statistics={statistics}
-        storeInformation={storeInformation}
-      />
-    </s-page>
+    <DashboardTabs
+      diagnosticsScope={diagnosticsScope}
+      feedScope={feedScope}
+      initialTab={initialTab}
+      isRefreshing={isRefreshing}
+      onRefresh={refresh}
+      statistics={statistics}
+      storeInformation={storeInformation}
+    />
   );
 }
 
 export function HydrateFallback() {
   return (
-    <s-page heading="Multi Sync" inlineSize="large">
-      <DashboardTabs
-        diagnosticsScope={null}
-        feedScope={null}
-        isRefreshing={false}
-        onRefresh={() => undefined}
-        statistics={pendingStatistics}
-        storeInformation={pendingStoreInformation}
-      />
-    </s-page>
+    <DashboardTabs
+      diagnosticsScope={null}
+      feedScope={null}
+      isRefreshing={false}
+      onRefresh={() => undefined}
+      statistics={pendingStatistics}
+      storeInformation={pendingStoreInformation}
+    />
   );
 }
 

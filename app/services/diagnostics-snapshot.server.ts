@@ -1,7 +1,16 @@
 import type { Prisma } from "@prisma/client";
 
 import prisma from "../db.server";
+import {
+  type DiagnosticsFilter,
+  type DiagnosticsFilterField,
+  type DiagnosticsFilterOption,
+} from "./diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "./diagnostics-search";
+import {
+  normalizeDiagnosticsSort,
+  type DiagnosticsSort,
+} from "./diagnostics-sort";
 import {
   DIAGNOSTICS_CLASSIFICATION_VERSION,
   type DiagnosticProduct,
@@ -33,6 +42,7 @@ export interface DiagnosticsSnapshotPage {
     endCursor: string | null;
   };
   scanVersion: string;
+  totalProducts: number;
 }
 
 interface SnapshotProductInput {
@@ -44,6 +54,8 @@ export interface DiagnosticsSnapshotCursor {
   productId: string;
   scanVersion: string;
   position: number;
+  offset?: number;
+  sort?: DiagnosticsSort;
   shopifyCursor?: string;
 }
 
@@ -82,6 +94,14 @@ export function decodeDiagnosticsSnapshotCursor(
       productId: parsed.productId,
       scanVersion: parsed.scanVersion,
       position: parsed.position,
+      ...(typeof parsed.offset === "number" &&
+      Number.isSafeInteger(parsed.offset) &&
+      parsed.offset >= 0
+        ? { offset: parsed.offset }
+        : {}),
+      ...(typeof parsed.sort === "string"
+        ? { sort: normalizeDiagnosticsSort(parsed.sort) }
+        : {}),
       ...(typeof parsed.shopifyCursor === "string"
         ? { shopifyCursor: parsed.shopifyCursor }
         : {}),
@@ -114,6 +134,12 @@ function parseWarnings(value: Prisma.JsonValue): DiagnosticWarning[] {
 function mapStoredProduct(product: {
   productId: string;
   title: string;
+  productCreatedAt: Date;
+  categoryName: string | null;
+  genderValues: string[];
+  ageValues: string[];
+  productType: string | null;
+  tags: string[];
   imageUrl: string | null;
   imageAlt: string | null;
   status: string;
@@ -122,6 +148,12 @@ function mapStoredProduct(product: {
   return {
     id: product.productId,
     title: product.title,
+    createdAt: product.productCreatedAt.toISOString(),
+    categoryName: product.categoryName,
+    genderValues: product.genderValues,
+    ageValues: product.ageValues,
+    productType: product.productType,
+    tags: product.tags,
     imageUrl: product.imageUrl,
     imageAlt: product.imageAlt,
     status:
@@ -218,6 +250,14 @@ export async function appendDiagnosticsSnapshotProducts(
       productId: product.id,
       position,
       title: product.title,
+      productCreatedAt: new Date(product.createdAt),
+      categoryName: product.categoryName,
+      genderValues: product.genderValues,
+      ageValues: product.ageValues,
+      productType: product.productType,
+      tags: product.tags,
+      warningCodes: product.warnings.map(({ code }) => code),
+      warningMessages: product.warnings.map(({ message }) => message),
       imageUrl: product.imageUrl,
       imageAlt: product.imageAlt,
       status: product.status,
@@ -322,33 +362,6 @@ async function pruneOldDiagnosticsSnapshots(shop: string) {
   });
 }
 
-async function resolveSnapshotPosition(
-  shop: string,
-  scanVersion: string,
-  cursor?: string | null,
-) {
-  const decoded = decodeDiagnosticsSnapshotCursor(cursor);
-
-  if (!decoded) {
-    return null;
-  }
-
-  if (decoded.scanVersion === scanVersion) {
-    return decoded.position;
-  }
-
-  const matchingProduct = await prisma.diagnosticsSnapshotProduct.findFirst({
-    where: {
-      shop,
-      scanVersion,
-      productId: decoded.productId,
-    },
-    select: { position: true },
-  });
-
-  return matchingProduct?.position ?? null;
-}
-
 export async function readDiagnosticsSnapshotPage(
   shop: string,
   tab: "all" | "submitted" | "warnings" | "excluded",
@@ -358,6 +371,8 @@ export async function readDiagnosticsSnapshotPage(
     pageSize: number;
     scanVersion?: string | null;
     search?: string | null;
+    sort?: DiagnosticsSort | string | null;
+    filter?: DiagnosticsFilter | null;
   },
 ): Promise<DiagnosticsSnapshotPage | null> {
   const normalizedShop = normalizeShop(shop);
@@ -383,11 +398,6 @@ export async function readDiagnosticsSnapshotPage(
     return null;
   }
 
-  const cursorPosition = await resolveSnapshotPosition(
-    normalizedShop,
-    snapshot.scanVersion,
-    requestedCursor,
-  );
   const status: DiagnosticStatus | undefined =
     tab === "submitted"
       ? "submitted"
@@ -397,50 +407,71 @@ export async function readDiagnosticsSnapshotPage(
           ? "error"
           : undefined;
   const normalizedSearch = normalizeDiagnosticsSearch(options.search ?? "");
+  const sort = normalizeDiagnosticsSort(options.sort);
   const isBackward = Boolean(options.before);
-  const storedProducts = await prisma.diagnosticsSnapshotProduct.findMany({
-    where: {
-      shop: normalizedShop,
-      scanVersion: snapshot.scanVersion,
-      ...(status ? { status } : {}),
-      ...(normalizedSearch
-        ? {
-            title: {
-              contains: normalizedSearch,
-              mode: "insensitive" as const,
-            },
-          }
-        : {}),
-      ...(cursorPosition === null
-        ? {}
-        : {
-            position: isBackward
-              ? { lt: cursorPosition }
-              : { gt: cursorPosition },
-          }),
-    },
-    orderBy: {
-      position: isBackward ? "desc" : "asc",
-    },
-    take: options.pageSize + 1,
-  });
+  const cursorOffset =
+    decodedCursor?.sort === sort ? (decodedCursor.offset ?? null) : null;
+
+  if (requestedCursor && cursorOffset === null) {
+    return null;
+  }
+
+  const pageOffset = isBackward
+    ? Math.max(0, cursorOffset! - options.pageSize)
+    : cursorOffset === null
+      ? 0
+      : cursorOffset + 1;
+  const sortDirection = sort.endsWith("-desc")
+    ? ("desc" as const)
+    : ("asc" as const);
+  const orderBy =
+    sort === "created-asc" || sort === "created-desc"
+      ? [
+          { productCreatedAt: sortDirection },
+          { position: "asc" as const },
+        ]
+      : sort === "title-asc" || sort === "title-desc"
+        ? [{ title: sortDirection }, { position: "asc" as const }]
+        : [{ productType: sortDirection }, { position: "asc" as const }];
+  const filterWhere = getDiagnosticsFilterWhere(options.filter);
+  const productWhere: Prisma.DiagnosticsSnapshotProductWhereInput = {
+    shop: normalizedShop,
+    scanVersion: snapshot.scanVersion,
+    ...(status ? { status } : {}),
+    ...(normalizedSearch
+      ? {
+          title: {
+            contains: normalizedSearch,
+            mode: "insensitive" as const,
+          },
+        }
+      : {}),
+    ...filterWhere,
+  };
+  const [storedProducts, totalProducts] = await Promise.all([
+    prisma.diagnosticsSnapshotProduct.findMany({
+      where: productWhere,
+      orderBy,
+      skip: pageOffset,
+      take: isBackward ? options.pageSize : options.pageSize + 1,
+    }),
+    prisma.diagnosticsSnapshotProduct.count({ where: productWhere }),
+  ]);
   const hasExtraProduct = storedProducts.length > options.pageSize;
   const displayedRows = storedProducts.slice(0, options.pageSize);
-
-  if (isBackward) {
-    displayedRows.reverse();
-  }
 
   return {
     products: displayedRows.map(mapStoredProduct),
     pageInfo: {
       hasNextPage: isBackward ? Boolean(requestedCursor) : hasExtraProduct,
-      hasPreviousPage: isBackward ? hasExtraProduct : Boolean(requestedCursor),
+      hasPreviousPage: pageOffset > 0,
       startCursor: displayedRows[0]
         ? encodeDiagnosticsSnapshotCursor({
             productId: displayedRows[0].productId,
             scanVersion: snapshot.scanVersion,
             position: displayedRows[0].position,
+            offset: pageOffset,
+            sort,
           })
         : null,
       endCursor: displayedRows.at(-1)
@@ -448,9 +479,127 @@ export async function readDiagnosticsSnapshotPage(
             productId: displayedRows.at(-1)!.productId,
             scanVersion: snapshot.scanVersion,
             position: displayedRows.at(-1)!.position,
+            offset: pageOffset + displayedRows.length - 1,
+            sort,
           })
         : null,
     },
     scanVersion: snapshot.scanVersion,
+    totalProducts,
   };
+}
+
+function getDiagnosticsFilterWhere(
+  filter?: DiagnosticsFilter | null,
+): Prisma.DiagnosticsSnapshotProductWhereInput {
+  if (!filter) {
+    return {};
+  }
+
+  switch (filter.field) {
+    case "merchant-error":
+      return { warningCodes: { has: filter.value } };
+    case "gender":
+      return { genderValues: { has: filter.value } };
+    case "age":
+      return { ageValues: { has: filter.value } };
+    case "google-product-category":
+      return { categoryName: filter.value };
+    case "product-type":
+      return { productType: filter.value };
+    case "tag":
+      return { tags: { has: filter.value } };
+  }
+}
+
+function getStatusForTab(
+  tab: "all" | "submitted" | "warnings" | "excluded",
+): DiagnosticStatus | undefined {
+  return tab === "submitted"
+    ? "submitted"
+    : tab === "warnings"
+      ? "warning"
+      : tab === "excluded"
+        ? "error"
+        : undefined;
+}
+
+function sortFilterOptions(options: DiagnosticsFilterOption[]) {
+  return options.sort((left, right) =>
+    left.label.localeCompare(right.label, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }),
+  );
+}
+
+export async function readDiagnosticsSnapshotFilterOptions(
+  shop: string,
+  tab: "all" | "submitted" | "warnings" | "excluded",
+  field: DiagnosticsFilterField,
+  scanVersion?: string | null,
+): Promise<DiagnosticsFilterOption[] | null> {
+  const normalizedShop = normalizeShop(shop);
+  const snapshot = await findReadyDiagnosticsSnapshot(
+    normalizedShop,
+    scanVersion,
+  );
+
+  if (!snapshot) {
+    return null;
+  }
+
+  const status = getStatusForTab(tab);
+  const rows = await prisma.diagnosticsSnapshotProduct.findMany({
+    where: {
+      shop: normalizedShop,
+      scanVersion: snapshot.scanVersion,
+      ...(status ? { status } : {}),
+    },
+    select: {
+      ageValues: true,
+      categoryName: true,
+      genderValues: true,
+      productType: true,
+      tags: true,
+      warningCodes: true,
+      warningMessages: true,
+    },
+  });
+  const options = new Map<string, DiagnosticsFilterOption>();
+
+  for (const row of rows) {
+    if (field === "merchant-error") {
+      row.warningCodes.forEach((value, index) => {
+        const label = row.warningMessages[index] ?? value;
+        if (!options.has(value)) {
+          options.set(value, { label, value });
+        }
+      });
+      continue;
+    }
+
+    const values =
+      field === "gender"
+        ? row.genderValues
+        : field === "age"
+          ? row.ageValues
+          : field === "google-product-category"
+            ? row.categoryName
+              ? [row.categoryName]
+              : []
+            : field === "product-type"
+              ? row.productType
+                ? [row.productType]
+                : []
+              : row.tags;
+
+    for (const value of values) {
+      if (!options.has(value)) {
+        options.set(value, { label: value, value });
+      }
+    }
+  }
+
+  return sortFilterOptions([...options.values()]);
 }

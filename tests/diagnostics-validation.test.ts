@@ -14,8 +14,12 @@ function product(
   return {
     id: "gid://shopify/Product/1",
     title: "Everyday shirt",
+    createdAt: "2026-01-15T12:00:00.000Z",
+    categoryName: "Apparel & Accessories > Clothing > Shirts & Tops",
     description: "A complete description",
     price: "20.00",
+    productType: "Shirts",
+    tags: [],
     imageUrl: null,
     imageAlt: null,
     collectionIds: [],
@@ -34,6 +38,35 @@ const noExclusions: DiagnosticExclusionRules = {
   excludedCollections: [],
   excludedTitleTerms: [],
 };
+
+test("filter metadata uses metafield Gender and Age values plus product tags", () => {
+  const diagnostic = validateDiagnosticProduct(
+    product({
+      tags: ["Summer", " summer ", "Featured"],
+      metafields: [
+        {
+          attribute: "gender",
+          namespace: "custom",
+          key: "gender",
+          type: "single_line_text_field",
+          value: "Women",
+        },
+        {
+          attribute: "age",
+          namespace: "custom",
+          key: "age",
+          type: "single_line_text_field",
+          value: "Adult",
+        },
+      ],
+    }),
+    noExclusions,
+  );
+
+  assert.deepEqual(diagnostic.genderValues, ["Women"]);
+  assert.deepEqual(diagnostic.ageValues, ["Adult"]);
+  assert.deepEqual(diagnostic.tags, ["Summer", "Featured"]);
+});
 
 test("a metafield supplies an attribute missing from product options", () => {
   const diagnostic = validateDiagnosticProduct(

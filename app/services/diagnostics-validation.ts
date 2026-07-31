@@ -10,7 +10,7 @@ import {
 } from "@multi-sync/catalog-rules";
 
 export const DIAGNOSTICS_CLASSIFICATION_VERSION =
-  "diagnostics-v9-positive-price-validation";
+  "diagnostics-v13-product-filters";
 
 export type DiagnosticStatus = "submitted" | "warning" | "error";
 
@@ -22,8 +22,12 @@ export interface DiagnosticWarning {
 export interface RawDiagnosticProduct {
   id: string;
   title: string;
+  createdAt: string;
+  categoryName: string | null;
   description: string | null;
   price: string | null;
+  productType: string | null;
+  tags: string[];
   imageUrl: string | null;
   imageAlt: string | null;
   collectionIds?: string[];
@@ -55,6 +59,12 @@ export interface DiagnosticExclusionRules {
 export interface DiagnosticProduct {
   id: string;
   title: string;
+  createdAt: string;
+  categoryName: string | null;
+  genderValues: string[];
+  ageValues: string[];
+  productType: string | null;
+  tags: string[];
   imageUrl: string | null;
   imageAlt: string | null;
   status: DiagnosticStatus;
@@ -330,6 +340,21 @@ function collectAttributeValues(
   return values;
 }
 
+function uniqueFilterValues(values: string[]) {
+  const uniqueValues = new Map<string, string>();
+
+  for (const value of values) {
+    const trimmed = value.trim();
+    const comparable = normalizeDiagnosticMatchText(trimmed);
+
+    if (comparable && !uniqueValues.has(comparable)) {
+      uniqueValues.set(comparable, trimmed);
+    }
+  }
+
+  return [...uniqueValues.values()];
+}
+
 /**
  * Product-level validation intentionally has no Shopify dependencies. New GMC
  * warning rules and future exclusion errors can be added here without changing
@@ -341,6 +366,12 @@ export function validateDiagnosticProduct(
   product: RawDiagnosticProduct,
   exclusionRules?: DiagnosticExclusionRules,
 ): DiagnosticProduct {
+  const metafieldValues = collectAttributeValues(product, "metafields");
+  const filterMetadata = {
+    genderValues: uniqueFilterValues(metafieldValues.get("gender") ?? []),
+    ageValues: uniqueFilterValues(metafieldValues.get("age") ?? []),
+    tags: uniqueFilterValues(product.tags),
+  };
   const exclusionReasons = getDiagnosticExclusionReasons(
     product,
     exclusionRules,
@@ -350,6 +381,10 @@ export function validateDiagnosticProduct(
     return {
       id: product.id,
       title: product.title,
+      createdAt: product.createdAt,
+      categoryName: product.categoryName,
+      ...filterMetadata,
+      productType: product.productType,
       imageUrl: product.imageUrl,
       imageAlt: product.imageAlt,
       status: "error",
@@ -363,7 +398,6 @@ export function validateDiagnosticProduct(
     "options",
     exclusionRules,
   );
-  const metafieldValues = collectAttributeValues(product, "metafields");
 
   for (const attribute of comparableAttributes) {
     const optionSet = normalizeValueSet(optionValues.get(attribute.key) ?? []);
@@ -406,6 +440,10 @@ export function validateDiagnosticProduct(
   return {
     id: product.id,
     title: product.title,
+    createdAt: product.createdAt,
+    categoryName: product.categoryName,
+    ...filterMetadata,
+    productType: product.productType,
     imageUrl: product.imageUrl,
     imageAlt: product.imageAlt,
     status: warnings.length === 0 ? "submitted" : "warning",

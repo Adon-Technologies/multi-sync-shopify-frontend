@@ -3,10 +3,19 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import type { DiagnosticsDataResponse } from "../routes/app.diagnostics-data";
 import type {
   DiagnosticsCounts,
+  DiagnosticsFilterOptions,
   DiagnosticsPage,
   DiagnosticsTab,
 } from "./diagnostics.server";
+import type {
+  DiagnosticsFilter,
+  DiagnosticsFilterField,
+} from "./diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "./diagnostics-search";
+import {
+  normalizeDiagnosticsSort,
+  type DiagnosticsSort,
+} from "./diagnostics-sort";
 import { DIAGNOSTICS_CLASSIFICATION_VERSION } from "./diagnostics-validation";
 
 export interface DiagnosticsQueryScope {
@@ -40,7 +49,9 @@ interface QueryRequestOptions {
 
 interface ProductsQueryRequestOptions extends QueryRequestOptions {
   abortOnUnmount?: boolean;
+  filter?: DiagnosticsFilter | null;
   search?: string;
+  sort?: DiagnosticsSort | string;
 }
 
 const defaultEndpoint = "/app/diagnostics-data";
@@ -69,7 +80,9 @@ export const diagnosticsKeys = {
     generation: number,
     tab: DiagnosticsTab,
     after: string | null,
+    filter: DiagnosticsFilter | null,
     search: string,
+    sort: DiagnosticsSort,
     snapshotVersion: string | null | undefined,
     endpoint = defaultEndpoint,
   ) =>
@@ -82,7 +95,30 @@ export const diagnosticsKeys = {
       "products",
       tab,
       after ?? "start",
+      filter?.field ?? "no-filter",
+      filter?.value ?? "",
       normalizeDiagnosticsSearch(search),
+      sort,
+      snapshotVersion ?? "latest",
+      endpoint,
+    ] as const,
+  filterOptions: (
+    { shop, sessionId }: DiagnosticsQueryScope,
+    generation: number,
+    tab: DiagnosticsTab,
+    field: DiagnosticsFilterField,
+    snapshotVersion: string | null | undefined,
+    endpoint = defaultEndpoint,
+  ) =>
+    [
+      "diagnostics",
+      shop,
+      sessionId,
+      generation,
+      DIAGNOSTICS_CLASSIFICATION_VERSION,
+      "filter-options",
+      tab,
+      field,
       snapshotVersion ?? "latest",
       endpoint,
     ] as const,
@@ -238,11 +274,14 @@ export function diagnosticsProductsQueryOptions(
   {
     abortOnUnmount = false,
     endpoint = defaultEndpoint,
+    filter = null,
     force = false,
     search = "",
+    sort,
   }: ProductsQueryRequestOptions = {},
 ) {
   const normalizedSearch = normalizeDiagnosticsSearch(search);
+  const normalizedSort = normalizeDiagnosticsSort(sort);
 
   return queryOptions({
     ...diagnosticsSessionCacheOptions,
@@ -251,7 +290,9 @@ export function diagnosticsProductsQueryOptions(
       generation,
       tab,
       request.after,
+      filter,
       normalizedSearch,
+      normalizedSort,
       request.snapshotVersion,
       endpoint,
     ),
@@ -259,10 +300,13 @@ export function diagnosticsProductsQueryOptions(
       const payload = await requestDiagnostics(
         buildRequestUrl(endpoint, {
           after: request.after,
+          filterField: filter?.field,
+          filterValue: filter?.value,
           intent: "page",
           refresh: force ? "1" : null,
           refreshToken: force ? String(generation) : null,
           search: normalizedSearch || null,
+          sort: normalizedSort,
           snapshotVersion: request.snapshotVersion,
           tab,
         }),
@@ -276,6 +320,45 @@ export function diagnosticsProductsQueryOptions(
       }
 
       return payload.page;
+    },
+  });
+}
+
+export function diagnosticsFilterOptionsQueryOptions(
+  scope: DiagnosticsQueryScope,
+  generation: number,
+  tab: DiagnosticsTab,
+  field: DiagnosticsFilterField,
+  snapshotVersion: string | null | undefined,
+  { endpoint = defaultEndpoint }: QueryRequestOptions = {},
+) {
+  return queryOptions({
+    ...diagnosticsSessionCacheOptions,
+    queryKey: diagnosticsKeys.filterOptions(
+      scope,
+      generation,
+      tab,
+      field,
+      snapshotVersion,
+      endpoint,
+    ),
+    queryFn: async (): Promise<DiagnosticsFilterOptions> => {
+      const payload = await requestDiagnostics(
+        buildRequestUrl(endpoint, {
+          field,
+          intent: "filter-options",
+          snapshotVersion,
+          tab,
+        }),
+      );
+
+      if (!payload.ok || payload.intent !== "filter-options") {
+        throw new Error(
+          payload.ok ? "Filter options couldn't be loaded." : payload.error,
+        );
+      }
+
+      return payload.result;
     },
   });
 }

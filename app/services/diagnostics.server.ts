@@ -5,7 +5,16 @@ import {
   getDiagnosticsConfigurationRules,
   type DiagnosticsConfigurationRules,
 } from "./configuration.server";
+import type {
+  DiagnosticsFilter,
+  DiagnosticsFilterField,
+  DiagnosticsFilterOption,
+} from "./diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "./diagnostics-search";
+import {
+  normalizeDiagnosticsSort,
+  type DiagnosticsSort,
+} from "./diagnostics-sort";
 import {
   appendDiagnosticsSnapshotProducts,
   beginDiagnosticsSnapshot,
@@ -14,6 +23,7 @@ import {
   discardDiagnosticsSnapshot,
   encodeDiagnosticsSnapshotCursor,
   findReadyDiagnosticsSnapshot,
+  readDiagnosticsSnapshotFilterOptions,
   readDiagnosticsSnapshotPage,
   type DiagnosticsSnapshotCounts,
 } from "./diagnostics-snapshot.server";
@@ -95,15 +105,23 @@ export interface DiagnosticsPage {
   products: DiagnosticProduct[];
   pageInfo: DiagnosticsPageInfo;
   scanVersion: string;
+  totalProducts?: number;
+}
+
+export interface DiagnosticsFilterOptions {
+  options: DiagnosticsFilterOption[];
+  scanVersion: string;
 }
 
 interface DiagnosticsPageOptions {
   tab: DiagnosticsTab;
   after?: string | null;
   before?: string | null;
+  filter?: DiagnosticsFilter | null;
   force?: boolean;
   refreshToken?: string | null;
   search?: string | null;
+  sort?: DiagnosticsSort | string | null;
   snapshotVersion?: string | null;
 }
 
@@ -169,6 +187,12 @@ interface ProductEdge {
   node: {
     id: string;
     title: string;
+    createdAt: string;
+    category: {
+      fullName: string;
+    } | null;
+    productType: string;
+    tags: string[];
     description: string | null;
     featuredMedia: {
       preview: {
@@ -304,6 +328,12 @@ const PRODUCT_PAGE_QUERY = `#graphql
         node {
           id
           title
+          createdAt
+          category {
+            fullName
+          }
+          productType
+          tags
           description(truncateAt: 1)
           featuredMedia {
             preview {
@@ -924,6 +954,10 @@ function mapProduct(
   return {
     id: node.id,
     title: node.title,
+    createdAt: node.createdAt,
+    categoryName: node.category?.fullName.trim() || null,
+    productType: node.productType.trim() || null,
+    tags: node.tags,
     description: node.description,
     price: node.priceRangeV2?.minVariantPrice?.amount ?? null,
     imageUrl: image?.url ?? null,
@@ -1446,6 +1480,8 @@ async function fetchDiagnosticsPage(
       pageSize: TABLE_PAGE_SIZE,
       search: options.search,
       scanVersion: options.snapshotVersion,
+      sort: options.sort,
+      filter: options.filter,
     });
 
     if (snapshotPage) {
@@ -1453,6 +1489,7 @@ async function fetchDiagnosticsPage(
         products: snapshotPage.products,
         pageInfo: snapshotPage.pageInfo,
         scanVersion: snapshotPage.scanVersion,
+        totalProducts: snapshotPage.totalProducts,
       };
     }
   }
@@ -1550,6 +1587,7 @@ function emptyDiagnosticsPage(scanVersion = ""): DiagnosticsPage {
       endCursor: null,
     },
     scanVersion,
+    totalProducts: 0,
   };
 }
 
@@ -1608,6 +1646,7 @@ export async function getDiagnosticsPage(
 ) {
   const force = options.force ?? false;
   const normalizedSearch = normalizeDiagnosticsSearch(options.search ?? "");
+  const sort = normalizeDiagnosticsSort(options.sort);
   let readySnapshot = force
     ? null
     : await findReadyDiagnosticsSnapshot(shop, options.snapshotVersion);
@@ -1646,6 +1685,9 @@ export async function getDiagnosticsPage(
     direction,
     cursor,
     encodeURIComponent(normalizedSearch),
+    sort,
+    options.filter?.field ?? "no-filter",
+    encodeURIComponent(options.filter?.value ?? ""),
   ].join("|");
 
   return getCachedValue(pageCache, key, PAGE_CACHE_TTL_MS, () =>
@@ -1653,7 +1695,38 @@ export async function getDiagnosticsPage(
       ...options,
       force: false,
       search: normalizedSearch,
+      sort,
       snapshotVersion: readySnapshot.scanVersion,
     }),
   );
+}
+
+export async function getDiagnosticsFilterOptions(
+  shop: string,
+  options: {
+    field: DiagnosticsFilterField;
+    tab: DiagnosticsTab;
+    snapshotVersion?: string | null;
+  },
+): Promise<DiagnosticsFilterOptions> {
+  const readySnapshot = await findReadyDiagnosticsSnapshot(
+    shop,
+    options.snapshotVersion,
+  );
+
+  if (!readySnapshot) {
+    return { options: [], scanVersion: "" };
+  }
+
+  const filterOptions = await readDiagnosticsSnapshotFilterOptions(
+    shop,
+    options.tab,
+    options.field,
+    readySnapshot.scanVersion,
+  );
+
+  return {
+    options: filterOptions ?? [],
+    scanVersion: readySnapshot.scanVersion,
+  };
 }

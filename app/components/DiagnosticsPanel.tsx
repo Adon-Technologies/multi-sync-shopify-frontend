@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CiWarning } from "react-icons/ci";
 import { IoCheckmarkDoneOutline } from "react-icons/io5";
-import { VscError } from "react-icons/vsc";
+import { VscCircleSlash, VscError } from "react-icons/vsc";
 
 import type {
   DiagnosticsCounts,
@@ -13,6 +13,7 @@ import type {
 } from "../services/diagnostics.server";
 import {
   createDiagnosticsClientState,
+  diagnosticsFilterOptionsQueryOptions,
   diagnosticsKeys,
   diagnosticsProductsQueryOptions,
   diagnosticsSummaryQueryOptions,
@@ -21,7 +22,18 @@ import {
   type DiagnosticsPageNavigation,
   type DiagnosticsQueryScope,
 } from "../services/diagnostics-query";
+import {
+  diagnosticsFilterFields,
+  diagnosticsFilterLabels,
+  type DiagnosticsFilter,
+  type DiagnosticsFilterField,
+} from "../services/diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "../services/diagnostics-search";
+import {
+  DEFAULT_DIAGNOSTICS_SORT,
+  normalizeDiagnosticsSort,
+  type DiagnosticsSort,
+} from "../services/diagnostics-sort";
 import type { DiagnosticProduct } from "../services/diagnostics-validation";
 import styles from "../styles/diagnostics.module.css";
 
@@ -50,6 +62,28 @@ const badgeToneClass: Record<DiagnosticsTab, string> = {
   excluded: styles.badgeExcluded,
 };
 
+const FILTER_POPOVER_ID = "diagnostics-product-filter-popover";
+const FILTER_FIELD_POPOVER_ID = "diagnostics-filter-field-popover";
+const FILTER_VALUE_POPOVER_ID = "diagnostics-filter-value-popover";
+const SORT_POPOVER_ID = "diagnostics-sort-popover";
+
+const diagnosticsFilterFieldOptions = diagnosticsFilterFields.map((field) => ({
+  label: diagnosticsFilterLabels[field],
+  value: field,
+}));
+
+const diagnosticsSortOptions: Array<{
+  label: string;
+  value: DiagnosticsSort;
+}> = [
+  { label: "Created - Newest First", value: "created-desc" },
+  { label: "Created - Oldest First", value: "created-asc" },
+  { label: "Product Title - A to Z", value: "title-asc" },
+  { label: "Product Title - Z to A", value: "title-desc" },
+  { label: "Product type - A to Z", value: "product-type-asc" },
+  { label: "Product type - Z to A", value: "product-type-desc" },
+];
+
 interface DiagnosticsPanelProps {
   active: boolean;
   dataEndpoint?: string;
@@ -68,11 +102,87 @@ interface DiagnosticsTableProps {
   canGoPrevious: boolean;
   error: string | null;
   isLoading: boolean;
+  isRefreshing: boolean;
+  pageIndex: number;
   pageInfo?: DiagnosticsPageInfo;
   products: DiagnosticProduct[];
   searchTerm: string;
+  totalProducts?: number;
   onNext: () => void;
   onPrevious: () => void;
+  onRefresh: () => void;
+}
+
+function PolarisOptionPicker({
+  accessibilityLabel,
+  disabled = false,
+  id,
+  onChange,
+  options,
+  placeholder,
+  showSortIcon = false,
+  value,
+}: {
+  accessibilityLabel: string;
+  disabled?: boolean;
+  id: string;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<{ label: string; value: string }>;
+  placeholder: string;
+  showSortIcon?: boolean;
+  value: string;
+}) {
+  const selectedLabel =
+    options.find((option) => option.value === value)?.label ?? placeholder;
+
+  return (
+    <div className={styles.polarisPicker}>
+      <s-clickable
+        accessibilityLabel={accessibilityLabel}
+        background="base"
+        blockSize="32px"
+        border="small-100"
+        borderColor="base"
+        borderRadius="base"
+        borderStyle="solid"
+        command="--show"
+        commandFor={id}
+        disabled={disabled}
+        inlineSize="100%"
+        padding="none"
+      >
+        <span className={styles.pickerTriggerContent}>
+          <span className={styles.pickerTriggerLabel}>
+            {showSortIcon ? <s-icon type="sort" /> : null}
+            <s-text color={value ? "base" : "subdued"}>
+              {selectedLabel}
+            </s-text>
+          </span>
+          <s-icon color="subdued" type="chevron-down" />
+        </span>
+      </s-clickable>
+      <s-popover id={id}>
+        <s-box padding="small-200">
+          <div className={styles.polarisPickerOptions}>
+            {options.map((option) => (
+              <s-button
+                command="--hide"
+                commandFor={id}
+                key={option.value}
+                onClick={() => onChange(option.value)}
+                variant="tertiary"
+              >
+                <span className={styles.polarisPickerOption}>
+                  <span>{option.label}</span>
+                  {option.value === value ? <s-icon type="check" /> : null}
+                </span>
+              </s-button>
+            ))}
+          </div>
+        </s-box>
+      </s-popover>
+    </div>
+  );
 }
 
 function formatCount(value: number) {
@@ -186,6 +296,9 @@ function SkeletonRows() {
               <span className={styles.skeletonTitle} />
             </div>
           </td>
+          <td>
+            <span className={styles.skeletonCategory} />
+          </td>
           <td className={styles.statusCell}>
             <span className={styles.skeletonStatus} />
           </td>
@@ -203,27 +316,65 @@ function DiagnosticsTable({
   canGoPrevious,
   error,
   isLoading,
+  isRefreshing,
+  pageIndex,
   pageInfo,
   products,
   searchTerm,
+  totalProducts,
   onNext,
   onPrevious,
+  onRefresh,
 }: DiagnosticsTableProps) {
   const emptyMessage = normalizeDiagnosticsSearch(searchTerm)
     ? "No products match your search."
     : "No products are available in this view.";
+  const firstProduct = products.length === 0 ? 0 : pageIndex * 25 + 1;
+  const lastProduct =
+    products.length === 0 ? 0 : firstProduct + products.length - 1;
 
   return (
     <>
+      <div className={styles.tableSummary}>
+        <span aria-live="polite">
+          {isLoading
+            ? "Loading products"
+            : `Showing ${formatCount(firstProduct)} to ${formatCount(
+                lastProduct,
+              )} of ${formatCount(
+                totalProducts ?? products.length,
+              )} Products`}
+        </span>
+      </div>
+
       <div className={styles.tableViewport}>
         <table className={styles.diagnosticsTable}>
           <thead>
             <tr>
               <th scope="col">Product</th>
-              <th className={styles.googleHeader} scope="col">
-                <img alt="Google" src="/google-icon.png" />
+              <th scope="col">
+                <span className={styles.categoryColumnAnchor}>
+                  Google product category
+                </span>
               </th>
-              <th scope="col">Warnings / Errors Found</th>
+              <th className={styles.googleHeader} scope="col">
+                <img alt="Google" src="/google-icon-1.png" />
+              </th>
+              <th scope="col">
+                <div className={styles.errorHeader}>
+                  <span>Error from merchant center</span>
+                  <s-button
+                    accessibilityLabel="Refresh product errors"
+                    disabled={isRefreshing}
+                    icon="refresh"
+                    loading={isRefreshing ? true : undefined}
+                    onClick={onRefresh}
+                    variant="tertiary"
+                  >
+                    Refresh product Errors
+                  </s-button>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -231,13 +382,13 @@ function DiagnosticsTable({
               <SkeletonRows />
             ) : error && products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={3}>
+                <td className={styles.emptyCell} colSpan={4}>
                   {error}
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={3}>
+                <td className={styles.emptyCell} colSpan={4}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -257,6 +408,22 @@ function DiagnosticsTable({
                         {product.title || "Untitled product"}
                       </a>
                     </div>
+                  </td>
+                  <td className={styles.categoryCell}>
+                    <span className={styles.categoryColumnAnchor}>
+                      {product.categoryName ? (
+                        <span className={styles.productCategory}>
+                          {product.categoryName}
+                        </span>
+                      ) : (
+                        <VscCircleSlash
+                          aria-label="No Google product category"
+                          className={styles.emptyCategory}
+                          role="img"
+                          title="No Google product category"
+                        />
+                      )}
+                    </span>
                   </td>
                   <td className={styles.statusCell}>
                     <StatusIcon status={product.status} />
@@ -282,13 +449,6 @@ function DiagnosticsTable({
       </div>
 
       <div className={styles.pagination}>
-        <span aria-live="polite" className={styles.paginationStatus}>
-          {isLoading
-            ? "Loading page"
-            : `${formatCount(products.length)} product${
-                products.length === 1 ? "" : "s"
-              } on this page`}
-        </span>
         <div
           aria-label="Diagnostics pagination"
           className={styles.paginationButtons}
@@ -332,6 +492,13 @@ export function DiagnosticsPanel({
   const [selectedTab, setSelectedTab] = useState<DiagnosticsTab>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeFilter, setActiveFilter] = useState<DiagnosticsFilter | null>(
+    null,
+  );
+  const [draftFilterField, setDraftFilterField] =
+    useState<DiagnosticsFilterField | null>(null);
+  const [draftFilterValue, setDraftFilterValue] = useState("");
+  const [selectedSort, setSelectedSort] = useState<DiagnosticsSort | "">("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshFallback, setRefreshFallback] =
@@ -342,6 +509,7 @@ export function DiagnosticsPanel({
       : createDiagnosticsClientState(),
   );
   const normalizedSearch = normalizeDiagnosticsSearch(debouncedSearch);
+  const activeSort = selectedSort || DEFAULT_DIAGNOSTICS_SORT;
   const tabNavigation = clientState.tabs[selectedTab];
   const navigation: DiagnosticsPageNavigation = normalizedSearch
     ? (tabNavigation.searches[normalizedSearch] ?? {
@@ -370,8 +538,10 @@ export function DiagnosticsPanel({
     pageRequest,
     {
       endpoint: dataEndpoint,
+      filter: activeFilter,
       force: isRefreshing,
       search: normalizedSearch,
+      sort: activeSort,
     },
   );
   const pageQuery = useQuery({
@@ -388,6 +558,30 @@ export function DiagnosticsPanel({
   const countsLoading = summaryQuery.isPending && !storeWideCounts;
   const countsRefreshing = isRefreshing && summaryQuery.isFetching;
   const pageLoading = pageQuery.isPending && !page;
+  const selectedTabDefinition = diagnosticTabs.find(
+    ({ id }) => id === selectedTab,
+  );
+  const selectedTabTotal =
+    storeWideCounts?.hasSnapshot && selectedTabDefinition
+      ? storeWideCounts[selectedTabDefinition.countKey]
+      : undefined;
+  const filterSnapshotVersion =
+    page?.scanVersion ?? storeWideCounts?.scanVersion ?? null;
+  const filterOptionsQuery = useQuery({
+    ...diagnosticsFilterOptionsQueryOptions(
+      queryScope,
+      clientState.generation,
+      selectedTab,
+      draftFilterField ?? "gender",
+      filterSnapshotVersion,
+      { endpoint: dataEndpoint },
+    ),
+    enabled:
+      queriesEnabled &&
+      Boolean(draftFilterField) &&
+      Boolean(filterSnapshotVersion),
+  });
+  const filterOptions = filterOptionsQuery.data?.options ?? [];
 
   useEffect(() => {
     const nextSearch = normalizeDiagnosticsSearch(searchTerm);
@@ -432,7 +626,9 @@ export function DiagnosticsPanel({
       {
         abortOnUnmount: true,
         endpoint: dataEndpoint,
+        filter: activeFilter,
         search: normalizedSearch,
+        sort: activeSort,
       },
     );
     const nextState = queryClient.getQueryState(nextOptions.queryKey);
@@ -460,6 +656,8 @@ export function DiagnosticsPanel({
     };
   }, [
     active,
+    activeFilter,
+    activeSort,
     clientState.generation,
     dataEndpoint,
     isRefreshing,
@@ -566,7 +764,11 @@ export function DiagnosticsPanel({
           nextState.generation,
           selectedTab,
           refreshedPageRequest,
-          { endpoint: dataEndpoint },
+          {
+            endpoint: dataEndpoint,
+            filter: activeFilter,
+            sort: activeSort,
+          },
         ),
       );
       const completedState: DiagnosticsClientState = {
@@ -675,6 +877,45 @@ export function DiagnosticsPanel({
     });
   };
 
+  const changeSort = (value: string) => {
+    const nextSort = normalizeDiagnosticsSort(value);
+    setSelectedSort(nextSort);
+
+    if (nextSort !== activeSort) {
+      storeClientState(createDiagnosticsClientState(clientState.generation));
+    }
+  };
+
+  const resetDraftFilter = () => {
+    setDraftFilterField(activeFilter?.field ?? null);
+    setDraftFilterValue(activeFilter?.value ?? "");
+  };
+
+  const changeDraftFilterField = (value: string) => {
+    setDraftFilterField(value as DiagnosticsFilterField);
+    setDraftFilterValue("");
+  };
+
+  const applyFilter = () => {
+    if (!draftFilterField || !draftFilterValue) {
+      return;
+    }
+
+    const nextFilter = {
+      field: draftFilterField,
+      value: draftFilterValue,
+    };
+    setActiveFilter(nextFilter);
+    storeClientState(createDiagnosticsClientState(clientState.generation));
+  };
+
+  const clearFilter = () => {
+    setActiveFilter(null);
+    setDraftFilterField(null);
+    setDraftFilterValue("");
+    storeClientState(createDiagnosticsClientState(clientState.generation));
+  };
+
   return (
     <div className={styles.diagnostics}>
       <div className={styles.header}>
@@ -684,16 +925,6 @@ export function DiagnosticsPanel({
             Review products before they are submitted to Google.
           </s-paragraph>
         </div>
-        <s-button
-          accessibilityLabel="Refresh diagnostics data"
-          disabled={isRefreshing}
-          icon="refresh"
-          loading={isRefreshing ? true : undefined}
-          onClick={refresh}
-          variant="secondary"
-        >
-          Refresh
-        </s-button>
       </div>
 
       {countsError ? (
@@ -727,6 +958,11 @@ export function DiagnosticsPanel({
           className={styles.innerTabs}
           role="tablist"
         >
+          <img
+            alt="Google"
+            className={styles.diagnosticsLogo}
+            src="/google-icon-1.png"
+          />
           {diagnosticTabs.map((tab, index) => {
             const selected = tab.id === selectedTab;
 
@@ -769,21 +1005,153 @@ export function DiagnosticsPanel({
           role="tabpanel"
           tabIndex={0}
         >
-          <div className={styles.searchArea}>
-            <s-search-field
-              label="Search products in this tab"
-              labelAccessibilityVisibility="exclusive"
-              onInput={(event) => {
-                const nextValue = event.currentTarget.value;
-                setSearchTerm(nextValue);
+          <div className={styles.searchToolbar}>
+            <div className={styles.filterSelect}>
+              <s-clickable
+                accessibilityLabel="Filter products"
+                background="base"
+                blockSize="32px"
+                border="small-100"
+                borderColor="base"
+                borderRadius="base"
+                borderStyle="solid"
+                command="--show"
+                commandFor={FILTER_POPOVER_ID}
+                inlineSize="100%"
+                onClick={resetDraftFilter}
+                padding="none"
+              >
+                <span className={styles.pickerTriggerContent}>
+                  <span className={styles.pickerTriggerLabel}>
+                    <s-text>
+                      Filter Products{activeFilter ? " (1)" : ""}
+                    </s-text>
+                  </span>
+                  <s-icon color="subdued" type="chevron-down" />
+                </span>
+              </s-clickable>
+              <s-popover id={FILTER_POPOVER_ID} inlineSize="360px">
+                <s-box padding="base">
+                  <div className={styles.filterPopoverContent}>
+                    <div className={styles.filterPopoverHeader}>
+                      <s-heading>Show all products where:</s-heading>
+                      <s-button
+                        accessibilityLabel="Close product filters"
+                        command="--hide"
+                        commandFor={FILTER_POPOVER_ID}
+                        icon="x"
+                        onClick={resetDraftFilter}
+                        variant="tertiary"
+                      />
+                    </div>
 
-                if (!normalizeDiagnosticsSearch(nextValue)) {
-                  setDebouncedSearch("");
-                }
-              }}
-              placeholder="Search products"
-              value={searchTerm}
-            />
+                    <PolarisOptionPicker
+                      accessibilityLabel="Select a product filter"
+                      id={FILTER_FIELD_POPOVER_ID}
+                      onChange={changeDraftFilterField}
+                      options={diagnosticsFilterFieldOptions}
+                      placeholder="Select Filter..."
+                      value={draftFilterField ?? ""}
+                    />
+
+                    {draftFilterField ? (
+                      <div className={styles.filterCondition}>
+                        <s-text>is</s-text>
+                        <PolarisOptionPicker
+                          accessibilityLabel={`Select ${diagnosticsFilterLabels[draftFilterField]}`}
+                          disabled={
+                            filterOptionsQuery.isPending ||
+                            filterOptionsQuery.isError ||
+                            filterOptions.length === 0
+                          }
+                          id={FILTER_VALUE_POPOVER_ID}
+                          onChange={setDraftFilterValue}
+                          options={filterOptions}
+                          placeholder={
+                            filterOptionsQuery.isPending
+                              ? "Loading values..."
+                              : `Select ${diagnosticsFilterLabels[draftFilterField]}...`
+                          }
+                          value={draftFilterValue}
+                        />
+                        {filterOptionsQuery.isError ? (
+                          <s-text tone="critical">
+                            Filter values couldn&apos;t be loaded.
+                          </s-text>
+                        ) : !filterOptionsQuery.isPending &&
+                          filterOptions.length === 0 ? (
+                          <s-text color="subdued">
+                            No values are available for this filter.
+                          </s-text>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className={styles.filterPopoverActions}>
+                      <div>
+                        {activeFilter ? (
+                          <s-button
+                            command="--hide"
+                            commandFor={FILTER_POPOVER_ID}
+                            onClick={clearFilter}
+                            variant="tertiary"
+                          >
+                            Clear filter
+                          </s-button>
+                        ) : null}
+                      </div>
+                      <s-stack direction="inline" gap="small">
+                        <s-button
+                          command="--hide"
+                          commandFor={FILTER_POPOVER_ID}
+                          onClick={resetDraftFilter}
+                          variant="secondary"
+                        >
+                          Cancel
+                        </s-button>
+                        <s-button
+                          command="--hide"
+                          commandFor={FILTER_POPOVER_ID}
+                          disabled={!draftFilterField || !draftFilterValue}
+                          onClick={applyFilter}
+                          variant="primary"
+                        >
+                          Add Filter
+                        </s-button>
+                      </s-stack>
+                    </div>
+                  </div>
+                </s-box>
+              </s-popover>
+            </div>
+            <div className={styles.searchArea}>
+              <s-search-field
+                label="Search products in this tab"
+                labelAccessibilityVisibility="exclusive"
+                onInput={(event) => {
+                  const nextValue = event.currentTarget.value;
+                  setSearchTerm(nextValue);
+
+                  if (!normalizeDiagnosticsSearch(nextValue)) {
+                    setDebouncedSearch("");
+                  }
+                }}
+                placeholder="Start typing to search for products..."
+                value={searchTerm}
+              />
+            </div>
+            <div className={styles.sortSelect}>
+              <PolarisOptionPicker
+                accessibilityLabel="Sort products"
+                disabled={isRefreshing}
+                id={SORT_POPOVER_ID}
+                onChange={changeSort}
+                options={diagnosticsSortOptions}
+                placeholder="Sort By"
+                showSortIcon
+                value={selectedSort}
+              />
+            </div>
           </div>
 
           {pageError ? (
@@ -799,11 +1167,15 @@ export function DiagnosticsPanel({
             canGoPrevious={navigation.index > 0}
             error={pageError}
             isLoading={pageLoading}
+            isRefreshing={isRefreshing}
             onNext={loadNext}
             onPrevious={loadPrevious}
+            onRefresh={refresh}
+            pageIndex={navigation.index}
             pageInfo={page?.pageInfo}
             products={page?.products ?? []}
             searchTerm={searchTerm}
+            totalProducts={page?.totalProducts ?? selectedTabTotal}
           />
         </div>
       </div>

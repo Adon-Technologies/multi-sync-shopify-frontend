@@ -1,8 +1,10 @@
 import {
   Suspense,
+  useCallback,
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
 } from "react";
 import { Await } from "react-router";
@@ -10,6 +12,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useQuery } from "@tanstack/react-query";
 import { HiHome } from "react-icons/hi2";
 import { IoMdSettings } from "react-icons/io";
+import { MdOutlineCreditCard } from "react-icons/md";
 import { SiGoogleanalytics } from "react-icons/si";
 import { TbFileTypeXml } from "react-icons/tb";
 
@@ -31,6 +34,7 @@ const tabs = [
   { icon: TbFileTypeXml, id: "feeds", label: "Feeds" },
   { icon: SiGoogleanalytics, id: "diagnostics", label: "Diagnostics" },
   { icon: IoMdSettings, id: "configurations", label: "Configurations" },
+  { icon: MdOutlineCreditCard, id: "plan", label: "Plan" },
 ] as const;
 
 export type DashboardTabId = (typeof tabs)[number]["id"];
@@ -415,7 +419,50 @@ export function DashboardTabs(props: DashboardTabsProps) {
   );
   const [hasUnsavedConfigurationChanges, setHasUnsavedConfigurationChanges] =
     useState(false);
+  const [tabIndicatorStyle, setTabIndicatorStyle] = useState<CSSProperties>({
+    opacity: 0,
+    transform: "translateX(0)",
+    width: 0,
+  });
+  const tabListRef = useRef<HTMLDivElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const updateTabIndicator = useCallback(() => {
+    const activeIndex = tabs.findIndex(({ id }) => id === activeTab);
+    const activeElement = tabRefs.current[activeIndex];
+
+    if (!activeElement) {
+      return;
+    }
+
+    setTabIndicatorStyle({
+      opacity: 1,
+      transform: `translateX(${activeElement.offsetLeft + 10}px)`,
+      width: Math.max(activeElement.offsetWidth - 20, 0),
+    });
+  }, [activeTab]);
+
+  useEffect(() => {
+    const animationFrame = window.requestAnimationFrame(updateTabIndicator);
+    const tabList = tabListRef.current;
+    const resizeObserver = new ResizeObserver(updateTabIndicator);
+
+    if (tabList) {
+      resizeObserver.observe(tabList);
+    }
+    for (const tab of tabRefs.current) {
+      if (tab) {
+        resizeObserver.observe(tab);
+      }
+    }
+    window.addEventListener("resize", updateTabIndicator);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateTabIndicator);
+    };
+  }, [updateTabIndicator]);
 
   useEffect(() => {
     const shop = props.diagnosticsScope?.shop;
@@ -478,95 +525,116 @@ export function DashboardTabs(props: DashboardTabsProps) {
   };
 
   return (
-    <div className={styles.contentShell}>
-      <div aria-label="Main sections" className={styles.tabList} role="tablist">
-        {tabs.map((tab, index) => {
-          const isActive = activeTab === tab.id;
-          const TabIcon = tab.icon;
+    <div className={styles.appViewport}>
+      <div className={styles.contentShell}>
+        <div
+          aria-label="Main sections"
+          className={styles.tabList}
+          ref={tabListRef}
+          role="tablist"
+        >
+          {tabs.map((tab, index) => {
+            const isActive = activeTab === tab.id;
+            const TabIcon = tab.icon;
 
-          return (
-            <button
-              aria-controls={`panel-${tab.id}`}
-              aria-selected={isActive}
-              className={styles.tab}
-              id={`tab-${tab.id}`}
-              key={tab.id}
-              onClick={() => void selectTab(tab.id)}
-              onKeyDown={(event) => handleKeyDown(event, index)}
-              ref={(element) => {
-                tabRefs.current[index] = element;
-              }}
-              role="tab"
-              tabIndex={isActive ? 0 : -1}
-              type="button"
-            >
-              <TabIcon aria-hidden="true" className={styles.tabIcon} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+            return (
+              <button
+                aria-controls={`panel-${tab.id}`}
+                aria-selected={isActive}
+                className={styles.tab}
+                id={`tab-${tab.id}`}
+                key={tab.id}
+                onClick={() => void selectTab(tab.id)}
+                onKeyDown={(event) => handleKeyDown(event, index)}
+                ref={(element) => {
+                  tabRefs.current[index] = element;
+                }}
+                role="tab"
+                tabIndex={isActive ? 0 : -1}
+                type="button"
+              >
+                <TabIcon aria-hidden="true" className={styles.tabIcon} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+          <span
+            aria-hidden="true"
+            className={styles.tabIndicator}
+            style={tabIndicatorStyle}
+          />
+        </div>
 
-      <div
-        aria-labelledby="tab-dashboard"
-        className={styles.panel}
-        hidden={activeTab !== "dashboard"}
-        id="panel-dashboard"
-        role="tabpanel"
-        tabIndex={0}
-      >
-        <DashboardPanelContent
-          {...props}
-          active={activeTab === "dashboard"}
-          onOpenFeeds={() => void selectTab("feeds", 1)}
-        />
-      </div>
+        <div
+          aria-labelledby="tab-dashboard"
+          className={styles.panel}
+          hidden={activeTab !== "dashboard"}
+          id="panel-dashboard"
+          role="tabpanel"
+          tabIndex={0}
+        >
+          <DashboardPanelContent
+            {...props}
+            active={activeTab === "dashboard"}
+            onOpenFeeds={() => void selectTab("feeds", 1)}
+          />
+        </div>
 
-      <div
-        aria-labelledby="tab-feeds"
-        className={styles.panel}
-        hidden={activeTab !== "feeds"}
-        id="panel-feeds"
-        role="tabpanel"
-        tabIndex={0}
-      >
-        <FeedsPanel active={activeTab === "feeds"} scope={props.feedScope} />
-      </div>
+        <div
+          aria-labelledby="tab-feeds"
+          className={styles.panel}
+          hidden={activeTab !== "feeds"}
+          id="panel-feeds"
+          role="tabpanel"
+          tabIndex={0}
+        >
+          <FeedsPanel active={activeTab === "feeds"} scope={props.feedScope} />
+        </div>
 
-      <div
-        aria-labelledby="tab-diagnostics"
-        className={styles.panel}
-        hidden={activeTab !== "diagnostics"}
-        id="panel-diagnostics"
-        role="tabpanel"
-        tabIndex={0}
-      >
-        <DiagnosticsPanel
-          active={activeTab === "diagnostics"}
-          key={
-            props.diagnosticsScope
-              ? `${props.diagnosticsScope.shop}:${props.diagnosticsScope.sessionId}`
-              : "diagnostics-pending"
-          }
-          scope={props.diagnosticsScope}
-        />
-      </div>
-
-      <div
-        aria-labelledby="tab-configurations"
-        className={styles.panel}
-        hidden={activeTab !== "configurations"}
-        id="panel-configurations"
-        role="tabpanel"
-        tabIndex={0}
-      >
-        {activeTab === "configurations" ? (
-          <ConfigurationsPanel
-            active
-            onUnsavedChangesChange={setHasUnsavedConfigurationChanges}
+        <div
+          aria-labelledby="tab-diagnostics"
+          className={styles.panel}
+          hidden={activeTab !== "diagnostics"}
+          id="panel-diagnostics"
+          role="tabpanel"
+          tabIndex={0}
+        >
+          <DiagnosticsPanel
+            active={activeTab === "diagnostics"}
+            key={
+              props.diagnosticsScope
+                ? `${props.diagnosticsScope.shop}:${props.diagnosticsScope.sessionId}`
+                : "diagnostics-pending"
+            }
             scope={props.diagnosticsScope}
           />
-        ) : null}
+        </div>
+
+        <div
+          aria-labelledby="tab-configurations"
+          className={styles.panel}
+          hidden={activeTab !== "configurations"}
+          id="panel-configurations"
+          role="tabpanel"
+          tabIndex={0}
+        >
+          {activeTab === "configurations" ? (
+            <ConfigurationsPanel
+              active
+              onUnsavedChangesChange={setHasUnsavedConfigurationChanges}
+              scope={props.diagnosticsScope}
+            />
+          ) : null}
+        </div>
+
+        <div
+          aria-labelledby="tab-plan"
+          className={`${styles.panel} ${styles.emptyPlan}`}
+          hidden={activeTab !== "plan"}
+          id="panel-plan"
+          role="tabpanel"
+          tabIndex={0}
+        />
       </div>
     </div>
   );

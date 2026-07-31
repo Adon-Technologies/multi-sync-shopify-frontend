@@ -178,20 +178,34 @@ model DiagnosticsSnapshot {
 }
 
 model DiagnosticsSnapshotProduct {
-  id          String  @id @default(auto()) @map("_id") @db.ObjectId
-  shop        String
-  scanVersion String
-  productId   String
-  position    Int
-  title       String
-  imageUrl    String?
-  imageAlt    String?
-  status      String
-  warningData Json
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  shop             String
+  scanVersion      String
+  productId        String
+  position         Int
+  title            String
+  productCreatedAt DateTime
+  categoryName     String?
+  genderValues     String[] @default([])
+  ageValues        String[] @default([])
+  productType      String?
+  tags             String[] @default([])
+  warningCodes     String[] @default([])
+  warningMessages  String[] @default([])
+  imageUrl         String?
+  imageAlt         String?
+  status           String
+  warningData      Json
 
   @@unique([shop, scanVersion, productId])
   @@index([shop, scanVersion, position])
   @@index([shop, scanVersion, status, position])
+  @@index([shop, scanVersion, productCreatedAt, position])
+  @@index([shop, scanVersion, status, productCreatedAt, position])
+  @@index([shop, scanVersion, title, position])
+  @@index([shop, scanVersion, status, title, position])
+  @@index([shop, scanVersion, productType, position])
+  @@index([shop, scanVersion, status, productType, position])
 }
 
 enum XmlFeedStatus {

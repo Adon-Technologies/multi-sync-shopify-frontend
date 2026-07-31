@@ -36,6 +36,11 @@ if (host === "localhost") {
 }
 
 export default defineConfig({
+  resolve: {
+    // Keep SSR, React Router, App Bridge, and lazily loaded tab modules on the
+    // same React instance during Vite dependency re-optimization.
+    dedupe: ["react", "react-dom", "react-router"],
+  },
   server: {
     allowedHosts: [host],
     cors: {
@@ -56,6 +61,27 @@ export default defineConfig({
     assetsInlineLimit: 0,
   },
   optimizeDeps: {
-    include: ["@shopify/app-bridge-react"],
+    // The app loads most tab panels lazily. Pre-bundling their shared runtime
+    // dependencies prevents Vite from discovering one later and invalidating
+    // optimized React chunks while the document is hydrating.
+    include: [
+      "react",
+      "react/jsx-runtime",
+      "react/jsx-dev-runtime",
+      "react-dom",
+      "react-dom/client",
+      "react-router",
+      "react-router/dom",
+      "@shopify/app-bridge-react",
+      "@tanstack/react-query",
+      "react-icons/ci",
+      "react-icons/hi2",
+      "react-icons/io",
+      "react-icons/io5",
+      "react-icons/md",
+      "react-icons/si",
+      "react-icons/tb",
+      "react-icons/vsc",
+    ],
   },
 }) satisfies UserConfig;

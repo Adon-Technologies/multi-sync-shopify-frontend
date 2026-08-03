@@ -6,6 +6,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { Await } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -16,10 +17,14 @@ import { MdOutlineCreditCard } from "react-icons/md";
 import { SiGoogleanalytics } from "react-icons/si";
 import { TbFileTypeXml } from "react-icons/tb";
 
-import { InlineLoadingValue, SectionError } from "./DashboardStates";
+import { InlineLoadingValue } from "./DashboardStates";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
 import { FeedsPanel } from "./FeedsPanel";
+import {
+  TabAlertNavigator,
+  type TabAlert,
+} from "./TabAlertNavigator";
 import type {
   ProductStatistics,
   StoreInformation,
@@ -59,8 +64,6 @@ interface DashboardPanelContentProps extends DashboardTabsProps {
 interface StatisticsTableProps {
   statistics?: ProductStatistics;
   state: SectionState;
-  isRetrying: boolean;
-  onRetry: () => void;
 }
 
 interface StoreInformationProps {
@@ -68,8 +71,12 @@ interface StoreInformationProps {
   alertsEmailState: SectionState;
   store?: StoreInformation;
   state: SectionState;
-  isRetrying: boolean;
-  onRetry: () => void;
+}
+
+interface DashboardSectionResultProps {
+  children: ReactNode;
+  failed: boolean;
+  onStateChange: (failed: boolean) => void;
 }
 
 export function parseDashboardTab(value: string | null): DashboardTabId {
@@ -121,8 +128,6 @@ function formatCount(value: number) {
 function StatisticsTable({
   statistics,
   state,
-  isRetrying,
-  onRetry,
 }: StatisticsTableProps) {
   const rows: Array<{ key: StatisticKey; label: string }> = [
     { key: "totalProducts", label: "Total products" },
@@ -136,14 +141,7 @@ function StatisticsTable({
 
   return (
     <s-stack gap="base">
-      {state === "error" ? (
-        <SectionError
-          heading="Product statistics couldn't be loaded"
-          isRetrying={isRetrying}
-          message="Shopify didn't return the catalog statistics. Try loading this section again."
-          onRetry={onRetry}
-        />
-      ) : statistics?.totalProducts === 0 ? (
+      {state !== "error" && statistics?.totalProducts === 0 ? (
         <s-banner heading="No products found" tone="info">
           Product statistics will appear here after products are added to this
           store.
@@ -198,8 +196,6 @@ function StoreInformationCard({
   alertsEmailState,
   store,
   state,
-  isRetrying,
-  onRetry,
 }: StoreInformationProps) {
   const hasMissingInformation =
     state === "ready" && (!store?.domain || !store.currency);
@@ -228,14 +224,7 @@ function StoreInformationCard({
 
   return (
     <s-stack gap="base">
-      {state === "error" ? (
-        <SectionError
-          heading="Store information couldn't be loaded"
-          isRetrying={isRetrying}
-          message="Shopify didn't return this store's details. Try loading this section again."
-          onRetry={onRetry}
-        />
-      ) : hasMissingInformation ? (
+      {hasMissingInformation ? (
         <s-banner heading="Store information is incomplete" tone="info">
           Some store details are not currently available from Shopify.
         </s-banner>
@@ -269,6 +258,18 @@ function StoreInformationCard({
   );
 }
 
+function DashboardSectionResult({
+  children,
+  failed,
+  onStateChange,
+}: DashboardSectionResultProps) {
+  useEffect(() => {
+    onStateChange(failed);
+  }, [failed, onStateChange]);
+
+  return children;
+}
+
 function DashboardPanelContent({
   active,
   diagnosticsScope,
@@ -278,6 +279,8 @@ function DashboardPanelContent({
   onOpenFeeds,
   onRefresh,
 }: DashboardPanelContentProps) {
+  const [statisticsFailed, setStatisticsFailed] = useState(false);
+  const [storeInformationFailed, setStoreInformationFailed] = useState(false);
   const configurationScope = diagnosticsScope ?? {
     shop: "pending-shop",
     sessionId: "pending-session",
@@ -299,6 +302,42 @@ function DashboardPanelContent({
       void configurationQuery.refetch();
     }
   };
+  const tabAlerts: TabAlert[] = [];
+  if (statisticsFailed) {
+    tabAlerts.push({
+      actionLabel: "Retry",
+      actionLoading: isRefreshing,
+      heading: "Product statistics couldn't be loaded",
+      id: "dashboard-statistics",
+      message:
+        "Shopify didn't return the catalog statistics. Try loading this section again.",
+      onAction: refreshDashboard,
+      tone: "critical",
+    });
+  }
+  if (storeInformationFailed) {
+    tabAlerts.push({
+      actionLabel: "Retry",
+      actionLoading: isRefreshing,
+      heading: "Store information couldn't be loaded",
+      id: "dashboard-store-information",
+      message:
+        "Shopify didn't return this store's details. Try loading this section again.",
+      onAction: refreshDashboard,
+      tone: "critical",
+    });
+  }
+  if (configurationQuery.isError) {
+    tabAlerts.push({
+      actionLabel: "Retry",
+      actionLoading: configurationQuery.isFetching,
+      heading: "Store configuration couldn't be loaded",
+      id: "dashboard-configuration",
+      message: configurationQuery.error.message,
+      onAction: refreshDashboard,
+      tone: "critical",
+    });
+  }
 
   return (
     <>
@@ -328,6 +367,12 @@ function DashboardPanelContent({
         </div>
       </div>
 
+      {tabAlerts.length > 0 ? (
+        <div className={styles.dashboardAlert}>
+          <TabAlertNavigator alerts={tabAlerts} />
+        </div>
+      ) : null}
+
       <div className={styles.cardGrid}>
         <s-section heading="Products">
           <s-stack gap="base">
@@ -337,29 +382,31 @@ function DashboardPanelContent({
             <Suspense
               fallback={
                 <StatisticsTable
-                  isRetrying={isRefreshing}
-                  onRetry={refreshDashboard}
                   state="loading"
                 />
               }
             >
               <Await
                 errorElement={
-                  <StatisticsTable
-                    isRetrying={isRefreshing}
-                    onRetry={refreshDashboard}
-                    state="error"
-                  />
+                  <DashboardSectionResult
+                    failed
+                    onStateChange={setStatisticsFailed}
+                  >
+                    <StatisticsTable state="error" />
+                  </DashboardSectionResult>
                 }
                 resolve={statistics}
               >
                 {(loadedStatistics) => (
-                  <StatisticsTable
-                    isRetrying={isRefreshing}
-                    onRetry={refreshDashboard}
-                    state="ready"
-                    statistics={loadedStatistics}
-                  />
+                  <DashboardSectionResult
+                    failed={false}
+                    onStateChange={setStatisticsFailed}
+                  >
+                    <StatisticsTable
+                      state="ready"
+                      statistics={loadedStatistics}
+                    />
+                  </DashboardSectionResult>
                 )}
               </Await>
             </Suspense>
@@ -372,37 +419,41 @@ function DashboardPanelContent({
               <StoreInformationCard
                 alertsEmail={configurationQuery.data?.configuration.alertsEmail}
                 alertsEmailState={alertsEmailState}
-                isRetrying={isRefreshing}
-                onRetry={refreshDashboard}
                 state="loading"
               />
             }
           >
             <Await
               errorElement={
-                <StoreInformationCard
-                  alertsEmail={
-                    configurationQuery.data?.configuration.alertsEmail
-                  }
-                  alertsEmailState={alertsEmailState}
-                  isRetrying={isRefreshing}
-                  onRetry={refreshDashboard}
-                  state="error"
-                />
+                <DashboardSectionResult
+                  failed
+                  onStateChange={setStoreInformationFailed}
+                >
+                  <StoreInformationCard
+                    alertsEmail={
+                      configurationQuery.data?.configuration.alertsEmail
+                    }
+                    alertsEmailState={alertsEmailState}
+                    state="error"
+                  />
+                </DashboardSectionResult>
               }
               resolve={storeInformation}
             >
               {(store) => (
-                <StoreInformationCard
-                  alertsEmail={
-                    configurationQuery.data?.configuration.alertsEmail
-                  }
-                  alertsEmailState={alertsEmailState}
-                  isRetrying={isRefreshing}
-                  onRetry={refreshDashboard}
-                  state="ready"
-                  store={store}
-                />
+                <DashboardSectionResult
+                  failed={false}
+                  onStateChange={setStoreInformationFailed}
+                >
+                  <StoreInformationCard
+                    alertsEmail={
+                      configurationQuery.data?.configuration.alertsEmail
+                    }
+                    alertsEmailState={alertsEmailState}
+                    state="ready"
+                    store={store}
+                  />
+                </DashboardSectionResult>
               )}
             </Await>
           </Suspense>

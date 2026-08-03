@@ -106,3 +106,15 @@ test("Inventory and Availability is a Polaris card between feed attributes and U
     /If empty, inventory from all locations will be used\./,
   );
 });
+
+test("the contextual Save button uses Shopify's loading spinner while saving", () => {
+  assert.match(
+    panelSource,
+    /const saveInProgress = isSaving \|\| saveMutation\.isPending;/,
+  );
+  assert.match(
+    panelSource,
+    /loading=\{saveInProgress \? "" : undefined\}[\s\S]*variant="primary"[\s\S]*>\s*Save\s*<\/button>/,
+  );
+  assert.doesNotMatch(panelSource, /Saving…/);
+});

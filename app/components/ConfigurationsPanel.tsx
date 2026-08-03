@@ -4,6 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PiEye } from "react-icons/pi";
 
 import { AttributeRulesCard } from "./AttributeRulesCard";
+import {
+  TabAlertNavigator,
+  type TabAlert,
+} from "./TabAlertNavigator";
 import { useHydrated } from "../hooks/useHydrated";
 import type { PublicConfiguration } from "../services/configuration.server";
 import {
@@ -878,6 +882,7 @@ export function ConfigurationsPanel({
     form !== null &&
     savedForm !== null &&
     configurationFingerprint(form) !== configurationFingerprint(savedForm);
+  const saveInProgress = isSaving || saveMutation.isPending;
   const availableLocationIds = useMemo(
     () => new Set((locationsQuery.data ?? []).map(({ id }) => id)),
     [locationsQuery.data],
@@ -911,6 +916,26 @@ export function ConfigurationsPanel({
     [onUnsavedChangesChange],
   );
 
+  const tabAlerts: TabAlert[] = [];
+  if (configurationQuery.isError) {
+    tabAlerts.push({
+      actionLabel: "Retry",
+      actionLoading: configurationQuery.isFetching,
+      heading: "Configuration is unavailable",
+      id: "configuration-load",
+      message: configurationQuery.error.message,
+      onAction: () => void configurationQuery.refetch(),
+      tone: "critical",
+    });
+  }
+  if (feedback) {
+    tabAlerts.push({
+      heading: feedback.message,
+      id: "configuration-feedback",
+      tone: feedback.tone,
+    });
+  }
+
   return (
     <div className={styles.configurations}>
       {isHydrated ? (
@@ -919,15 +944,15 @@ export function ConfigurationsPanel({
           open={hasUnsavedChanges}
         >
           <button
-            disabled={!form || isSaving || saveMutation.isPending}
-            loading={isSaving || saveMutation.isPending ? true : undefined}
+            disabled={!form || saveInProgress}
+            loading={saveInProgress ? "" : undefined}
             onClick={save}
             variant="primary"
           >
-            {isSaving || saveMutation.isPending ? "Saving…" : "Save"}
+            Save
           </button>
           <button
-            disabled={isSaving || saveMutation.isPending}
+            disabled={saveInProgress}
             onClick={discard}
           >
             Discard
@@ -945,22 +970,7 @@ export function ConfigurationsPanel({
         </div>
       </div>
 
-      {configurationQuery.isError ? (
-        <s-banner heading="Configuration is unavailable" tone="critical">
-          {configurationQuery.error.message}
-          <s-button
-            onClick={() => configurationQuery.refetch()}
-            slot="secondary-actions"
-            variant="secondary"
-          >
-            Retry
-          </s-button>
-        </s-banner>
-      ) : null}
-
-      {feedback ? (
-        <s-banner heading={feedback.message} tone={feedback.tone} />
-      ) : null}
+      <TabAlertNavigator alerts={tabAlerts} />
 
       <div className={styles.cards}>
         <s-section heading="Information">

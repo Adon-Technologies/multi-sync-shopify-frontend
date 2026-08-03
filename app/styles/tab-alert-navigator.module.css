@@ -1,0 +1,13 @@
+.controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block-start: 0.75rem;
+}
+
+.position {
+  color: var(--p-color-text-secondary, #616161);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}

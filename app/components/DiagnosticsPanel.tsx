@@ -36,6 +36,10 @@ import {
 } from "../services/diagnostics-sort";
 import type { DiagnosticProduct } from "../services/diagnostics-validation";
 import styles from "../styles/diagnostics.module.css";
+import {
+  TabAlertNavigator,
+  type TabAlert,
+} from "./TabAlertNavigator";
 
 const diagnosticTabs: Array<{
   id: DiagnosticsTab;
@@ -916,6 +920,41 @@ export function DiagnosticsPanel({
     storeClientState(createDiagnosticsClientState(clientState.generation));
   };
 
+  const tabAlerts: TabAlert[] = [];
+  if (countsError) {
+    tabAlerts.push({
+      actionLabel: "Retry",
+      actionLoading: isRefreshing,
+      heading: "Diagnostic totals are unavailable",
+      id: "diagnostic-totals",
+      message: `${countsError} Previous totals are still shown when available. Select Refresh to try again.`,
+      onAction: refresh,
+      tone: "warning",
+    });
+  }
+  if (refreshError) {
+    tabAlerts.push({
+      actionLabel: "Retry",
+      actionLoading: isRefreshing,
+      heading: "Diagnostics refresh failed",
+      id: "diagnostics-refresh",
+      message: refreshError,
+      onAction: refresh,
+      tone: "warning",
+    });
+  }
+  if (pageError) {
+    tabAlerts.push({
+      actionLabel: "Retry",
+      actionLoading: isRefreshing,
+      heading: "Products are unavailable",
+      id: "diagnostic-products",
+      message: `${pageError} Previous products are still shown when available. Select Refresh to try again.`,
+      onAction: refresh,
+      tone: "warning",
+    });
+  }
+
   return (
     <div className={styles.diagnostics}>
       <div className={styles.header}>
@@ -927,28 +966,9 @@ export function DiagnosticsPanel({
         </div>
       </div>
 
-      {countsError ? (
+      {tabAlerts.length > 0 ? (
         <div className={styles.errorBanner}>
-          <s-banner heading="Diagnostic totals are unavailable" tone="warning">
-            {countsError} Previous totals are still shown when available. Select
-            Refresh to try again.
-          </s-banner>
-        </div>
-      ) : null}
-
-      {refreshError ? (
-        <div className={styles.errorBanner}>
-          <s-banner heading="Diagnostics refresh failed" tone="warning">
-            {refreshError}
-            <s-button
-              disabled={isRefreshing}
-              onClick={refresh}
-              slot="secondary-actions"
-              variant="secondary"
-            >
-              Retry
-            </s-button>
-          </s-banner>
+          <TabAlertNavigator alerts={tabAlerts} />
         </div>
       ) : null}
 
@@ -1153,15 +1173,6 @@ export function DiagnosticsPanel({
               />
             </div>
           </div>
-
-          {pageError ? (
-            <div className={styles.tableError}>
-              <s-banner heading="Products are unavailable" tone="warning">
-                {pageError} Previous products are still shown when available.
-                Select Refresh to try again.
-              </s-banner>
-            </div>
-          ) : null}
 
           <DiagnosticsTable
             canGoPrevious={navigation.index > 0}

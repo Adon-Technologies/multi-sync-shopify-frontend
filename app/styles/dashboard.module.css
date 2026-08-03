@@ -142,6 +142,10 @@
   margin-bottom: 16px;
 }
 
+.dashboardAlert {
+  margin-bottom: 16px;
+}
+
 .refreshArea {
   display: flex;
   flex: 0 0 auto;

@@ -282,7 +282,8 @@ model FeedRefreshRun {
   id              String               @id @default(auto()) @map("_id") @db.ObjectId
   storeId         String               @db.ObjectId
   scheduleId      String               @db.ObjectId
-  schedule        FeedRefreshSchedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  // Uninstall cleanup removes the schedule but preserves historical run records.
+  schedule        FeedRefreshSchedule  @relation(fields: [scheduleId], references: [id], onDelete: NoAction)
   scheduledFor    DateTime
   source          FeedRefreshSource
   status          FeedRefreshRunStatus @default(QUEUED)

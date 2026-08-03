@@ -105,3 +105,59 @@ export async function requestFeedBackend<TResponse>(
 
   return payload;
 }
+
+export async function requestStoreUninstallCleanup(
+  shop: string,
+  accessToken?: string,
+) {
+  const shopDomain = shop.normalize("NFKC").trim().toLowerCase();
+  const secret =
+    process.env.MULTI_SYNC_INTERNAL_SECRET?.trim() ||
+    accessToken?.trim();
+  if (!secret) {
+    throw new FeedBackendError(
+      "The uninstall cleanup service is not configured.",
+      503,
+    );
+  }
+
+  const method = "POST";
+  const pathname = "/api/stores/uninstall-cleanup";
+  const timestamp = Date.now().toString();
+  let response: Response;
+
+  try {
+    response = await fetch(`${backendBaseUrl}${pathname}`, {
+      method,
+      headers: {
+        Accept: "application/json",
+        "x-multi-sync-shop": shopDomain,
+        "x-multi-sync-signature": signature(
+          secret,
+          timestamp,
+          method,
+          pathname,
+          "",
+        ),
+        "x-multi-sync-timestamp": timestamp,
+      },
+    });
+  } catch {
+    throw new FeedBackendError(
+      "The uninstall cleanup service is unavailable.",
+      503,
+    );
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | { error?: string; ok?: boolean }
+    | null;
+  if (!response.ok || !payload?.ok) {
+    throw new FeedBackendError(
+      payload?.error || "The uninstall cleanup could not be completed.",
+      response.status,
+    );
+  }
+
+  return payload;
+}

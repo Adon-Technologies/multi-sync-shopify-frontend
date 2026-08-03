@@ -5,13 +5,6 @@ interface InlineLoadingValueProps {
   width?: "small" | "large";
 }
 
-interface SectionErrorProps {
-  heading: string;
-  message: string;
-  isRetrying: boolean;
-  onRetry: () => void;
-}
-
 export function InlineLoadingValue({
   label,
   width = "small",
@@ -25,29 +18,5 @@ export function InlineLoadingValue({
         }`}
       />
     </span>
-  );
-}
-
-export function SectionError({
-  heading,
-  message,
-  isRetrying,
-  onRetry,
-}: SectionErrorProps) {
-  return (
-    <s-banner heading={heading} tone="critical">
-      <s-stack gap="base">
-        <s-paragraph>{message}</s-paragraph>
-        <div>
-          <s-button
-            loading={isRetrying ? true : undefined}
-            onClick={onRetry}
-            variant="secondary"
-          >
-            Retry
-          </s-button>
-        </div>
-      </s-stack>
-    </s-banner>
   );
 }

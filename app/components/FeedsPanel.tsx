@@ -32,12 +32,18 @@ import {
   generatePrimaryFeed,
   primaryFeedQueryOptions,
   refreshAdditionalFeed,
+  refreshAllFeeds,
+  refreshAllStatusQueryOptions,
   type FeedQueryScope,
 } from "../services/feed-query";
 import { useHydrated } from "../hooks/useHydrated";
 import { shouldPollPrimaryFeed } from "../services/feed-generation-state";
 import styles from "../styles/feeds.module.css";
 import { AutomaticRefreshCard } from "./AutomaticRefreshCard";
+import {
+  TabAlertNavigator,
+  type TabAlert,
+} from "./TabAlertNavigator";
 
 interface FeedsPanelProps {
   active: boolean;
@@ -585,6 +591,10 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     null,
   );
   const [automaticWorkActive, setAutomaticWorkActive] = useState(false);
+  const [automaticRefreshAlerts, setAutomaticRefreshAlerts] = useState<
+    TabAlert[]
+  >([]);
+  const [refreshAllRunId, setRefreshAllRunId] = useState<string | null>(null);
   const wasActive = useRef(false);
   const endpoint = "/app/feed-data";
   const additionalEndpoint = "/app/additional-feeds";
@@ -607,6 +617,22 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       active && hasPendingAdditionalFeeds(currentQuery.state.data)
         ? 2_000
         : false,
+    refetchIntervalInBackground: false,
+  });
+  const refreshAllStatusQuery = useQuery({
+    ...refreshAllStatusQueryOptions(
+      queryScope,
+      refreshAllRunId ?? "pending",
+    ),
+    enabled: active && Boolean(scope) && Boolean(refreshAllRunId),
+    refetchInterval: (currentQuery) => {
+      const status = currentQuery.state.data?.status;
+      return status === "SUCCESS" ||
+        status === "PARTIALLY_FAILED" ||
+        status === "FAILED"
+        ? false
+        : 2_000;
+    },
     refetchIntervalInBackground: false,
   });
   const refetchAdditionalFeeds = additionalQuery.refetch;
@@ -734,6 +760,51 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       });
     },
   });
+  const refreshAllMutation = useMutation({
+    mutationFn: () => refreshAllFeeds(),
+    onSuccess: (result) => {
+      setFeedback(null);
+      setRefreshAllRunId(result.runId);
+      if (scope) {
+        queryClient.setQueryData<FeedDataResponse>(
+          feedKeys.primary(scope, endpoint),
+          (current) =>
+            current?.ok
+              ? {
+                  ...current,
+                  activeGeneration: result.activeGeneration,
+                }
+              : current,
+        );
+        queryClient.setQueryData<AdditionalFeedsResponse>(
+          feedKeys.additional(scope, additionalEndpoint),
+          (current) =>
+            current?.ok
+              ? {
+                  ...current,
+                  activeGeneration: result.activeGeneration,
+                }
+              : current,
+        );
+      }
+      void invalidateFeedQueries();
+      shopify.toast.show(
+        `Refreshing ${result.totalFeeds} XML ${
+          result.totalFeeds === 1 ? "feed" : "feeds"
+        }.`,
+      );
+    },
+    onError: (error) => {
+      setRefreshAllRunId(null);
+      setFeedback({
+        message:
+          error instanceof Error
+            ? error.message
+            : "The XML refresh couldn't be started.",
+        tone: "critical",
+      });
+    },
+  });
   const deleteMutation = useMutation({
     mutationFn: (feedId: string) =>
       deleteAdditionalFeed(feedId, additionalEndpoint),
@@ -799,13 +870,21 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   );
   const generationLocked =
     automaticWorkActive ||
+    Boolean(refreshAllRunId) ||
     generationInProgress ||
     mutation.isPending ||
     additionalGenerateMutation.isPending ||
-    additionalRefreshMutation.isPending;
+    additionalRefreshMutation.isPending ||
+    refreshAllMutation.isPending;
   const activeGeneration =
     additionalData?.activeGeneration ?? data?.activeGeneration ?? null;
   const successfulFeed = Boolean(feed?.gcsObjectName && feed.lastRefreshedAt);
+  const hasRefreshableFeeds =
+    successfulFeed ||
+    additionalFeeds.some(
+      ({ feed: candidate }) =>
+        Boolean(candidate.gcsObjectName && candidate.lastRefreshedAt),
+    );
   const progress = feed ? generationProgress(feed) : null;
 
   useEffect(() => {
@@ -813,6 +892,46 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       reconcileAdditionalMarketForms(forms, additionalFeeds),
     );
   }, [additionalFeeds]);
+
+  useEffect(() => {
+    const result = refreshAllStatusQuery.data;
+    if (
+      !refreshAllRunId ||
+      !result ||
+      (result.status !== "SUCCESS" &&
+        result.status !== "PARTIALLY_FAILED" &&
+        result.status !== "FAILED")
+    ) {
+      return;
+    }
+
+    setRefreshAllRunId(null);
+    void Promise.all([refetchFeed(), refetchAdditionalFeeds()]);
+
+    if (result.status === "SUCCESS") {
+      shopify.toast.show(
+        `All ${result.completedFeeds} XML ${
+          result.completedFeeds === 1 ? "feed was" : "feeds were"
+        } refreshed.`,
+      );
+      return;
+    }
+
+    setFeedback({
+      message:
+        result.runError ??
+        `${result.failedFeeds} XML ${
+          result.failedFeeds === 1 ? "feed" : "feeds"
+        } could not be refreshed.`,
+      tone: "critical",
+    });
+  }, [
+    refreshAllRunId,
+    refreshAllStatusQuery.data,
+    refetchAdditionalFeeds,
+    refetchFeed,
+    shopify,
+  ]);
 
   const generate = async () => {
     if (!market || generationLocked || mutation.isPending) {
@@ -925,6 +1044,75 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     });
   };
 
+  const tabAlerts: TabAlert[] = [];
+  if (feedback) {
+    tabAlerts.push({
+      heading: feedback.message,
+      id: "feed-feedback",
+      tone: feedback.tone,
+    });
+  }
+  if (refreshAllRunId && refreshAllStatusQuery.isError) {
+    tabAlerts.push({
+      actionLabel: "Retry",
+      actionLoading: refreshAllStatusQuery.isFetching,
+      heading: "XML refresh status couldn't be loaded",
+      id: "refresh-all-status",
+      message:
+        refreshAllStatusQuery.error instanceof Error
+          ? refreshAllStatusQuery.error.message
+          : "Try loading the refresh status again.",
+      onAction: () => void refreshAllStatusQuery.refetch(),
+      tone: "critical",
+    });
+  }
+  if (query.isError) {
+    tabAlerts.push({
+      actionLabel: "Try again",
+      actionLoading: query.isFetching,
+      heading: "Feeds couldn't be loaded",
+      id: "primary-feed-load",
+      message:
+        query.error instanceof Error
+          ? query.error.message
+          : "The feed service is unavailable.",
+      onAction: () => void query.refetch(),
+      tone: "critical",
+    });
+  }
+  if (additionalQuery.isError) {
+    tabAlerts.push({
+      actionLabel: "Try again",
+      actionLoading: additionalQuery.isFetching,
+      heading: "Additional Market feeds couldn't be loaded",
+      id: "additional-feeds-load",
+      message:
+        additionalQuery.error instanceof Error
+          ? additionalQuery.error.message
+          : "The feed service is unavailable.",
+      onAction: () => void additionalQuery.refetch(),
+      tone: "critical",
+    });
+  }
+  if (data?.marketUnavailable && !backendUnavailable) {
+    tabAlerts.push({
+      heading: "Shopify Market details may be outdated",
+      id: "market-details-warning",
+      message:
+        "The saved Primary Feed is still available, but Shopify didn't return current market details.",
+      tone: "warning",
+    });
+  }
+  if (feed?.status === "FAILED" && feed.lastError) {
+    tabAlerts.push({
+      heading: "Feed generation failed",
+      id: "primary-feed-generation",
+      message: feed.lastError,
+      tone: "critical",
+    });
+  }
+  tabAlerts.push(...automaticRefreshAlerts);
+
   return (
     <div className={styles.feeds}>
       <div className={styles.header}>
@@ -935,64 +1123,31 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
             feeds.
           </s-paragraph>
         </div>
+        <s-button
+          accessibilityLabel="Refresh all XML feeds"
+          disabled={
+            !scope ||
+            !hasRefreshableFeeds ||
+            backendUnavailable ||
+            additionalData?.backendUnavailable ||
+            generationLocked
+              ? true
+              : undefined
+          }
+          icon="refresh"
+          loading={
+            refreshAllMutation.isPending || Boolean(refreshAllRunId)
+              ? true
+              : undefined
+          }
+          onClick={() => refreshAllMutation.mutate()}
+          variant="primary"
+        >
+          Refresh all XMLs
+        </s-button>
       </div>
 
-      {feedback ? (
-        <s-banner heading={feedback.message} tone={feedback.tone} />
-      ) : null}
-
-      {query.isError ? (
-        <s-banner heading="Feeds couldn't be loaded" tone="critical">
-          <s-paragraph>
-            {query.error instanceof Error
-              ? query.error.message
-              : "The feed service is unavailable."}
-          </s-paragraph>
-          <s-button
-            loading={query.isFetching ? true : undefined}
-            onClick={() => void query.refetch()}
-            variant="secondary"
-          >
-            Try again
-          </s-button>
-        </s-banner>
-      ) : null}
-
-      {additionalQuery.isError ? (
-        <s-banner
-          heading="Additional Market feeds couldn't be loaded"
-          tone="critical"
-        >
-          <s-paragraph>
-            {additionalQuery.error instanceof Error
-              ? additionalQuery.error.message
-              : "The feed service is unavailable."}
-          </s-paragraph>
-          <s-button
-            loading={additionalQuery.isFetching ? true : undefined}
-            onClick={() => void additionalQuery.refetch()}
-            variant="secondary"
-          >
-            Try again
-          </s-button>
-        </s-banner>
-      ) : null}
-
-      {data?.marketUnavailable && !backendUnavailable ? (
-        <s-banner
-          heading="Shopify Market details may be outdated"
-          tone="warning"
-        >
-          The saved Primary Feed is still available, but Shopify didn&apos;t
-          return current market details.
-        </s-banner>
-      ) : null}
-
-      {feed?.status === "FAILED" && feed.lastError ? (
-        <s-banner heading="Feed generation failed" tone="critical">
-          {feed.lastError}
-        </s-banner>
-      ) : null}
+      <TabAlertNavigator alerts={tabAlerts} />
 
       <s-section>
         <div className={styles.feedTable}>
@@ -1511,6 +1666,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
             : "pending-feed-refresh-schedule"
         }
         onActivityChange={setAutomaticWorkActive}
+        onAlertsChange={setAutomaticRefreshAlerts}
         scope={scope}
       />
 

@@ -25,10 +25,12 @@ import {
 } from "../services/feed-refresh-query";
 import { feedKeys, type FeedQueryScope } from "../services/feed-query";
 import styles from "../styles/feeds.module.css";
+import type { TabAlert } from "./TabAlertNavigator";
 
 interface AutomaticRefreshCardProps {
   active: boolean;
   onActivityChange: (active: boolean) => void;
+  onAlertsChange: (alerts: TabAlert[]) => void;
   scope: FeedQueryScope | null;
 }
 
@@ -214,6 +216,7 @@ function TimeValuePicker({
 export function AutomaticRefreshCard({
   active,
   onActivityChange,
+  onAlertsChange,
   scope,
 }: AutomaticRefreshCardProps) {
   const hydrated = useHydrated();
@@ -255,6 +258,40 @@ export function AutomaticRefreshCard({
   const schedule = scheduleQuery.data;
   const refetchSchedule = scheduleQuery.refetch;
   const scheduleDataUpdatedAt = scheduleQuery.dataUpdatedAt;
+  const automaticRefreshAlerts = useMemo<TabAlert[]>(() => {
+    const alerts: TabAlert[] = [];
+
+    if (scheduleQuery.isError) {
+      alerts.push({
+        actionLabel: "Try again",
+        actionLoading: scheduleQuery.isFetching,
+        heading: "Automatic refresh couldn't be loaded",
+        id: "automatic-refresh-load",
+        message:
+          scheduleQuery.error instanceof Error
+            ? scheduleQuery.error.message
+            : "Try loading the schedule again.",
+        onAction: () => void refetchSchedule(),
+        tone: "critical",
+      });
+    }
+
+    if (validationError) {
+      alerts.push({
+        heading: validationError,
+        id: "automatic-refresh-validation",
+        tone: "critical",
+      });
+    }
+
+    return alerts;
+  }, [
+    refetchSchedule,
+    scheduleQuery.error,
+    scheduleQuery.isError,
+    scheduleQuery.isFetching,
+    validationError,
+  ]);
   const automaticWorkActive = isAutomaticRefreshActive(
     schedule?.lastAutomaticStatus,
   );
@@ -292,6 +329,17 @@ export function AutomaticRefreshCard({
   useEffect(() => {
     onActivityChange(automaticWorkActive);
   }, [automaticWorkActive, onActivityChange]);
+
+  useEffect(() => {
+    onAlertsChange(automaticRefreshAlerts);
+  }, [automaticRefreshAlerts, onAlertsChange]);
+
+  useEffect(
+    () => () => {
+      onAlertsChange([]);
+    },
+    [onAlertsChange],
+  );
 
   useEffect(
     () => () => {
@@ -578,26 +626,6 @@ export function AutomaticRefreshCard({
         </div>
         <s-paragraph color="subdued">{subtitle}</s-paragraph>
 
-        {scheduleQuery.isError ? (
-          <s-banner
-            heading="Automatic refresh couldn't be loaded"
-            tone="critical"
-          >
-            <s-paragraph>
-              {scheduleQuery.error instanceof Error
-                ? scheduleQuery.error.message
-                : "Try loading the schedule again."}
-            </s-paragraph>
-            <s-button
-              loading={scheduleQuery.isFetching ? true : undefined}
-              onClick={() => void scheduleQuery.refetch()}
-              variant="secondary"
-            >
-              Try again
-            </s-button>
-          </s-banner>
-        ) : null}
-
         {scheduleQuery.isPending && !schedule ? (
           <ScheduleLoadingState />
         ) : draft && schedule ? (
@@ -675,10 +703,6 @@ export function AutomaticRefreshCard({
                 </s-clickable>
               </div>
             </div>
-
-            {validationError ? (
-              <s-banner heading={validationError} tone="critical" />
-            ) : null}
 
             <dl aria-live="polite" className={styles.scheduleStatus}>
               <div className={styles.scheduleStatusRow}>

@@ -7,6 +7,10 @@ import type {
   AdditionalMarketOptionsResponse,
 } from "../routes/app.additional-feeds";
 import type { FeedDataResponse } from "../routes/app.feed-data";
+import type {
+  FeedRefreshAllResponse,
+  FeedRefreshAllStatusResponse,
+} from "../routes/app.feed-refresh-all";
 
 export interface FeedQueryScope {
   locale: string | null;
@@ -40,6 +44,12 @@ export const feedKeys = {
       "primary",
       endpoint,
     ] as const,
+  refreshAll: (
+    scope: FeedQueryScope,
+    endpoint: string,
+    runId: string,
+  ) =>
+    [...feedKeys.all(scope), "refresh-all", endpoint, runId] as const,
 };
 
 async function readResponse<TPayload extends { error?: string; ok: boolean }>(
@@ -87,6 +97,46 @@ export async function generatePrimaryFeed(
   });
 
   return readResponse<FeedDataResponse>(response);
+}
+
+export async function refreshAllFeeds(
+  endpoint = "/app/feed-refresh-all",
+) {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+
+  const result = await readResponse<FeedRefreshAllResponse>(response);
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  return result;
+}
+
+export function refreshAllStatusQueryOptions(
+  scope: FeedQueryScope,
+  runId: string,
+  endpoint = "/app/feed-refresh-all",
+) {
+  return queryOptions({
+    queryKey: feedKeys.refreshAll(scope, endpoint, runId),
+    queryFn: async ({ signal }) => {
+      const search = new URLSearchParams({ runId });
+      const response = await fetch(`${endpoint}?${search.toString()}`, {
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      const result =
+        await readResponse<FeedRefreshAllStatusResponse>(response);
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      return result;
+    },
+    retry: false,
+    staleTime: 0,
+  });
 }
 
 function resourceUrl(

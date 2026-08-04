@@ -7,6 +7,7 @@ import {
 import { MongoDBSessionStorage } from "@shopify/shopify-app-session-storage-mongodb";
 
 import { upsertInstalledStore } from "./services/store.server";
+import { assertStoreAccessAllowed } from "./services/store-access.server";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -66,6 +67,11 @@ export default shopify;
 export const apiVersion = ApiVersion.July26;
 export const addDocumentResponseHeaders = shopify.addDocumentResponseHeaders;
 export const authenticate = shopify.authenticate;
+export async function authenticateActiveAdmin(request: Request) {
+  const context = await shopify.authenticate.admin(request);
+  await assertStoreAccessAllowed(context.session.shop);
+  return context;
+}
 export const unauthenticated = shopify.unauthenticated;
 export const login = shopify.login;
 export const registerWebhooks = shopify.registerWebhooks;

@@ -5,7 +5,7 @@ import {
   requestFeedBackend,
 } from "../services/feed-backend.server";
 import { getStoredAdditionalFeedMetadata } from "../services/feed-metadata.server";
-import { authenticate } from "../shopify.server";
+import { authenticateActiveAdmin } from "../shopify.server";
 import type {
   ActiveFeedGeneration,
   FeedMarket,
@@ -76,7 +76,7 @@ function isBackendUnavailable(error: unknown) {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session } = await authenticateActiveAdmin(request);
   const url = new URL(request.url);
   const resource = url.searchParams.get("resource") ?? "feeds";
 
@@ -129,7 +129,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session } = await authenticateActiveAdmin(request);
   const input = (await request.json().catch(() => null)) as
     | {
         countryCode?: unknown;

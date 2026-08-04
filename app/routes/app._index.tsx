@@ -17,13 +17,13 @@ import {
   type ProductStatistics,
   type StoreInformation,
 } from "../services/dashboard.server";
-import { authenticate } from "../shopify.server";
+import { authenticateActiveAdmin } from "../shopify.server";
 
 const pendingStatistics = new Promise<ProductStatistics>(() => undefined);
 const pendingStoreInformation = new Promise<StoreInformation>(() => undefined);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session } = await authenticateActiveAdmin(request);
   const initialTab = parseDashboardTab(
     new URL(request.url).searchParams.get("tab"),
   );
@@ -47,7 +47,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session } = await authenticateActiveAdmin(request);
   invalidateDashboardCache(session.shop);
 
   return { ok: true };

@@ -5,6 +5,7 @@ import {
   buildInstalledStoreUpdate,
   buildStoreTokenUpdate,
   buildUninstalledStoreUpdate,
+  canSyncStoreFromSession,
   normalizeShopDomain,
 } from "../app/services/store-lifecycle.ts";
 
@@ -32,6 +33,12 @@ test("reinstall restores status, token, install date, and configuration identity
     installedAt: reinstalledAt,
   });
   assert.equal("configuration" in update, false);
+});
+
+test("stale sessions cannot reactivate an uninstalled store outside authentication", () => {
+  assert.equal(canSyncStoreFromSession("UNINSTALLED"), false);
+  assert.equal(canSyncStoreFromSession("UNINSTALLED", true), true);
+  assert.equal(canSyncStoreFromSession("INSTALLED"), true);
 });
 
 test("uninstall invalidates the token without deleting the record", () => {

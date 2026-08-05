@@ -4,7 +4,7 @@ import {
   FeedBackendError,
   requestFeedBackend,
 } from "../services/feed-backend.server";
-import { authenticateActiveAdmin } from "../shopify.server";
+import { authenticateSubscribedAdmin } from "../shopify.server";
 
 export type AutomaticRefreshStatus =
   | "NEVER_RUN"
@@ -75,7 +75,7 @@ function normalizedCursor(value: string | null) {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticateActiveAdmin(request);
+  const { session } = await authenticateSubscribedAdmin(request);
   const url = new URL(request.url);
 
   try {
@@ -107,7 +107,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticateActiveAdmin(request);
+  const { session } = await authenticateSubscribedAdmin(request);
   const input = (await request.json().catch(() => null)) as
     | {
         customAutomaticRefresh?: unknown;

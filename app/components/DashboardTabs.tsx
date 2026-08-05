@@ -18,6 +18,10 @@ import { SiGoogleanalytics } from "react-icons/si";
 import { TbFileTypeXml } from "react-icons/tb";
 
 import { InlineLoadingValue } from "./DashboardStates";
+import {
+  SubscriptionBanner,
+  SubscriptionPanel,
+} from "./SubscriptionStatus";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
 import { FeedsPanel } from "./FeedsPanel";
@@ -341,6 +345,8 @@ function DashboardPanelContent({
 
   return (
     <>
+      <SubscriptionBanner shop={diagnosticsScope?.shop ?? null} />
+
       <div className={styles.dashboardHeader}>
         <div>
           <s-heading>Overview</s-heading>
@@ -680,12 +686,18 @@ export function DashboardTabs(props: DashboardTabsProps) {
 
         <div
           aria-labelledby="tab-plan"
-          className={`${styles.panel} ${styles.emptyPlan}`}
+          className={styles.panel}
           hidden={activeTab !== "plan"}
           id="panel-plan"
           role="tabpanel"
           tabIndex={0}
-        />
+        >
+          {activeTab === "plan" ? (
+            <SubscriptionPanel
+              shop={props.diagnosticsScope?.shop ?? null}
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   );

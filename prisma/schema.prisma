@@ -43,6 +43,16 @@ enum StoreAccessStatus {
   SUSPENDED
 }
 
+enum SubscriptionStatus {
+  UNKNOWN
+  NO_SUBSCRIPTION
+  TRIAL
+  ACTIVE
+  CANCELED
+  FROZEN
+  EXPIRED
+}
+
 enum CheckoutLinkMode {
   DISABLED
   CART
@@ -65,6 +75,7 @@ model Store {
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
   configuration          Configuration?
+  subscription           StoreSubscription?
   xmlLinks               XmlLink[]
   attributeRuleJobs      AttributeRuleJob[]
   feedRefreshSchedule    FeedRefreshSchedule?
@@ -78,6 +89,28 @@ model Store {
 
   @@index([status])
   @@index([accessStatus])
+}
+
+model StoreSubscription {
+  id                       String             @id @default(auto()) @map("_id") @db.ObjectId
+  storeId                  String             @unique @db.ObjectId
+  store                    Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  shopifyShopId            String
+  planHandle               String?
+  status                   SubscriptionStatus @default(UNKNOWN)
+  billingPeriod            String?
+  trialEndsAt              DateTime?
+  currentBillingCycleStart DateTime?
+  currentBillingCycleEnd   DateTime?
+  cancelAtEndOfCycle       Boolean            @default(false)
+  lastSyncedAt             DateTime?
+  lastSyncError            String?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+
+  @@index([status])
+  @@index([planHandle])
+  @@index([trialEndsAt])
 }
 
 model Configuration {

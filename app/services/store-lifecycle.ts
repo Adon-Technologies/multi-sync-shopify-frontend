@@ -28,6 +28,13 @@ export function normalizeShopDomain(shop: string) {
   return shop.normalize("NFKC").trim().toLowerCase();
 }
 
+export function canSyncStoreFromSession(
+  status: StoreLifecycleStatus | null,
+  allowReinstall = false,
+) {
+  return status !== "UNINSTALLED" || allowReinstall;
+}
+
 function validDate(value: unknown) {
   return value instanceof Date && Number.isFinite(value.getTime())
     ? value

@@ -3,6 +3,7 @@ import {
   buildInstalledStoreUpdate,
   buildStoreTokenUpdate,
   buildUninstalledStoreUpdate,
+  canSyncStoreFromSession,
   normalizeShopDomain,
 } from "./store-lifecycle";
 
@@ -14,7 +15,14 @@ interface StoreSession {
   shop: string;
 }
 
-export async function upsertInstalledStore(session: StoreSession) {
+export interface UpsertInstalledStoreOptions {
+  allowReinstall?: boolean;
+}
+
+export async function upsertInstalledStore(
+  session: StoreSession,
+  options: UpsertInstalledStoreOptions = {},
+) {
   const shopDomain = normalizeShopDomain(session.shop);
   const existing = await prisma.store.findUnique({
     where: { shopDomain },
@@ -26,6 +34,16 @@ export async function upsertInstalledStore(session: StoreSession) {
       status: true,
     },
   });
+  if (
+    !canSyncStoreFromSession(
+      existing?.status ?? null,
+      options.allowReinstall,
+    )
+  ) {
+    throw new Error(
+      `Store ${shopDomain} must complete Shopify authentication before it can be reinstalled.`,
+    );
+  }
   const tokenUpdate = buildStoreTokenUpdate(existing ?? null, session);
   const accessToken =
     tokenUpdate.accessToken ??

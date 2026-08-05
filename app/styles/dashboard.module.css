@@ -146,6 +146,49 @@
   margin-bottom: 16px;
 }
 
+.subscriptionBanner {
+  margin-bottom: 16px;
+}
+
+.subscriptionSkeleton {
+  box-sizing: border-box;
+  display: grid;
+  gap: 10px;
+  min-height: 92px;
+  margin-bottom: 16px;
+  padding: 18px;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.subscriptionSkeleton span,
+.planSkeleton {
+  display: block;
+  height: 16px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #ebebeb 25%, #f7f7f7 37%, #ebebeb 63%);
+  background-size: 400% 100%;
+  animation: skeletonShimmer 1.4s ease infinite;
+}
+
+.subscriptionSkeleton span:first-child {
+  width: min(240px, 65%);
+}
+
+.subscriptionSkeleton span:last-child {
+  width: min(480px, 90%);
+}
+
+.planPanel {
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+.planSkeleton {
+  min-height: 240px;
+}
+
 .refreshArea {
   display: flex;
   flex: 0 0 auto;
@@ -311,7 +354,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .inlineSkeleton {
+  .inlineSkeleton,
+  .subscriptionSkeleton span,
+  .planSkeleton {
     animation: none;
   }
 

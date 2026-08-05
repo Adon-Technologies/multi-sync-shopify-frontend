@@ -1,5 +1,22 @@
 # Shopify App Template - React Router
 
+## Multi-Sync Shopify App Pricing
+
+Billing is provided by Shopify App Pricing in the Partner Dashboard. The
+public plan's redirect URL is `/app`. On return, Shopify appends
+`plan_handle`; the app treats that parameter only as a signal to force a live
+backend synchronization. Access is granted only after the backend verifies
+Partner API `activeSubscription`.
+
+Partner API credentials are configured only in
+`multi-sync-backend/.env`. See the backend README and `.env.example` for the
+required organization ID, App ID, app handle, Partner access token, plan
+handle, and API version.
+
+The frontend never creates a Billing API subscription, never assigns a local
+seven-day trial, and never derives trial time from install or uninstall
+dates. The Dashboard displays Shopify's returned `trialEndsAt`.
+
 This is a template for building a [Shopify app](https://shopify.dev/docs/apps/getting-started) using [React Router](https://reactrouter.com/). It was forked from the [Shopify Remix app template](https://github.com/Shopify/shopify-app-template-remix) and converted to React Router.
 
 Rather than cloning this repo, follow the [Quick Start steps](https://github.com/Shopify/shopify-app-template-react-router#quick-start).

@@ -191,6 +191,7 @@ interface AdditionalMarketFormProps {
   forms: AdditionalMarketFormState[];
   generationLocked: boolean;
   isGenerating: boolean;
+  progress: string | null;
   marketError: boolean;
   marketLoading: boolean;
   marketOptions: AdditionalMarketOption[];
@@ -211,6 +212,7 @@ function AdditionalMarketForm({
   forms,
   generationLocked,
   isGenerating,
+  progress,
   marketError,
   marketLoading,
   marketOptions,
@@ -309,7 +311,18 @@ function AdditionalMarketForm({
     <div className={styles.addMarketForm}>
       <div className={styles.selectorGrid}>
         <div className={styles.selectorField}>
-          <span className={styles.selectorLabel}>Market and country</span>
+          <span className={styles.selectorLabelWithLoading}>
+            <span className={styles.selectorLabel}>Market and country</span>
+            {marketLoading ||
+            (form.market &&
+              languagesQuery.isPending &&
+              !form.pendingFeedId) ? (
+              <s-spinner
+                accessibilityLabel="Loading Shopify Market options"
+                size="base"
+              />
+            ) : null}
+          </span>
           <s-clickable
             accessibilityLabel="Choose a Shopify Market and country"
             background="base"
@@ -344,7 +357,6 @@ function AdditionalMarketForm({
             </span>
           ) : null}
           <s-popover
-            blockSize="340px"
             id={marketPopoverId}
             inlineSize="420px"
             onHide={hydrated ? () => setMarketSearch("") : undefined}
@@ -444,7 +456,6 @@ function AdditionalMarketForm({
             </span>
           ) : null}
           <s-popover
-            blockSize="340px"
             id={languagePopoverId}
             inlineSize="420px"
             onHide={hydrated ? () => setLanguageSearch("") : undefined}
@@ -503,16 +514,6 @@ function AdditionalMarketForm({
         </div>
       </div>
 
-      {marketLoading ||
-      (form.market && languagesQuery.isPending && !form.pendingFeedId) ? (
-        <div className={styles.inlineLoading}>
-          <s-spinner
-            accessibilityLabel="Loading Shopify Market options"
-            size="base"
-          />
-        </div>
-      ) : null}
-
       {languagesQuery.isError && !form.pendingFeedId ? (
         <div className={styles.inlineError}>
           <span className={styles.formError} role="alert">
@@ -549,6 +550,7 @@ function AdditionalMarketForm({
         <s-text color="subdued">
           Generating {form.market.marketName} / {form.market.countryName} /{" "}
           {form.language.name}
+          {progress ? ` (${progress})` : ""}
         </s-text>
       ) : null}
 
@@ -1414,6 +1416,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                   const candidatePending = pendingStatuses.has(
                     candidate.status,
                   );
+                  const candidateDeleting =
+                    deleteMutation.isPending &&
+                    deleteMutation.variables === candidate.id;
                   const candidateReady = Boolean(
                     candidate.gcsObjectName && candidate.lastRefreshedAt,
                   );
@@ -1570,11 +1575,13 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                             disabled={
                               generationLocked ||
                               candidatePending ||
-                              deleteMutation.isPending
+                              (deleteMutation.isPending &&
+                                !candidateDeleting)
                                 ? true
                                 : undefined
                             }
                             icon="delete"
+                            loading={candidateDeleting ? true : undefined}
                             onClick={() => setDeleteTarget(entry)}
                             tone="critical"
                             variant="secondary"
@@ -1642,6 +1649,11 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                   marketOptionsQuery.data?.ok
                     ? marketOptionsQuery.data.options
                     : []
+                }
+                progress={
+                  pendingEntry
+                    ? generationProgress(pendingEntry.feed)
+                    : null
                 }
                 onGenerate={generateAdditional}
                 onRemove={(formId) =>

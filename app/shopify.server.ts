@@ -5,9 +5,15 @@ import {
   shopifyApp,
 } from "@shopify/shopify-app-react-router/server";
 import { MongoDBSessionStorage } from "@shopify/shopify-app-session-storage-mongodb";
+import { redirect as reactRouterRedirect } from "react-router";
 
+import { cleanPlanSelectionReturnPath } from "./billing/types";
 import { upsertInstalledStore } from "./services/store.server";
 import { assertStoreAccessAllowed } from "./services/store-access.server";
+import {
+  getPlanSelectionForSession,
+  getSubscriptionForSession,
+} from "./services/subscription.server";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -52,7 +58,16 @@ const shopify = shopifyApp({
   distribution: AppDistribution.AppStore,
   hooks: {
     afterAuth: async ({ session }) => {
-      await upsertInstalledStore(session);
+      await upsertInstalledStore(session, { allowReinstall: true });
+      await getSubscriptionForSession(session, { force: true }).catch(
+        (error) => {
+          console.error("[billing] post-authentication sync failed", {
+            category:
+              error instanceof Error ? error.name : "UNKNOWN",
+            shop: session.shop,
+          });
+        },
+      );
     },
   },
   future: {
@@ -71,6 +86,54 @@ export async function authenticateActiveAdmin(request: Request) {
   const context = await shopify.authenticate.admin(request);
   await assertStoreAccessAllowed(context.session.shop);
   return context;
+}
+export async function authenticateSubscribedAdmin(request: Request) {
+  const context = await authenticateActiveAdmin(request);
+  const url = new URL(request.url);
+  const returnedFromPlanSelection = url.searchParams.has("plan_handle");
+  let subscription;
+  try {
+    subscription = await getSubscriptionForSession(context.session, {
+      force:
+        returnedFromPlanSelection || request.method !== "GET",
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Your Shopify subscription could not be verified.";
+    const status =
+      typeof error === "object" &&
+      error !== null &&
+      "status" in error &&
+      typeof error.status === "number"
+        ? error.status
+        : 503;
+    throw Response.json(
+      {
+        code: "BILLING_VERIFICATION_UNAVAILABLE",
+        error: message,
+        ok: false,
+      },
+      { status },
+    );
+  }
+
+  if (!subscription.canUseApp) {
+    const planSelection = await getPlanSelectionForSession(
+      context.session,
+    );
+    throw context.redirect(planSelection.url, { target: "_top" });
+  }
+
+  if (
+    returnedFromPlanSelection &&
+    url.pathname.replace(/\/+$/, "") === "/app"
+  ) {
+    throw reactRouterRedirect(cleanPlanSelectionReturnPath(request.url));
+  }
+
+  return { ...context, subscription };
 }
 export const unauthenticated = shopify.unauthenticated;
 export const login = shopify.login;

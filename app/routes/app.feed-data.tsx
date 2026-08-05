@@ -5,7 +5,7 @@ import {
   requestFeedBackend,
 } from "../services/feed-backend.server";
 import { getStoredPrimaryFeedMetadata } from "../services/feed-metadata.server";
-import { authenticateActiveAdmin } from "../shopify.server";
+import { authenticateSubscribedAdmin } from "../shopify.server";
 
 export type FeedStatus =
   | "NOT_GENERATED"
@@ -94,7 +94,7 @@ function isBackendUnavailable(error: unknown) {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticateActiveAdmin(request);
+  const { session } = await authenticateSubscribedAdmin(request);
 
   try {
     const result = await requestFeedBackend<FeedDataResponse>(
@@ -124,7 +124,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticateActiveAdmin(request);
+  const { session } = await authenticateSubscribedAdmin(request);
 
   try {
     const result = await requestFeedBackend<FeedDataResponse>(

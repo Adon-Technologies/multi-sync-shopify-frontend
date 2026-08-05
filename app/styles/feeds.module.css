@@ -278,6 +278,13 @@
   line-height: 20px;
 }
 
+.selectorLabelWithLoading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+}
+
 .selectorField s-clickable {
   min-height: 34px;
 }
@@ -285,12 +292,11 @@
 .selectorPopoverContent {
   display: grid;
   gap: 10px;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 308px;
   min-height: 0;
 }
 
 .selectorResults {
+  max-height: 252px;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -312,8 +318,7 @@
 }
 
 .formActions,
-.inlineError,
-.inlineLoading {
+.inlineError {
   display: flex;
   align-items: center;
   gap: 8px;

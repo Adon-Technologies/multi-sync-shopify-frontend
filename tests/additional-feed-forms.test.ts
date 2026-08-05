@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -181,5 +182,34 @@ test("Primary metadata keeps polling while any store feed owns the lock", () => 
       activeGeneration: null,
     }),
     false,
+  );
+});
+
+test("additional generation forms show the pending feed product progress", () => {
+  const panelSource = readFileSync(
+    new URL("../app/components/FeedsPanel.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    panelSource,
+    /progress=\{\s*pendingEntry\s*\?\s*generationProgress\(pendingEntry\.feed\)/,
+  );
+  assert.match(panelSource, /\{progress \? ` \(\$\{progress\}\)` : ""\}/);
+});
+
+test("the selected additional feed delete icon shows loading", () => {
+  const panelSource = readFileSync(
+    new URL("../app/components/FeedsPanel.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    panelSource,
+    /candidateDeleting\s*=\s*deleteMutation\.isPending\s*&&\s*deleteMutation\.variables === candidate\.id/,
+  );
+  assert.match(
+    panelSource,
+    /icon="delete"\s*loading=\{candidateDeleting \? true : undefined\}/,
   );
 });

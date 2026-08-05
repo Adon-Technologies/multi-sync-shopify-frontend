@@ -1,7 +1,10 @@
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
-import db from "../db.server";
-import { requestStoreUninstallCleanup } from "../services/feed-backend.server";
+import { authenticate, sessionStorage } from "../shopify.server";
+import {
+  FeedBackendError,
+  requestStoreUninstallCleanup,
+} from "../services/feed-backend.server";
+import { deleteShopifySessionsForShop } from "../services/shopify-session-cleanup";
 import { markStoreUninstalled } from "../services/store.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -17,6 +20,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   } catch (error) {
     console.error(`Uninstall cleanup failed for ${shop}`, {
       category: error instanceof Error ? error.name : "UNKNOWN",
+      message:
+        error instanceof Error ? error.message : "Unknown cleanup error",
+      status: error instanceof FeedBackendError ? error.status : undefined,
     });
     // A non-2xx response asks Shopify to retry this idempotent webhook.
     return new Response("Store cleanup is temporarily unavailable.", {
@@ -27,11 +33,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // Keep the Store record for lifecycle history, but invalidate its tokens.
   await markStoreUninstalled(shop);
 
-  // Webhook requests can trigger multiple times and after an app has already been uninstalled.
-  // If this webhook already ran, the session may have been deleted previously.
-  if (session) {
-    await db.session.deleteMany({ where: { shop } });
-  }
+  // Delete every offline and online session for this shop. This remains safe
+  // when Shopify retries the webhook after the sessions were already removed.
+  await deleteShopifySessionsForShop(shop, sessionStorage);
 
   return new Response();
 };

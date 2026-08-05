@@ -16,10 +16,10 @@ import {
   getActiveShopifyLocations,
   InventoryLocationVerificationError,
 } from "../services/shopify-locations.server";
-import { authenticateActiveAdmin } from "../shopify.server";
+import { authenticateSubscribedAdmin } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticateActiveAdmin(request);
+  const { admin, session } = await authenticateSubscribedAdmin(request);
   const url = new URL(request.url);
   const intent = url.searchParams.get("intent");
 
@@ -71,7 +71,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticateActiveAdmin(request);
+  const { admin, session } = await authenticateSubscribedAdmin(request);
 
   try {
     const value = (await request.json()) as unknown;

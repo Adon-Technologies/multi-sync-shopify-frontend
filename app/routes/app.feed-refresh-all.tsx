@@ -7,7 +7,7 @@ import {
   FeedBackendError,
   requestFeedBackend,
 } from "../services/feed-backend.server";
-import { authenticateActiveAdmin } from "../shopify.server";
+import { authenticateSubscribedAdmin } from "../shopify.server";
 import type { ActiveFeedGeneration } from "./app.feed-data";
 
 export type FeedRefreshAllResponse =
@@ -51,7 +51,7 @@ function errorResponse(error: unknown) {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticateActiveAdmin(request);
+  const { session } = await authenticateSubscribedAdmin(request);
   const runId = new URL(request.url).searchParams.get("runId")?.trim() ?? "";
 
   try {
@@ -67,7 +67,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticateActiveAdmin(request);
+  const { session } = await authenticateSubscribedAdmin(request);
 
   try {
     const result = await requestFeedBackend<FeedRefreshAllResponse>(

@@ -15,7 +15,7 @@ import {
   type DiagnosticsFilterField,
 } from "../services/diagnostics-filter";
 import { normalizeDiagnosticsSort } from "../services/diagnostics-sort";
-import { authenticateActiveAdmin } from "../shopify.server";
+import { authenticateSubscribedAdmin } from "../shopify.server";
 
 export type DiagnosticsDataResponse =
   | {
@@ -51,7 +51,7 @@ const validTabs = new Set<DiagnosticsTab>([
 export const loader = async ({
   request,
 }: LoaderFunctionArgs): Promise<DiagnosticsDataResponse> => {
-  const { admin, session } = await authenticateActiveAdmin(request);
+  const { admin, session } = await authenticateSubscribedAdmin(request);
   const url = new URL(request.url);
   const requestedIntent = url.searchParams.get("intent");
   const intent =

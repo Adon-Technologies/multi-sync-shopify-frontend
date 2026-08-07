@@ -1,3 +1,13 @@
 .cache
+.env
+.env.*
+!.env.example
+.react-router
+.shopify
 build
 node_modules
+scripts/cutover/*.candidate.json
+scripts/cutover/*.report.json
+scripts/migrate-database/*.candidate.json
+scripts/migrate-database/.migration-output
+scripts/migrate-database/migration.env

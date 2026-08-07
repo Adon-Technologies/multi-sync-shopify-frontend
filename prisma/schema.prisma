@@ -13,26 +13,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Session {
-  id                  String    @id @map("_id")
-  shop                String
-  state               String
-  isOnline            Boolean   @default(false)
-  scope               String?
-  expires             DateTime?
-  accessToken         String
-  userId              BigInt?
-  firstName           String?
-  lastName            String?
-  email               String?
-  accountOwner        Boolean   @default(false)
-  locale              String?
-  collaborator        Boolean?  @default(false)
-  emailVerified       Boolean?  @default(false)
-  refreshToken        String?
-  refreshTokenExpires DateTime?
-}
-
 enum StoreStatus {
   INSTALLED
   UNINSTALLED
@@ -67,13 +47,14 @@ enum InventorySourceMode {
 model Store {
   id                     String               @id @default(auto()) @map("_id") @db.ObjectId
   shopDomain             String               @unique
+  shopPlan               String?
+  accessStatus           StoreAccessStatus    @default(ACTIVE)
   accessToken            String?
   status                 StoreStatus          @default(INSTALLED)
-  accessStatus           StoreAccessStatus    @default(ACTIVE)
   installedAt            DateTime             @default(now())
-  uninstalledAt          DateTime?
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
+  uninstalledAt          DateTime?
   configuration          Configuration?
   subscription           StoreSubscription?
   xmlLinks               XmlLink[]
@@ -105,8 +86,8 @@ model StoreSubscription {
   cancelAtEndOfCycle       Boolean            @default(false)
   lastSyncedAt             DateTime?
   lastSyncError            String?
-  createdAt                DateTime            @default(now())
-  updatedAt                DateTime            @updatedAt
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
 
   @@index([status])
   @@index([planHandle])

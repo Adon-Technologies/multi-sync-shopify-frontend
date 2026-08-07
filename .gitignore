@@ -16,6 +16,12 @@ database.sqlite
 .env
 .env.*
 !.env.example
+scripts/migrate-database/migration.env
+scripts/migrate-database/.migration-output/
+scripts/migrate-database/*.candidate.json
+scripts/cutover/*.report.json
+scripts/cutover/*.candidate.json
+scripts/cutover/backups/
 
 
 

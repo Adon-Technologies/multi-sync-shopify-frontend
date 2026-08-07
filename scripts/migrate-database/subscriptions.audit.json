@@ -1,0 +1,3024 @@
+{
+  "formatVersion": 1,
+  "auditType": "LegacySubscriptionReadOnly",
+  "generatedAt": "2026-08-07T11:10:21.320Z",
+  "sourceDatabase": "gsf",
+  "targetDatabase": "Multi-sync",
+  "policy": {
+    "mongoWrites": 0,
+    "shopifyWrites": 0,
+    "classificationUsesLiveReadOnlyShopifySubscriptionsWhenAvailable": true,
+    "noSubscriberIsInferredFromShopTrialAlone": true
+  },
+  "billingSettings": [
+    {
+      "annualAmount": 100,
+      "annualEnabled": true,
+      "annualPlanKey": "annual",
+      "currencyCode": "EUR",
+      "defaultTrialDays": 7,
+      "monthlyAmount": 10,
+      "monthlyEnabled": true,
+      "monthlyPlanKey": "Pro Plan"
+    }
+  ],
+  "summary": {
+    "legacyInstallerShops": 68,
+    "legacyInstalled": 44,
+    "legacyUninstalled": 24,
+    "legacyStoreDocuments": 42,
+    "legacyTrialRecords": 67,
+    "classifications": {
+      "INSTALLED_SUBSCRIPTION_UNKNOWN": 3,
+      "MISSING_INSTALL_STATUS": 1,
+      "SUBSCRIBER": 37,
+      "TEST_SUBSCRIPTION": 1,
+      "TRIAL": 3,
+      "UNINSTALLED": 24
+    },
+    "shopifyQueryStatuses": {
+      "FAILED": 2,
+      "NOT_QUERIED_NO_STORE_DOCUMENT": 3,
+      "SUCCESS": 39
+    },
+    "realActiveSubscriptions": 38,
+    "testActiveSubscriptions": 1,
+    "targetStores": 73,
+    "targetInstalled": 52,
+    "targetUninstalled": 21,
+    "targetSubscriptionRecords": 38,
+    "mongoWrites": 0,
+    "shopifyWrites": 0
+  },
+  "differences": {
+    "installerShopsMissingTrial": [
+      "3ge4bs-a9.myshopify.com",
+      "7dc72d-1b.myshopify.com"
+    ],
+    "trialRecordsMissingInstallerShop": [
+      "test-store-pierre-2.myshopify.com"
+    ],
+    "latestInstallEventDisagreesWithInstallerShop": [],
+    "legacyShopsMissingFromMultiSync": [
+      "adon-test-1.myshopify.com",
+      "teststore2pierre.myshopify.com"
+    ],
+    "multiSyncShopsMissingFromLegacy": [
+      "d0ejht-zp.myshopify.com",
+      "dhhqqq-jf.myshopify.com",
+      "ic2yxk-sc.myshopify.com",
+      "mainz-empire.myshopify.com",
+      "northern-garms.myshopify.com",
+      "x08r90-1g.myshopify.com"
+    ],
+    "legacyInstalledMissingFromMultiSyncInstalled": [],
+    "multiSyncInstalledMissingFromLegacyInstalled": [
+      "adon-test-5.myshopify.com",
+      "d0ejht-zp.myshopify.com",
+      "dhhqqq-jf.myshopify.com",
+      "ic2yxk-sc.myshopify.com",
+      "mainz-empire.myshopify.com",
+      "northern-garms.myshopify.com",
+      "test-store-pierre-2.myshopify.com",
+      "x08r90-1g.myshopify.com"
+    ]
+  },
+  "records": [
+    {
+      "shopDomain": "0f7c17-47.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-25T09:09:26.496Z",
+      "lastInstallAt": "2026-06-25T09:09:26.496Z",
+      "lastUninstallAt": "2026-08-01T09:23:38.076Z",
+      "latestInstallEvent": {
+        "at": "2026-08-01T09:23:38.200Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-25T09:09:26.810Z",
+        "lastUninstallAt": "2026-08-01T09:23:38.064Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc6e",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "0vvxug-rt.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-28T08:13:41.519Z",
+      "lastInstallAt": "2026-05-28T08:13:41.519Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-05-28T08:13:41.521Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-28T08:13:41.887Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-05-28T08:13:42Z",
+            "currentPeriodEnd": "2026-09-02T08:13:50Z",
+            "id": "gid://shopify/AppSubscription/79872983423",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-04T08:13:42.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc6f",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "10qnei-1m.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-19T05:59:55.554Z",
+      "lastInstallAt": "2026-06-19T05:59:55.555Z",
+      "lastUninstallAt": "2026-08-05T20:53:00.674Z",
+      "latestInstallEvent": {
+        "at": "2026-08-05T20:53:00.736Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-19T05:59:55.838Z",
+        "lastUninstallAt": "2026-08-05T20:53:00.706Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc70",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "10srff-ea.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-18T11:45:55.941Z",
+      "lastInstallAt": "2026-06-18T11:45:55.941Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-18T11:45:55.943Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-18T11:45:56.204Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-18T11:46:06Z",
+            "currentPeriodEnd": "2026-08-24T11:46:18Z",
+            "id": "gid://shopify/AppSubscription/36763894038",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-25T11:46:06.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc71",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "1438ff-97.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-18T15:53:28.439Z",
+      "lastInstallAt": "2026-05-18T15:53:28.439Z",
+      "lastUninstallAt": "2026-05-18T16:01:11.173Z",
+      "latestInstallEvent": {
+        "at": "2026-05-18T16:01:11.210Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-18T15:53:28.932Z",
+        "lastUninstallAt": "2026-05-18T16:01:11.186Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc72",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "1ssiif-0k.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-19T07:26:38.517Z",
+      "lastInstallAt": "2026-05-19T07:33:51.600Z",
+      "lastUninstallAt": "2026-05-19T07:32:41.113Z",
+      "latestInstallEvent": {
+        "at": "2026-05-19T07:33:51.601Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-19T07:26:38.923Z",
+        "lastUninstallAt": "2026-05-19T07:32:41.123Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-05-19T07:33:52Z",
+            "currentPeriodEnd": "2026-08-24T07:34:02Z",
+            "id": "gid://shopify/AppSubscription/49051140421",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-05-26T07:33:52.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc73",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "3a1dva-e9.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-11T06:38:00.849Z",
+      "lastInstallAt": "2026-06-11T06:38:00.849Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-11T06:38:00.853Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-11T06:38:01.257Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-11T06:38:01Z",
+            "currentPeriodEnd": "2026-08-17T06:38:10Z",
+            "id": "gid://shopify/AppSubscription/64757203287",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-18T06:38:01.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc74",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "3f0nay-0r.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-26T10:28:48.383Z",
+      "lastInstallAt": "2026-05-26T10:28:48.383Z",
+      "lastUninstallAt": "2026-07-08T08:56:28.353Z",
+      "latestInstallEvent": {
+        "at": "2026-07-08T08:56:28.432Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-26T10:28:48.673Z",
+        "lastUninstallAt": "2026-07-08T08:56:28.405Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc75",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "3ge4bs-a9.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-04-28T18:37:36.370Z",
+      "lastInstallAt": "2026-04-28T18:37:36.370Z",
+      "lastUninstallAt": "2026-04-28T18:38:11.870Z",
+      "latestInstallEvent": {
+        "at": "2026-04-28T18:38:11.906Z",
+        "type": "UNINSTALL"
+      },
+      "trial": null,
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc76",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "49ibk2-m0.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-26T10:18:54.625Z",
+      "lastInstallAt": "2026-05-26T10:18:54.625Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-05-26T10:18:55.016Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-26T10:18:55.644Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-05-26T10:18:56Z",
+            "currentPeriodEnd": "2026-08-31T10:19:08Z",
+            "id": "gid://shopify/AppSubscription/78794817870",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-02T10:18:56.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc77",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "4dda9c-7d.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-26T04:56:48.276Z",
+      "lastInstallAt": "2026-06-26T04:56:48.276Z",
+      "lastUninstallAt": "2026-06-26T04:57:28.622Z",
+      "latestInstallEvent": {
+        "at": "2026-06-26T04:57:28.666Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-26T04:56:48.571Z",
+        "lastUninstallAt": "2026-06-26T04:57:28.642Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc78",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "531ee4-d5.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-28T08:27:46.557Z",
+      "lastInstallAt": "2026-07-28T08:27:46.557Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-07-28T08:27:46.559Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-28T08:27:46.760Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-07-28T08:27:54Z",
+            "currentPeriodEnd": "2026-09-03T08:28:02Z",
+            "id": "gid://shopify/AppSubscription/112924197204",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-08-04T08:27:54.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc79",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "53e0vt-yc.myshopify.com",
+      "classification": "TRIAL",
+      "legacyInstalled": true,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-12T10:22:14.321Z",
+      "lastInstallAt": "2026-07-12T10:22:14.321Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-07-12T10:22:14.323Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-12T10:22:14.550Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_NO_STORE_DOCUMENT",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc7a",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "5sieeu-pc.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-27T06:37:49.087Z",
+      "lastInstallAt": "2026-05-27T06:37:49.087Z",
+      "lastUninstallAt": "2026-08-03T12:14:54.211Z",
+      "latestInstallEvent": {
+        "at": "2026-08-03T12:14:54.260Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-27T06:37:49.496Z",
+        "lastUninstallAt": "2026-08-03T12:14:54.234Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc7b",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "6de71a-a6.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-19T12:00:54.704Z",
+      "lastInstallAt": "2026-06-19T12:00:54.704Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-19T12:00:54.708Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-19T12:00:54.886Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-19T12:01:02Z",
+            "currentPeriodEnd": "2026-08-25T12:01:11Z",
+            "id": "gid://shopify/AppSubscription/124721299779",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-26T12:01:02.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc7c",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "7dc72d-1b.myshopify.com",
+      "classification": "INSTALLED_SUBSCRIPTION_UNKNOWN",
+      "legacyInstalled": true,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-17T11:11:27.685Z",
+      "lastInstallAt": "2026-06-17T11:11:27.685Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-17T11:11:27.688Z",
+        "type": "INSTALL"
+      },
+      "trial": null,
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_NO_STORE_DOCUMENT",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc7d",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "7gzna4-ef.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-26T10:01:40.133Z",
+      "lastInstallAt": "2026-06-26T10:01:40.133Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-26T10:01:40.135Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-26T10:01:40.444Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-26T10:01:45Z",
+            "currentPeriodEnd": "2026-09-01T10:01:52Z",
+            "id": "gid://shopify/AppSubscription/72074232140",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-07-03T10:01:45.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc7e",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "8kiwy6-kw.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-25T09:09:06.784Z",
+      "lastInstallAt": "2026-06-25T09:09:06.784Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-25T09:09:06.786Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-25T09:09:07.174Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-25T09:13:11Z",
+            "currentPeriodEnd": "2026-08-31T09:13:32Z",
+            "id": "gid://shopify/AppSubscription/72065155404",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-07-02T09:13:11.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc7f",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "9gzrzz-pb.myshopify.com",
+      "classification": "INSTALLED_SUBSCRIPTION_UNKNOWN",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-19T09:31:25.086Z",
+      "lastInstallAt": "2026-06-19T09:31:25.086Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-19T09:31:25.089Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-19T09:31:25.404Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": "Shopify returned HTTP 404",
+        "queryStatus": "FAILED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": "Inactive",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc80",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "a8avzs-dh.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-08T08:08:24.834Z",
+      "lastInstallAt": "2026-06-08T08:08:24.834Z",
+      "lastUninstallAt": "2026-07-28T05:57:04.458Z",
+      "latestInstallEvent": {
+        "at": "2026-07-28T05:57:04.497Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-08T08:08:25.133Z",
+        "lastUninstallAt": "2026-07-28T05:57:04.477Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc81",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "adon-test-1.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-23T06:34:31.661Z",
+      "lastInstallAt": "2026-07-23T06:34:31.661Z",
+      "lastUninstallAt": "2026-08-07T10:23:37.233Z",
+      "latestInstallEvent": {
+        "at": "2026-08-07T10:23:37.293Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-23T06:34:31.851Z",
+        "lastUninstallAt": "2026-08-07T10:23:37.236Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": null
+    },
+    {
+      "shopDomain": "adon-test-5.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-27T06:44:53.331Z",
+      "lastInstallAt": "2026-07-27T06:44:53.331Z",
+      "lastUninstallAt": "2026-08-07T10:24:36.633Z",
+      "latestInstallEvent": {
+        "at": "2026-08-07T10:24:36.668Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-27T06:44:53.635Z",
+        "lastUninstallAt": "2026-08-07T10:24:36.629Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc82",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "adon-test.myshopify.com",
+      "classification": "TEST_SUBSCRIPTION",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-11T08:35:23.128Z",
+      "lastInstallAt": "2026-07-07T06:27:53.058Z",
+      "lastUninstallAt": "2026-06-17T12:21:33.221Z",
+      "latestInstallEvent": {
+        "at": "2026-07-07T06:27:53.062Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-11T08:35:23.471Z",
+        "lastUninstallAt": "2026-06-17T12:21:33.236Z",
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-07-22T09:34:17Z",
+            "currentPeriodEnd": "2026-08-21T09:34:24Z",
+            "id": "gid://shopify/AppSubscription/29287579820",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": true,
+            "trialDays": 0,
+            "trialEndsAt": null
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Partner Test",
+        "status": "INSTALLED",
+        "storeId": "6a6232efb5c1b2b93bedca40",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "TRIAL",
+          "trialEndsAt": "2026-08-12T12:29:58.000Z"
+        }
+      }
+    },
+    {
+      "shopDomain": "app-review-73a76252-r3424-a2.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-18T12:07:33.166Z",
+      "lastInstallAt": "2026-06-18T12:07:33.166Z",
+      "lastUninstallAt": "2026-06-18T16:47:03.528Z",
+      "latestInstallEvent": {
+        "at": "2026-06-18T16:47:03.564Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-18T12:07:33.478Z",
+        "lastUninstallAt": "2026-06-18T16:47:03.529Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc83",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "behrkz-k9.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-04T11:39:50.163Z",
+      "lastInstallAt": "2026-06-04T11:39:50.163Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-04T11:39:50.168Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-04T11:39:50.585Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-04T11:39:51Z",
+            "currentPeriodEnd": "2026-08-10T11:39:57Z",
+            "id": "gid://shopify/AppSubscription/107684725120",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-11T11:39:51.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc84",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "boho-ibiza-3062.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-18T18:05:51.010Z",
+      "lastInstallAt": "2026-06-18T18:05:51.010Z",
+      "lastUninstallAt": "2026-06-18T18:21:01.327Z",
+      "latestInstallEvent": {
+        "at": "2026-06-18T18:21:01.360Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-18T18:05:51.305Z",
+        "lastUninstallAt": "2026-06-18T18:21:01.339Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc85",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "cucqnc-ab.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-29T13:32:15.757Z",
+      "lastInstallAt": "2026-07-29T13:32:15.757Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-07-29T13:32:15.761Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-29T13:32:16.100Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-07-29T13:32:38Z",
+            "currentPeriodEnd": "2026-09-04T13:32:47Z",
+            "id": "gid://shopify/AppSubscription/98916401485",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-08-05T13:32:38.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc86",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "d0qtbd-i9.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-30T08:33:36.565Z",
+      "lastInstallAt": "2026-06-30T08:33:36.565Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-30T08:33:36.566Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-30T08:33:36.955Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-30T08:33:39Z",
+            "currentPeriodEnd": "2026-09-05T08:33:46Z",
+            "id": "gid://shopify/AppSubscription/59436499275",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-07-07T08:33:39.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc87",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "dyvtsp-0f.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-27T10:38:24.414Z",
+      "lastInstallAt": "2026-05-27T10:38:24.414Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-05-27T10:38:24.417Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-27T10:38:24.658Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-05-27T10:38:25Z",
+            "currentPeriodEnd": "2026-09-01T10:38:32Z",
+            "id": "gid://shopify/AppSubscription/61891215626",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-03T10:38:25.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc88",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "e238e9-35.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-12T10:07:43.348Z",
+      "lastInstallAt": "2026-06-12T10:07:43.348Z",
+      "lastUninstallAt": "2026-06-12T11:21:13.217Z",
+      "latestInstallEvent": {
+        "at": "2026-06-12T11:21:13.254Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-12T10:07:43.633Z",
+        "lastUninstallAt": "2026-06-12T11:21:13.224Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc89",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "e72nru-i8.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-04T12:41:40.869Z",
+      "lastInstallAt": "2026-05-04T12:41:40.869Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-05-04T12:41:40.941Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-04T12:41:41.335Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-05-13T06:26:12Z",
+            "currentPeriodEnd": "2026-08-11T06:26:22Z",
+            "id": "gid://shopify/AppSubscription/71450657106",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 0,
+            "trialEndsAt": null
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a7581f1694d376a5b3dc68c",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "e8djpd-49.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-18T10:47:51.431Z",
+      "lastInstallAt": "2026-06-18T10:47:51.431Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-18T10:47:51.434Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-18T10:47:51.451Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-18T10:47:55Z",
+            "currentPeriodEnd": "2026-08-24T10:48:02Z",
+            "id": "gid://shopify/AppSubscription/45660864776",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-25T10:47:55.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc8a",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "e95kv4-sp.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-18T10:12:38.236Z",
+      "lastInstallAt": "2026-06-18T10:12:38.236Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-18T10:12:38.238Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-18T10:12:38.207Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-18T10:12:48Z",
+            "currentPeriodEnd": "2026-08-24T10:13:16Z",
+            "id": "gid://shopify/AppSubscription/32368034013",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-25T10:12:48.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc8b",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "ga5cts-wp.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-23T09:17:11.671Z",
+      "lastInstallAt": "2026-06-23T09:17:11.671Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-23T09:17:11.673Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-23T09:17:11.877Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-23T09:17:26Z",
+            "currentPeriodEnd": "2026-08-29T09:19:06Z",
+            "id": "gid://shopify/AppSubscription/46772060424",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-30T09:17:26.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc8c",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "ijhnff-vk.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-24T12:15:06.468Z",
+      "lastInstallAt": "2026-07-24T12:15:06.468Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-07-24T12:15:06.469Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-24T12:15:06.631Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-07-24T12:15:12Z",
+            "currentPeriodEnd": "2026-08-30T12:15:35Z",
+            "id": "gid://shopify/AppSubscription/71962689802",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-07-31T12:15:12.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc8d",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "ir4wtb-p9.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-25T06:57:27.391Z",
+      "lastInstallAt": "2026-06-25T06:57:27.391Z",
+      "lastUninstallAt": "2026-06-25T08:13:20.633Z",
+      "latestInstallEvent": {
+        "at": "2026-06-25T08:13:20.671Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-25T06:57:27.634Z",
+        "lastUninstallAt": "2026-06-25T08:13:20.651Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc8e",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "jqewde-ng.myshopify.com",
+      "classification": "TRIAL",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-31T12:20:46.267Z",
+      "lastInstallAt": "2026-07-31T12:20:46.267Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-07-31T12:20:46.274Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-31T12:20:46.412Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-07-31T12:20:56Z",
+            "currentPeriodEnd": "2026-08-07T12:21:03Z",
+            "id": "gid://shopify/AppSubscription/67829530968",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-08-07T12:20:56.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc8f",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "k0bpcz-nt.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-12T11:40:08.322Z",
+      "lastInstallAt": "2026-05-12T12:08:59.047Z",
+      "lastUninstallAt": "2026-05-12T12:06:39.884Z",
+      "latestInstallEvent": {
+        "at": "2026-05-12T12:08:59.059Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-12T11:40:08.669Z",
+        "lastUninstallAt": "2026-05-12T12:06:39.900Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 1,
+        "trialDaysRemaining": 6,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-05-13T06:25:42Z",
+            "currentPeriodEnd": "2026-08-17T06:25:53Z",
+            "id": "gid://shopify/AppSubscription/26440630295",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 6,
+            "trialEndsAt": "2026-05-19T06:25:42.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc90",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "loveandbump.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-20T11:05:07.115Z",
+      "lastInstallAt": "2026-05-20T11:05:07.115Z",
+      "lastUninstallAt": "2026-05-20T11:31:58.246Z",
+      "latestInstallEvent": {
+        "at": "2026-05-20T11:31:58.283Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-20T11:05:07.703Z",
+        "lastUninstallAt": "2026-05-20T11:31:58.276Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc91",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "m1kft0-0v.myshopify.com",
+      "classification": "TRIAL",
+      "legacyInstalled": true,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-01T03:37:15.744Z",
+      "lastInstallAt": "2026-06-01T03:37:15.744Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-01T03:37:15.809Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-01T03:37:16.340Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_NO_STORE_DOCUMENT",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": "Plus",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc92",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "mahemi-dn.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-19T13:35:38.332Z",
+      "lastInstallAt": "2026-06-19T13:35:38.332Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-19T13:35:38.334Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-19T13:35:38.665Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-19T13:35:54Z",
+            "currentPeriodEnd": "2026-08-31T01:57:58Z",
+            "id": "gid://shopify/AppSubscription/56403034453",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-26T13:35:54.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc93",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "mfgunr-qq.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-19T07:25:13.133Z",
+      "lastInstallAt": "2026-06-19T07:25:13.133Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-19T07:25:13.135Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-19T07:25:13.581Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-19T07:25:17Z",
+            "currentPeriodEnd": "2026-08-25T07:25:28Z",
+            "id": "gid://shopify/AppSubscription/29456269450",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-26T07:25:17.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc94",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "ncqrzw-r1.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-19T07:09:03.775Z",
+      "lastInstallAt": "2026-05-19T07:09:03.775Z",
+      "lastUninstallAt": "2026-06-04T12:19:17.666Z",
+      "latestInstallEvent": {
+        "at": "2026-06-04T12:19:17.707Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-19T07:09:04.429Z",
+        "lastUninstallAt": "2026-06-04T12:19:17.681Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc95",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "ngmkrd-br.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-24T11:56:01.332Z",
+      "lastInstallAt": "2026-07-24T11:56:01.332Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-07-24T11:56:01.334Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-24T11:56:01.559Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-07-24T11:56:08Z",
+            "currentPeriodEnd": "2026-08-30T11:56:16Z",
+            "id": "gid://shopify/AppSubscription/110762557770",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-07-31T11:56:08.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc96",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "ni8xb0-tt.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-04T20:49:05.102Z",
+      "lastInstallAt": "2026-06-04T20:49:05.102Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-04T20:49:05.105Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-04T20:49:05.199Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-04T20:49:05Z",
+            "currentPeriodEnd": "2026-08-10T20:49:18Z",
+            "id": "gid://shopify/AppSubscription/56296309077",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-11T20:49:05.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc97",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "nq7fkg-1c.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-02T09:23:30.336Z",
+      "lastInstallAt": "2026-06-02T09:23:30.336Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-02T09:23:30.416Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-02T09:23:30.926Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-02T09:23:31Z",
+            "currentPeriodEnd": "2026-08-08T09:23:49Z",
+            "id": "gid://shopify/AppSubscription/64679412055",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-09T09:23:31.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc98",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "nutriessential-com.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-16T10:07:41.426Z",
+      "lastInstallAt": "2026-06-16T10:07:41.426Z",
+      "lastUninstallAt": "2026-06-16T11:46:40.368Z",
+      "latestInstallEvent": {
+        "at": "2026-06-16T11:46:40.708Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-16T10:07:42.018Z",
+        "lastUninstallAt": "2026-06-16T11:46:40.350Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc99",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "pjdvkn-b1.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-14T10:54:46.977Z",
+      "lastInstallAt": "2026-05-14T10:54:46.977Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-05-14T10:54:47.046Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-14T10:54:47.541Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-05-14T10:54:47Z",
+            "currentPeriodEnd": "2026-08-19T10:55:01Z",
+            "id": "gid://shopify/AppSubscription/32270155930",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-05-21T10:54:47.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc9a",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "ppwh0t-mx.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-25T08:48:27.881Z",
+      "lastInstallAt": "2026-06-25T08:48:27.881Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-25T08:48:27.883Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-25T08:48:28.192Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-25T08:48:34Z",
+            "currentPeriodEnd": "2026-08-31T08:48:42Z",
+            "id": "gid://shopify/AppSubscription/58884718923",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-07-02T08:48:34.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc9b",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "qbyw9x-ns.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-19T06:52:51.729Z",
+      "lastInstallAt": "2026-06-19T06:52:51.729Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-19T06:52:51.732Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-19T06:52:52.058Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-19T06:52:56Z",
+            "currentPeriodEnd": "2026-08-25T06:53:06Z",
+            "id": "gid://shopify/AppSubscription/56400773461",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-26T06:52:56.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Inactive",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc9c",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "r0band-pa.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-04T11:05:15.776Z",
+      "lastInstallAt": "2026-06-04T11:05:15.776Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-04T11:05:15.780Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-04T11:05:15.938Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-04T11:05:16Z",
+            "currentPeriodEnd": "2026-08-10T11:05:25Z",
+            "id": "gid://shopify/AppSubscription/112477602132",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-11T11:05:16.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc9d",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "sshrkq-r5.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-19T07:58:50.072Z",
+      "lastInstallAt": "2026-06-19T07:58:50.072Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-19T07:58:50.075Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-19T07:58:50.409Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-19T07:59:02Z",
+            "currentPeriodEnd": "2026-08-25T07:59:14Z",
+            "id": "gid://shopify/AppSubscription/59075559751",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-26T07:59:02.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc9e",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "test-store-pierre-2.myshopify.com",
+      "classification": "MISSING_INSTALL_STATUS",
+      "legacyInstalled": null,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": null,
+      "lastInstallAt": null,
+      "lastUninstallAt": null,
+      "latestInstallEvent": null,
+      "trial": {
+        "firstInstallAt": "2026-06-22T09:21:14.623Z",
+        "lastUninstallAt": "2026-08-07T10:27:00.313Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": "Shopify returned HTTP 401",
+        "queryStatus": "FAILED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": "Plus",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddc9f",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "teststore2pierre.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-04-27T09:44:44.438Z",
+      "lastInstallAt": "2026-06-12T13:28:48.434Z",
+      "lastUninstallAt": "2026-06-17T12:19:35.775Z",
+      "latestInstallEvent": {
+        "at": "2026-06-17T12:19:35.820Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-04-27T09:44:45.066Z",
+        "lastUninstallAt": "2026-06-17T12:19:35.789Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": null
+    },
+    {
+      "shopDomain": "tshirt-emporium-2.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-17T15:26:00.204Z",
+      "lastInstallAt": "2026-07-17T15:26:00.204Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-07-17T15:26:00.207Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-17T15:26:00.232Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-07-17T15:26:13Z",
+            "currentPeriodEnd": "2026-08-23T15:26:20Z",
+            "id": "gid://shopify/AppSubscription/124834971972",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-07-24T15:26:13.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddca1",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "tzvtcg-80.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-23T08:29:46.750Z",
+      "lastInstallAt": "2026-06-23T08:29:46.750Z",
+      "lastUninstallAt": "2026-06-23T10:31:37.799Z",
+      "latestInstallEvent": {
+        "at": "2026-06-23T10:31:37.837Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-23T08:29:46.902Z",
+        "lastUninstallAt": "2026-06-23T10:31:37.816Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddca2",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "ugcfsh-v5.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-19T11:59:39.542Z",
+      "lastInstallAt": "2026-06-19T10:28:15.164Z",
+      "lastUninstallAt": "2026-06-30T13:41:26.755Z",
+      "latestInstallEvent": {
+        "at": "2026-06-30T13:41:26.791Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-19T11:59:40.107Z",
+        "lastUninstallAt": "2026-06-30T13:41:26.762Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddca3",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "uxfetg-mh.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-24T10:47:44.089Z",
+      "lastInstallAt": "2026-07-24T10:47:44.089Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-07-24T10:47:44.092Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-24T10:47:44.277Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-07-24T10:47:58Z",
+            "currentPeriodEnd": "2026-08-30T10:48:08Z",
+            "id": "gid://shopify/AppSubscription/228703240541",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-07-31T10:47:58.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddca4",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "v3cjpe-w9.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-21T12:55:16.463Z",
+      "lastInstallAt": "2026-05-22T05:51:55.792Z",
+      "lastUninstallAt": "2026-05-21T13:03:12.836Z",
+      "latestInstallEvent": {
+        "at": "2026-05-22T05:51:56.016Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-21T12:55:16.650Z",
+        "lastUninstallAt": "2026-05-21T13:03:12.846Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 1,
+        "trialDaysRemaining": 6,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-05-22T05:51:57Z",
+            "currentPeriodEnd": "2026-08-26T05:52:10Z",
+            "id": "gid://shopify/AppSubscription/83005964675",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 6,
+            "trialEndsAt": "2026-05-28T05:51:57.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddca5",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "vhvew9-es.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-02T09:49:16.646Z",
+      "lastInstallAt": "2026-06-30T08:25:54.718Z",
+      "lastUninstallAt": "2026-07-13T09:12:43.202Z",
+      "latestInstallEvent": {
+        "at": "2026-07-13T09:12:43.262Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-02T09:49:16.965Z",
+        "lastUninstallAt": "2026-07-13T09:12:43.217Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddca6",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "vxwusp-0i.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-13T15:06:26.769Z",
+      "lastInstallAt": "2026-07-13T15:06:26.769Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-07-13T15:06:26.771Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-13T15:06:26.972Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-07-13T15:06:39Z",
+            "currentPeriodEnd": "2026-08-19T15:06:46Z",
+            "id": "gid://shopify/AppSubscription/108149604736",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-07-20T15:06:39.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddca7",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "w6kbzu-sy.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-09T19:29:21.272Z",
+      "lastInstallAt": "2026-06-09T19:29:21.272Z",
+      "lastUninstallAt": "2026-06-15T15:09:58.658Z",
+      "latestInstallEvent": {
+        "at": "2026-06-15T15:09:58.689Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-09T19:29:21.474Z",
+        "lastUninstallAt": "2026-06-15T15:09:58.669Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 5,
+        "trialDaysRemaining": 2,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddca8",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "w7wwz6-uh.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-04T10:40:38.826Z",
+      "lastInstallAt": "2026-06-04T10:40:38.826Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-04T10:40:38.829Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-04T10:40:39.202Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-04T10:40:39Z",
+            "currentPeriodEnd": "2026-08-23T10:28:00Z",
+            "id": "gid://shopify/AppSubscription/54002975059",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-11T10:40:39.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Basic",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddca9",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "wuspbq-nz.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-05T09:57:49.924Z",
+      "lastInstallAt": "2026-06-05T09:57:49.924Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-05T09:57:49.928Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-05T09:57:50.080Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-05T09:57:50Z",
+            "currentPeriodEnd": "2026-08-11T10:12:56Z",
+            "id": "gid://shopify/AppSubscription/83935920477",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-12T09:57:50.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddcaa",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "wy0tzf-yp.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-07-13T14:55:02.125Z",
+      "lastInstallAt": "2026-07-13T14:55:02.125Z",
+      "lastUninstallAt": "2026-07-14T12:41:32.164Z",
+      "latestInstallEvent": {
+        "at": "2026-07-14T12:41:32.204Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-07-13T14:55:02.353Z",
+        "lastUninstallAt": "2026-07-14T12:41:32.179Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddcab",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "ynagu8-12.myshopify.com",
+      "classification": "UNINSTALLED",
+      "legacyInstalled": false,
+      "legacyStoreDocument": false,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-04-30T12:21:12.813Z",
+      "lastInstallAt": "2026-04-30T12:21:12.813Z",
+      "lastUninstallAt": "2026-04-30T12:36:33.561Z",
+      "latestInstallEvent": {
+        "at": "2026-04-30T12:36:33.604Z",
+        "type": "UNINSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-04-30T12:21:13.164Z",
+        "lastUninstallAt": "2026-04-30T12:36:33.559Z",
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "NOT_QUERIED_UNINSTALLED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": null,
+        "status": "UNINSTALLED",
+        "storeId": "6a758b00694d376a5b3ddcac",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "z5b9tc-2m.myshopify.com",
+      "classification": "INSTALLED_SUBSCRIPTION_UNKNOWN",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-05-28T08:10:45.986Z",
+      "lastInstallAt": "2026-05-28T08:10:45.986Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-05-28T08:10:46.109Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-05-28T08:10:46.652Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": "Shopify returned HTTP 402",
+        "queryStatus": "FAILED",
+        "subscriptions": []
+      },
+      "multiSync": {
+        "shopPlan": "Inactive",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddcad",
+        "subscription": null
+      }
+    },
+    {
+      "shopDomain": "zquh1y-zf.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-06-15T13:22:16.917Z",
+      "lastInstallAt": "2026-06-15T13:22:16.917Z",
+      "lastUninstallAt": null,
+      "latestInstallEvent": {
+        "at": "2026-06-15T13:22:16.920Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-06-15T13:22:16.969Z",
+        "lastUninstallAt": null,
+        "permanentlyLocked": false,
+        "trialCompleted": false,
+        "trialConsumed": 0,
+        "trialDaysRemaining": 7,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-15T13:22:29Z",
+            "currentPeriodEnd": "2026-08-21T13:22:42Z",
+            "id": "gid://shopify/AppSubscription/98668216653",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 7,
+            "trialEndsAt": "2026-06-22T13:22:29.000Z"
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddcae",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    },
+    {
+      "shopDomain": "zula-amsterdam.myshopify.com",
+      "classification": "SUBSCRIBER",
+      "legacyInstalled": true,
+      "legacyStoreDocument": true,
+      "legacyAccessSuspended": false,
+      "firstInstallAt": "2026-04-28T11:18:41.725Z",
+      "lastInstallAt": "2026-06-12T14:33:53.076Z",
+      "lastUninstallAt": "2026-06-12T14:31:16.673Z",
+      "latestInstallEvent": {
+        "at": "2026-06-12T14:33:53.078Z",
+        "type": "INSTALL"
+      },
+      "trial": {
+        "firstInstallAt": "2026-04-28T11:19:37.283Z",
+        "lastUninstallAt": "2026-06-12T14:31:16.738Z",
+        "permanentlyLocked": true,
+        "trialCompleted": true,
+        "trialConsumed": 7,
+        "trialDaysRemaining": 0,
+        "trialDaysTotal": 7
+      },
+      "shopify": {
+        "queryError": null,
+        "queryStatus": "SUCCESS",
+        "subscriptions": [
+          {
+            "createdAt": "2026-06-25T08:12:15Z",
+            "currentPeriodEnd": "2026-08-24T08:12:25Z",
+            "id": "gid://shopify/AppSubscription/59324072263",
+            "name": "Pro Plan",
+            "status": "ACTIVE",
+            "test": false,
+            "trialDays": 0,
+            "trialEndsAt": null
+          }
+        ]
+      },
+      "multiSync": {
+        "shopPlan": "Grow",
+        "status": "INSTALLED",
+        "storeId": "6a758b00694d376a5b3ddcaf",
+        "subscription": {
+          "billingPeriod": "EVERY_30_DAYS",
+          "planHandle": "pro-plan",
+          "status": "ACTIVE",
+          "trialEndsAt": null
+        }
+      }
+    }
+  ]
+}

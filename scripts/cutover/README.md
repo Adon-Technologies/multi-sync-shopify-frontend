@@ -14,9 +14,8 @@ configuration, writes to GCS, or changes MongoDB.
 
 ## Files
 
-- `../../shopify.app.multi-sync-google-feed.toml`: isolated Shopify production
-  configuration for the existing app. Keeping it separate prevents an
-  accidental command against the current default app configuration.
+- `../../shopify.app.toml`: the single canonical Shopify configuration for
+  the existing Multi Sync Google Feed app.
 - `audit-readiness.mjs`: read-only filesystem, MongoDB, and optional Shopify
   Admin API validation. The report never contains credentials.
 - `prepare-token-exchange.mjs`: builds a local approval candidate after
@@ -87,10 +86,10 @@ for that shop. The old non-expiring token is revoked immediately.
    `Multi-sync`/`multi-sync` targets.
 4. Configure the frontend with the same app credentials and internal secret.
 5. Deploy the frontend code to `multi-sync.fly.dev`.
-6. Only after both services are healthy, deploy the isolated Shopify config:
+6. Only after both services are healthy, deploy the canonical Shopify config:
 
    ```powershell
-   shopify app deploy --config multi-sync-google-feed
+   shopify app deploy
    ```
 
    Review the CLI summary interactively. Do not use an unattended deletion

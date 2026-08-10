@@ -3,13 +3,10 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useFetcher, useLoaderData } from "react-router";
+import { redirect, useFetcher, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
-import {
-  DashboardTabs,
-  parseDashboardTab,
-} from "../components/DashboardTabs";
+import { DashboardTabs, parseDashboardTab } from "../components/DashboardTabs";
 import {
   getProductStatistics,
   getStoreInformation,
@@ -17,22 +14,47 @@ import {
   type ProductStatistics,
   type StoreInformation,
 } from "../services/dashboard.server";
-import { authenticateSubscribedAdmin } from "../shopify.server";
+import {
+  getPlanSelectionForSession,
+  getSubscriptionForSession,
+} from "../services/subscription.server";
+import {
+  authenticateActiveAdmin,
+  authenticateSubscribedAdmin,
+} from "../shopify.server";
+import { cleanPlanSelectionReturnPath } from "../billing/types";
 
 const pendingStatistics = new Promise<ProductStatistics>(() => undefined);
 const pendingStoreInformation = new Promise<StoreInformation>(() => undefined);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticateSubscribedAdmin(request);
-  const initialTab = parseDashboardTab(
-    new URL(request.url).searchParams.get("tab"),
-  );
+  const { admin, session } = await authenticateActiveAdmin(request);
+  const requestUrl = new URL(request.url);
+  const returnedFromPlanSelection = requestUrl.searchParams.has("plan_handle");
+  const subscription = await getSubscriptionForSession(session, {
+    force: returnedFromPlanSelection,
+  });
+  if (returnedFromPlanSelection) {
+    throw redirect(cleanPlanSelectionReturnPath(request.url));
+  }
+  const initialTab = parseDashboardTab(requestUrl.searchParams.get("tab"));
+  const planSelection = await getPlanSelectionForSession(session);
 
   return {
     // These promises start concurrently and stream independently. React
     // Router discards stale loader results after navigation or revalidation.
-    storeInformation: getStoreInformation(admin, session.shop),
-    statistics: getProductStatistics(admin, session.shop),
+    storeInformation: subscription.canUseApp
+      ? getStoreInformation(admin, session.shop)
+      : Promise.resolve({ currency: null, domain: session.shop }),
+    statistics: subscription.canUseApp
+      ? getProductStatistics(admin, session.shop)
+      : Promise.resolve({
+          generatedAt: new Date().toISOString(),
+          publishedProducts: 0,
+          publishedProductVariants: 0,
+          totalProducts: 0,
+          unpublishedProducts: 0,
+        }),
     diagnosticsScope: {
       shop: session.shop,
       sessionId: session.id,
@@ -43,6 +65,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       sessionId: session.id,
     },
     initialTab,
+    planSelectionUrl: planSelection?.url ?? null,
+    subscription,
   };
 };
 
@@ -58,8 +82,10 @@ export default function Index() {
     diagnosticsScope,
     feedScope,
     initialTab,
+    planSelectionUrl,
     statistics,
     storeInformation,
+    subscription,
   } = useLoaderData<typeof loader>();
   const refreshFetcher = useFetcher<typeof action>();
   const isRefreshing = refreshFetcher.state !== "idle";
@@ -70,8 +96,10 @@ export default function Index() {
       diagnosticsScope={diagnosticsScope}
       feedScope={feedScope}
       initialTab={initialTab}
+      initialSubscription={subscription}
       isRefreshing={isRefreshing}
       onRefresh={refresh}
+      planSelectionUrl={planSelectionUrl}
       statistics={statistics}
       storeInformation={storeInformation}
     />
@@ -83,8 +111,10 @@ export function HydrateFallback() {
     <DashboardTabs
       diagnosticsScope={null}
       feedScope={null}
+      initialSubscription={null}
       isRefreshing={false}
       onRefresh={() => undefined}
+      planSelectionUrl={null}
       statistics={pendingStatistics}
       storeInformation={pendingStoreInformation}
     />

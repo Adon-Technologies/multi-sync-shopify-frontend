@@ -19,16 +19,16 @@ import { TbFileTypeXml } from "react-icons/tb";
 
 import { InlineLoadingValue } from "./DashboardStates";
 import {
+  BillingAccessGate,
+  InactivePlanBanner,
   SubscriptionBanner,
   SubscriptionPanel,
+  useSubscription,
 } from "./SubscriptionStatus";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
 import { FeedsPanel } from "./FeedsPanel";
-import {
-  TabAlertNavigator,
-  type TabAlert,
-} from "./TabAlertNavigator";
+import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 import type {
   ProductStatistics,
   StoreInformation,
@@ -36,6 +36,7 @@ import type {
 import { configurationQueryOptions } from "../services/configuration-query";
 import type { DiagnosticsQueryScope } from "../services/diagnostics-query";
 import type { FeedQueryScope } from "../services/feed-query";
+import type { SubscriptionView } from "../billing/types";
 import styles from "../styles/dashboard.module.css";
 
 const tabs = [
@@ -54,10 +55,12 @@ interface DashboardTabsProps {
   diagnosticsScope: DiagnosticsQueryScope | null;
   feedScope: FeedQueryScope | null;
   initialTab?: DashboardTabId;
+  initialSubscription: SubscriptionView | null;
   statistics: Promise<ProductStatistics>;
   storeInformation: Promise<StoreInformation>;
   isRefreshing: boolean;
   onRefresh: () => void;
+  planSelectionUrl: string | null;
 }
 
 interface DashboardPanelContentProps extends DashboardTabsProps {
@@ -129,10 +132,7 @@ function formatCount(value: number) {
   return new Intl.NumberFormat().format(value);
 }
 
-function StatisticsTable({
-  statistics,
-  state,
-}: StatisticsTableProps) {
+function StatisticsTable({ statistics, state }: StatisticsTableProps) {
   const rows: Array<{ key: StatisticKey; label: string }> = [
     { key: "totalProducts", label: "Total products" },
     { key: "publishedProducts", label: "Published products" },
@@ -276,12 +276,14 @@ function DashboardSectionResult({
 
 function DashboardPanelContent({
   active,
+  initialSubscription,
   diagnosticsScope,
   statistics,
   storeInformation,
   isRefreshing,
   onOpenFeeds,
   onRefresh,
+  planSelectionUrl,
 }: DashboardPanelContentProps) {
   const [statisticsFailed, setStatisticsFailed] = useState(false);
   const [storeInformationFailed, setStoreInformationFailed] = useState(false);
@@ -291,7 +293,10 @@ function DashboardPanelContent({
   };
   const configurationQuery = useQuery({
     ...configurationQueryOptions(configurationScope),
-    enabled: active && Boolean(diagnosticsScope),
+    enabled:
+      active &&
+      Boolean(initialSubscription?.canUseApp) &&
+      Boolean(diagnosticsScope),
   });
   const alertsEmailState: SectionState =
     !diagnosticsScope ||
@@ -345,7 +350,14 @@ function DashboardPanelContent({
 
   return (
     <>
-      <SubscriptionBanner shop={diagnosticsScope?.shop ?? null} />
+      <SubscriptionBanner
+        initialSubscription={initialSubscription}
+        shop={diagnosticsScope?.shop ?? null}
+      />
+
+      {initialSubscription && !initialSubscription.canUseApp ? (
+        <InactivePlanBanner planSelectionUrl={planSelectionUrl} />
+      ) : null}
 
       <div className={styles.dashboardHeader}>
         <div>
@@ -358,11 +370,16 @@ function DashboardPanelContent({
           <span aria-live="polite" className={styles.visuallyHidden}>
             {isRefreshing ? "Refreshing dashboard data" : ""}
           </span>
-          <s-button onClick={onOpenFeeds} variant="primary">
+          <s-button
+            disabled={!initialSubscription?.canUseApp ? true : undefined}
+            onClick={onOpenFeeds}
+            variant="primary"
+          >
             Open feeds
           </s-button>
           <s-button
             accessibilityLabel="Refresh dashboard data"
+            disabled={!initialSubscription?.canUseApp ? true : undefined}
             icon="refresh"
             loading={isRefreshing ? true : undefined}
             onClick={refreshDashboard}
@@ -373,104 +390,110 @@ function DashboardPanelContent({
         </div>
       </div>
 
-      {tabAlerts.length > 0 ? (
-        <div className={styles.dashboardAlert}>
-          <TabAlertNavigator alerts={tabAlerts} />
-        </div>
-      ) : null}
+      {initialSubscription && !initialSubscription.canUseApp ? null : (
+        <>
+          {tabAlerts.length > 0 ? (
+            <div className={styles.dashboardAlert}>
+              <TabAlertNavigator alerts={tabAlerts} />
+            </div>
+          ) : null}
 
-      <div className={styles.cardGrid}>
-        <s-section heading="Products">
-          <s-stack gap="base">
-            <s-paragraph color="subdued">
-              Variants usually become individual Google feed items.
-            </s-paragraph>
-            <Suspense
-              fallback={
-                <StatisticsTable
-                  state="loading"
-                />
-              }
-            >
-              <Await
-                errorElement={
-                  <DashboardSectionResult
-                    failed
-                    onStateChange={setStatisticsFailed}
+          <div className={styles.cardGrid}>
+            <s-section heading="Products">
+              <s-stack gap="base">
+                <s-paragraph color="subdued">
+                  Variants usually become individual Google feed items.
+                </s-paragraph>
+                <Suspense fallback={<StatisticsTable state="loading" />}>
+                  <Await
+                    errorElement={
+                      <DashboardSectionResult
+                        failed
+                        onStateChange={setStatisticsFailed}
+                      >
+                        <StatisticsTable state="error" />
+                      </DashboardSectionResult>
+                    }
+                    resolve={statistics}
                   >
-                    <StatisticsTable state="error" />
-                  </DashboardSectionResult>
+                    {(loadedStatistics) => (
+                      <DashboardSectionResult
+                        failed={false}
+                        onStateChange={setStatisticsFailed}
+                      >
+                        <StatisticsTable
+                          state="ready"
+                          statistics={loadedStatistics}
+                        />
+                      </DashboardSectionResult>
+                    )}
+                  </Await>
+                </Suspense>
+              </s-stack>
+            </s-section>
+
+            <s-section heading="Store">
+              <Suspense
+                fallback={
+                  <StoreInformationCard
+                    alertsEmail={
+                      configurationQuery.data?.configuration.alertsEmail
+                    }
+                    alertsEmailState={alertsEmailState}
+                    state="loading"
+                  />
                 }
-                resolve={statistics}
               >
-                {(loadedStatistics) => (
-                  <DashboardSectionResult
-                    failed={false}
-                    onStateChange={setStatisticsFailed}
-                  >
-                    <StatisticsTable
-                      state="ready"
-                      statistics={loadedStatistics}
-                    />
-                  </DashboardSectionResult>
-                )}
-              </Await>
-            </Suspense>
-          </s-stack>
-        </s-section>
-
-        <s-section heading="Store">
-          <Suspense
-            fallback={
-              <StoreInformationCard
-                alertsEmail={configurationQuery.data?.configuration.alertsEmail}
-                alertsEmailState={alertsEmailState}
-                state="loading"
-              />
-            }
-          >
-            <Await
-              errorElement={
-                <DashboardSectionResult
-                  failed
-                  onStateChange={setStoreInformationFailed}
+                <Await
+                  errorElement={
+                    <DashboardSectionResult
+                      failed
+                      onStateChange={setStoreInformationFailed}
+                    >
+                      <StoreInformationCard
+                        alertsEmail={
+                          configurationQuery.data?.configuration.alertsEmail
+                        }
+                        alertsEmailState={alertsEmailState}
+                        state="error"
+                      />
+                    </DashboardSectionResult>
+                  }
+                  resolve={storeInformation}
                 >
-                  <StoreInformationCard
-                    alertsEmail={
-                      configurationQuery.data?.configuration.alertsEmail
-                    }
-                    alertsEmailState={alertsEmailState}
-                    state="error"
-                  />
-                </DashboardSectionResult>
-              }
-              resolve={storeInformation}
-            >
-              {(store) => (
-                <DashboardSectionResult
-                  failed={false}
-                  onStateChange={setStoreInformationFailed}
-                >
-                  <StoreInformationCard
-                    alertsEmail={
-                      configurationQuery.data?.configuration.alertsEmail
-                    }
-                    alertsEmailState={alertsEmailState}
-                    state="ready"
-                    store={store}
-                  />
-                </DashboardSectionResult>
-              )}
-            </Await>
-          </Suspense>
-        </s-section>
-      </div>
+                  {(store) => (
+                    <DashboardSectionResult
+                      failed={false}
+                      onStateChange={setStoreInformationFailed}
+                    >
+                      <StoreInformationCard
+                        alertsEmail={
+                          configurationQuery.data?.configuration.alertsEmail
+                        }
+                        alertsEmailState={alertsEmailState}
+                        state="ready"
+                        store={store}
+                      />
+                    </DashboardSectionResult>
+                  )}
+                </Await>
+              </Suspense>
+            </s-section>
+          </div>
+        </>
+      )}
     </>
   );
 }
 
 export function DashboardTabs(props: DashboardTabsProps) {
   const shopify = useAppBridge();
+  const subscriptionQuery = useSubscription(
+    props.diagnosticsScope?.shop ?? null,
+    props.initialSubscription,
+  );
+  const subscription = subscriptionQuery.data ?? props.initialSubscription;
+  const canUseApp = subscription?.canUseApp ?? true;
   const [activeTab, setActiveTab] = useState<DashboardTabId>(
     props.initialTab ?? "dashboard",
   );
@@ -523,23 +546,15 @@ export function DashboardTabs(props: DashboardTabsProps) {
 
   useEffect(() => {
     const shop = props.diagnosticsScope?.shop;
-    if (
-      !shop ||
-      new URL(window.location.href).searchParams.has("tab")
-    ) {
+    if (!shop || new URL(window.location.href).searchParams.has("tab")) {
       return;
     }
 
-    const storedTab = parseDashboardTab(
-      storedActiveTab(shop),
-    );
+    const storedTab = parseDashboardTab(storedActiveTab(shop));
     setActiveTab(storedTab);
   }, [props.diagnosticsScope?.shop]);
 
-  const selectTab = async (
-    tabId: DashboardTabId,
-    tabIndex?: number,
-  ) => {
+  const selectTab = async (tabId: DashboardTabId, tabIndex?: number) => {
     if (
       tabId !== activeTab &&
       activeTab === "configurations" &&
@@ -633,6 +648,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
           <DashboardPanelContent
             {...props}
             active={activeTab === "dashboard"}
+            initialSubscription={subscription}
             onOpenFeeds={() => void selectTab("feeds", 1)}
           />
         </div>
@@ -645,7 +661,15 @@ export function DashboardTabs(props: DashboardTabsProps) {
           role="tabpanel"
           tabIndex={0}
         >
-          <FeedsPanel active={activeTab === "feeds"} scope={props.feedScope} />
+          <BillingAccessGate
+            canUseApp={canUseApp}
+            planSelectionUrl={props.planSelectionUrl}
+          >
+            <FeedsPanel
+              active={activeTab === "feeds" && canUseApp}
+              scope={props.feedScope}
+            />
+          </BillingAccessGate>
         </div>
 
         <div
@@ -656,15 +680,20 @@ export function DashboardTabs(props: DashboardTabsProps) {
           role="tabpanel"
           tabIndex={0}
         >
-          <DiagnosticsPanel
-            active={activeTab === "diagnostics"}
-            key={
-              props.diagnosticsScope
-                ? `${props.diagnosticsScope.shop}:${props.diagnosticsScope.sessionId}`
-                : "diagnostics-pending"
-            }
-            scope={props.diagnosticsScope}
-          />
+          <BillingAccessGate
+            canUseApp={canUseApp}
+            planSelectionUrl={props.planSelectionUrl}
+          >
+            <DiagnosticsPanel
+              active={activeTab === "diagnostics" && canUseApp}
+              key={
+                props.diagnosticsScope
+                  ? `${props.diagnosticsScope.shop}:${props.diagnosticsScope.sessionId}`
+                  : "diagnostics-pending"
+              }
+              scope={props.diagnosticsScope}
+            />
+          </BillingAccessGate>
         </div>
 
         <div
@@ -675,13 +704,18 @@ export function DashboardTabs(props: DashboardTabsProps) {
           role="tabpanel"
           tabIndex={0}
         >
-          {activeTab === "configurations" ? (
-            <ConfigurationsPanel
-              active
-              onUnsavedChangesChange={setHasUnsavedConfigurationChanges}
-              scope={props.diagnosticsScope}
-            />
-          ) : null}
+          <BillingAccessGate
+            canUseApp={canUseApp}
+            planSelectionUrl={props.planSelectionUrl}
+          >
+            {activeTab === "configurations" ? (
+              <ConfigurationsPanel
+                active={canUseApp}
+                onUnsavedChangesChange={setHasUnsavedConfigurationChanges}
+                scope={props.diagnosticsScope}
+              />
+            ) : null}
+          </BillingAccessGate>
         </div>
 
         <div
@@ -694,6 +728,8 @@ export function DashboardTabs(props: DashboardTabsProps) {
         >
           {activeTab === "plan" ? (
             <SubscriptionPanel
+              initialSubscription={subscription}
+              planSelectionUrl={props.planSelectionUrl}
               shop={props.diagnosticsScope?.shop ?? null}
             />
           ) : null}

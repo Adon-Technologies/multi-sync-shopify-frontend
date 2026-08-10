@@ -6,7 +6,7 @@ import process from "node:process";
 import { MongoClient } from "mongodb";
 
 const DEFAULT_BACKEND_ENV = "../multi-sync-backend/.env";
-const DEFAULT_CONFIG = "shopify.app.multi-sync-google-feed.toml";
+const DEFAULT_CONFIG = "shopify.app.toml";
 const DEFAULT_FRONTEND_ENV = ".env";
 const DEFAULT_OUTPUT = "scripts/cutover/cutover-readiness.report.json";
 const DEFAULT_REFERENCE_SHOPIFY_ENV =

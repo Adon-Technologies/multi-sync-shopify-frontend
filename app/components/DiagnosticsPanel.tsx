@@ -373,6 +373,7 @@ function DiagnosticsTable({
                     icon="refresh"
                     loading={isRefreshing ? true : undefined}
                     onClick={onRefresh}
+                    tone="critical"
                     variant="tertiary"
                   >
                     Refresh product Errors

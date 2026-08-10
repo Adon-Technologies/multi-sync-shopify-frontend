@@ -1,5 +1,6 @@
-# Default production configuration for the existing Multi Sync Google Feed app.
-# The separate Adknot app is preserved in shopify.app.adknot-ai.toml.
+# Canonical Shopify configuration for Multi Sync Google Feed.
+# Local development updates only the selected dev-store preview to the CLI tunnel;
+# deployments continue to use the production application_url below.
 
 client_id = "cd9cc67d2db7611a483d8e33b30328f2"
 name = "Multi Sync Google Feed"
@@ -8,7 +9,8 @@ application_url = "https://multi-sync.fly.dev"
 embedded = true
 
 [build]
-automatically_update_urls_on_dev = false
+automatically_update_urls_on_dev = true
+dev_store_url = "adon-test.myshopify.com"
 
 [webhooks]
 api_version = "2026-07"

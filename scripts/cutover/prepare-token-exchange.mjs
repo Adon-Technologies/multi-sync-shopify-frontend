@@ -15,7 +15,7 @@ import {
   validateAdminToken,
 } from "./token-exchange-common.mjs";
 
-const DEFAULT_CONFIG = "shopify.app.multi-sync-google-feed.toml";
+const DEFAULT_CONFIG = "shopify.app.toml";
 const DEFAULT_ENV = ".env";
 const DEFAULT_OUTPUT =
   "scripts/cutover/token-exchange.candidate.json";

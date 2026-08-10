@@ -20,13 +20,46 @@ async function requestSubscription() {
     credentials: "same-origin",
     headers: { Accept: "application/json" },
   });
-  const payload = (await response.json().catch(() => null)) as
-    | SubscriptionResponse
-    | null;
+  const payload = (await response
+    .json()
+    .catch(() => null)) as SubscriptionResponse | null;
   if (!response.ok || !payload?.ok || !payload.subscription) {
     throw new SubscriptionQueryError(
-      payload?.error ||
-        "Your subscription could not be verified. Try again.",
+      payload?.error || "Your subscription could not be verified. Try again.",
+    );
+  }
+  return payload.subscription;
+}
+
+export async function cancelSubscription() {
+  const response = await fetch("/app/subscription/cancel", {
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+    method: "POST",
+  });
+  const payload = (await response
+    .json()
+    .catch(() => null)) as SubscriptionResponse | null;
+  if (!response.ok || !payload?.ok || !payload.subscription) {
+    throw new SubscriptionQueryError(
+      payload?.error || "Your subscription could not be canceled. Try again.",
+    );
+  }
+  return payload.subscription;
+}
+
+export async function forceSyncSubscription() {
+  const response = await fetch("/app/subscription", {
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+    method: "POST",
+  });
+  const payload = (await response
+    .json()
+    .catch(() => null)) as SubscriptionResponse | null;
+  if (!response.ok || !payload?.ok || !payload.subscription) {
+    throw new SubscriptionQueryError(
+      payload?.error || "Your subscription could not be verified. Try again.",
     );
   }
   return payload.subscription;

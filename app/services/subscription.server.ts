@@ -26,19 +26,24 @@ export async function getSubscriptionForSession(
   const result = await requestFeedBackend<SubscriptionResponse>(
     session,
     options.force ? "POST" : "GET",
-    options.force
-      ? "/api/subscription/sync"
-      : "/api/subscription",
+    options.force ? "/api/subscription/sync" : "/api/subscription",
   );
   return result.subscription;
 }
 
-export async function getPlanSelectionForSession(
-  session: BillingSession,
-) {
+export async function getPlanSelectionForSession(session: BillingSession) {
   return requestFeedBackend<PlanSelectionResponse>(
     session,
     "GET",
     "/api/subscription/plan-selection-url",
   );
+}
+
+export async function cancelSubscriptionForSession(session: BillingSession) {
+  const result = await requestFeedBackend<SubscriptionResponse>(
+    session,
+    "POST",
+    "/api/subscription/cancel",
+  );
+  return result.subscription;
 }

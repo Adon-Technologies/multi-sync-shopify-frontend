@@ -24,7 +24,7 @@ function parseArguments(arguments_) {
   const options = {
     all: false,
     backendEnv: "../multi-sync-backend/.env",
-    config: "shopify.app.multi-sync-google-feed.toml",
+    config: "shopify.app.toml",
     confirmHash: null,
     env: ".env",
     execute: false,

@@ -10,10 +10,7 @@ import { redirect as reactRouterRedirect } from "react-router";
 import { cleanPlanSelectionReturnPath } from "./billing/types";
 import { upsertInstalledStore } from "./services/store.server";
 import { assertStoreAccessAllowed } from "./services/store-access.server";
-import {
-  getPlanSelectionForSession,
-  getSubscriptionForSession,
-} from "./services/subscription.server";
+import { getSubscriptionForSession } from "./services/subscription.server";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -62,8 +59,7 @@ const shopify = shopifyApp({
       await getSubscriptionForSession(session, { force: true }).catch(
         (error) => {
           console.error("[billing] post-authentication sync failed", {
-            category:
-              error instanceof Error ? error.name : "UNKNOWN",
+            category: error instanceof Error ? error.name : "UNKNOWN",
             shop: session.shop,
           });
         },
@@ -94,8 +90,7 @@ export async function authenticateSubscribedAdmin(request: Request) {
   let subscription;
   try {
     subscription = await getSubscriptionForSession(context.session, {
-      force:
-        returnedFromPlanSelection || request.method !== "GET",
+      force: returnedFromPlanSelection || request.method !== "GET",
     });
   } catch (error) {
     const message =
@@ -120,10 +115,15 @@ export async function authenticateSubscribedAdmin(request: Request) {
   }
 
   if (!subscription.canUseApp) {
-    const planSelection = await getPlanSelectionForSession(
-      context.session,
+    throw Response.json(
+      {
+        code: "SUBSCRIPTION_REQUIRED",
+        error: "An active subscription is required to use this feature.",
+        message: "An active subscription is required to use this feature.",
+        ok: false,
+      },
+      { status: 402 },
     );
-    throw context.redirect(planSelection.url, { target: "_top" });
   }
 
   if (

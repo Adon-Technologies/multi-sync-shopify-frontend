@@ -341,6 +341,14 @@ export function SubscriptionPanel({
           >
             Cancel subscription
           </s-button>
+        ) : query.data.cancelAtEndOfCycle && cycleEnd && planSelectionUrl ? (
+          <s-button
+            href={planSelectionUrl}
+            target="_top"
+            variant="primary"
+          >
+            Reactivate subscription
+          </s-button>
         ) : query.data.cancelAtEndOfCycle && cycleEnd ? (
           <s-button disabled variant="secondary">
             Cancels on {formatSubscriptionDate(cycleEnd)}

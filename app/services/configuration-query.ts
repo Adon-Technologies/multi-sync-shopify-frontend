@@ -27,6 +27,7 @@ interface ConfigurationResponse {
   ok: true;
   intent: "configuration";
   configuration: PublicConfiguration;
+  feedRefreshRequired: boolean;
   ruleJobs: PublicAttributeRuleJobs;
 }
 

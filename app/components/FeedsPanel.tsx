@@ -1260,9 +1260,13 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                           <s-button
                             accessibilityLabel="Open Primary Feed in a new tab"
                             icon="external"
+                            interestFor="primary-feed-open-tooltip"
                             onClick={openFeed}
                             variant="secondary"
                           />
+                          <s-tooltip id="primary-feed-open-tooltip">
+                            Open
+                          </s-tooltip>
                           <s-button
                             accessibilityLabel="Refresh Primary Feed"
                             disabled={
@@ -1273,6 +1277,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                                 : undefined
                             }
                             icon="refresh"
+                            interestFor="primary-feed-refresh-tooltip"
                             loading={
                               primaryGenerationInProgress || mutation.isPending
                                 ? true
@@ -1281,12 +1286,19 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                             onClick={() => void generate()}
                             variant="secondary"
                           />
+                          <s-tooltip id="primary-feed-refresh-tooltip">
+                            Refresh XML
+                          </s-tooltip>
                           <s-button
                             accessibilityLabel="Copy Primary Feed URL"
                             icon="clipboard"
+                            interestFor="primary-feed-copy-tooltip"
                             onClick={() => void copyFeed()}
                             variant="secondary"
                           />
+                          <s-tooltip id="primary-feed-copy-tooltip">
+                            Copy
+                          </s-tooltip>
                         </>
                       ) : primaryGenerationInProgress ? (
                         <s-button disabled loading variant="secondary">
@@ -1509,6 +1521,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                               <s-button
                                 accessibilityLabel={`Open ${entry.market.name} ${entry.market.countryName ?? ""} ${entry.market.locale} feed in a new tab`}
                                 icon="external"
+                                interestFor={`additional-feed-${candidate.id}-open-tooltip`}
                                 onClick={() => {
                                   const opened = window.open(
                                     candidate.publicUrl,
@@ -1519,6 +1532,11 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                                 }}
                                 variant="secondary"
                               />
+                              <s-tooltip
+                                id={`additional-feed-${candidate.id}-open-tooltip`}
+                              >
+                                Open
+                              </s-tooltip>
                               <s-button
                                 accessibilityLabel={`Refresh ${entry.market.name} ${entry.market.locale} feed`}
                                 disabled={
@@ -1528,6 +1546,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                                     : undefined
                                 }
                                 icon="refresh"
+                                interestFor={`additional-feed-${candidate.id}-refresh-tooltip`}
                                 loading={
                                   candidatePending ||
                                   (additionalRefreshMutation.isPending &&
@@ -1541,12 +1560,23 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                                 }
                                 variant="secondary"
                               />
+                              <s-tooltip
+                                id={`additional-feed-${candidate.id}-refresh-tooltip`}
+                              >
+                                Refresh XML
+                              </s-tooltip>
                               <s-button
                                 accessibilityLabel={`Copy ${entry.market.name} ${entry.market.locale} feed URL`}
                                 icon="clipboard"
+                                interestFor={`additional-feed-${candidate.id}-copy-tooltip`}
                                 onClick={() => void copyAdditionalFeed(entry)}
                                 variant="secondary"
                               />
+                              <s-tooltip
+                                id={`additional-feed-${candidate.id}-copy-tooltip`}
+                              >
+                                Copy
+                              </s-tooltip>
                             </>
                           ) : candidatePending ? (
                             <s-button disabled loading variant="secondary">

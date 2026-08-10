@@ -118,3 +118,29 @@ test("the contextual Save button uses Shopify's loading spinner while saving", (
   );
   assert.doesNotMatch(panelSource, /Saving…/);
 });
+
+test("Gender and Age rule dialogs keep one full-dialog scrollbar", () => {
+  assert.match(
+    panelStyles,
+    /\.rulesModalContent\s*\{[\s\S]*max-height:[^;]+;[\s\S]*overflow-y:\s*auto;/,
+  );
+  const rulesList = panelStyles.match(/\.rulesList\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.doesNotMatch(rulesList, /overflow-y|max-height/);
+});
+
+test("a saved configuration that made XML stale shows its warning at the top", () => {
+  const headerStart = panelSource.indexOf(`<div className={styles.header}>`);
+  const warningStart = panelSource.indexOf(
+    `heading="XML feed refresh required"`,
+  );
+  const cardsStart = panelSource.indexOf(`<div className={styles.cards}>`);
+
+  assert.ok(headerStart >= 0);
+  assert.ok(warningStart > headerStart && warningStart < cardsStart);
+  assert.match(panelSource, /configurationQuery\.data\?\.feedRefreshRequired/);
+  assert.match(
+    panelSource,
+    /published XML still[\s\S]*uses the previous settings/,
+  );
+  assert.match(panelSource, /refetchType: "all"/);
+});

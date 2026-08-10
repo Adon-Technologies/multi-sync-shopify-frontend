@@ -45,3 +45,20 @@ test("the refresh-all action uses the durable backend batch endpoint", () => {
     /void Promise\.all\(\[refetchFeed\(\), refetchAdditionalFeeds\(\)\]\)/,
   );
 });
+
+test("Feeds labels icon actions on hover without rendering the configuration warning", () => {
+  assert.doesNotMatch(panelSource, /feedsRequiringRefresh/);
+  assert.doesNotMatch(
+    panelSource,
+    /Configuration changes are not included in the published XML yet\./,
+  );
+  for (const label of ["Open", "Refresh XML", "Copy"]) {
+    assert.match(
+      panelSource,
+      new RegExp(
+        `<s-tooltip[^>]*>[\\s\\S]*?${label}[\\s\\S]*?<\\/s-tooltip>`,
+      ),
+    );
+  }
+  assert.match(panelSource, /interestFor="primary-feed-open-tooltip"/);
+});

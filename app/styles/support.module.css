@@ -1,0 +1,53 @@
+.supportRoot {
+  padding: 1rem 0 2rem;
+}
+
+.conversation {
+  max-height: 32rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+
+.messageRow {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.messageRowMerchant {
+  justify-content: flex-end;
+}
+
+.messageBubble {
+  background: var(--p-color-bg-surface-secondary);
+  border-radius: 0.75rem;
+  max-width: min(42rem, 85%);
+  padding: 0.75rem 1rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.messageBubbleMerchant {
+  background: var(--p-color-bg-fill-brand-secondary);
+}
+
+.messageMeta {
+  color: var(--p-color-text-secondary);
+  font-size: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.ticketTitleButton {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--p-color-text-link);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  text-align: left;
+}
+
+.unread {
+  font-weight: 700;
+}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "@shopify/polaris/build/esm/styles.css";
 
 export default function App() {
   const [queryClient] = useState(

@@ -405,9 +405,12 @@
 .rulesModalContent {
   display: grid;
   gap: 16px;
-  max-height: min(70vh, 680px);
+  max-height: min(70dvh, 680px);
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .rulesSectionBox,
@@ -451,9 +454,6 @@
 .rulesList {
   display: grid;
   gap: 12px;
-  max-height: 440px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .rulesEmptyState {

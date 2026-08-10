@@ -839,12 +839,19 @@ export function ConfigurationsPanel({
       queryClient.setQueryData(
         configurationQueryOptions(scope).queryKey,
         (current: typeof configurationQuery.data) =>
-          current ? { ...current, configuration } : current,
+          current
+            ? {
+                ...current,
+                configuration,
+                feedRefreshRequired: result.feedRefreshRequired,
+              }
+            : current,
       );
 
       if (result.feedRefreshRequired) {
-        void queryClient.invalidateQueries({
+        await queryClient.invalidateQueries({
           queryKey: ["feeds", scope.shop, scope.sessionId],
+          refetchType: "all",
         });
         shopify.toast.show(
           "Configuration saved. Refresh the XML feed to apply the feed settings.",
@@ -969,6 +976,14 @@ export function ConfigurationsPanel({
           </s-paragraph>
         </div>
       </div>
+
+      {configurationQuery.data?.feedRefreshRequired ? (
+        <s-banner heading="XML feed refresh required" tone="warning">
+          Your configuration changes are saved, but the published XML still
+          uses the previous settings. Open Feeds and refresh the affected XML
+          feeds to apply them.
+        </s-banner>
+      ) : null}
 
       <TabAlertNavigator alerts={tabAlerts} />
 

@@ -44,6 +44,17 @@ enum InventorySourceMode {
   SELECTED_LOCATIONS
 }
 
+enum SupportTicketStatus {
+  PENDING
+  OPEN
+  CLOSED
+}
+
+enum SupportSenderRole {
+  MERCHANT
+  SUPPORT
+}
+
 model Store {
   id                     String               @id @default(auto()) @map("_id") @db.ObjectId
   shopDomain             String               @unique
@@ -67,9 +78,48 @@ model Store {
   refreshTokenExpiresAt  DateTime?
   tokenRefreshLockId     String?
   tokenRefreshLockedAt   DateTime?
+  supportTickets         SupportTicket[]
 
   @@index([status])
   @@index([accessStatus])
+}
+
+model SupportTicket {
+  id                  String              @id @default(auto()) @map("_id") @db.ObjectId
+  storeId             String              @db.ObjectId
+  store               Store               @relation(fields: [storeId], references: [id], onDelete: NoAction)
+  title               String
+  status              SupportTicketStatus @default(PENDING)
+  lastMessage         String?
+  lastMessageAt       DateTime?
+  messageCount        Int                 @default(0)
+  merchantUnreadCount Int                 @default(0)
+  supportUnreadCount  Int                 @default(1)
+  firstSupportReplyAt DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  closedAt            DateTime?
+  closedByRole        SupportSenderRole?
+  closedById          String?
+  messages            SupportMessage[]
+
+  @@index([storeId, updatedAt])
+  @@index([storeId, status, updatedAt])
+  @@index([status, updatedAt])
+  @@index([lastMessageAt])
+}
+
+model SupportMessage {
+  id         String            @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId   String            @db.ObjectId
+  ticket     SupportTicket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderRole SupportSenderRole
+  senderId   String?
+  senderName String?
+  message    String
+  createdAt  DateTime          @default(now())
+
+  @@index([ticketId, createdAt])
 }
 
 model StoreSubscription {

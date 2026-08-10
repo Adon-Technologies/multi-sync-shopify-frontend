@@ -312,10 +312,21 @@ export async function getConfigurationPageData(
   const migratedConfiguration =
     await ensureOptionMappings(initialConfiguration);
   const configuration = await ensureDiagnosticsRevision(migratedConfiguration);
+  const [ruleJobs, staleFeedCount] = await Promise.all([
+    getAttributeRuleJobStatuses(store.id),
+    prisma.xmlLink.count({
+      where: {
+        gcsObjectName: { not: null },
+        requiresRefresh: true,
+        storeId: store.id,
+      },
+    }),
+  ]);
 
   return {
     configuration: mapConfiguration(configuration),
-    ruleJobs: await getAttributeRuleJobStatuses(store.id),
+    feedRefreshRequired: staleFeedCount > 0,
+    ruleJobs,
   };
 }
 
@@ -332,16 +343,7 @@ export async function saveConfigurationForShop(
     select: {
       ageRulesAppliedVersion: true,
       genderRulesAppliedVersion: true,
-      showSalePriceInGoogleFeed: true,
-      useProductImageAsMainImage: true,
-      includeShippingWeightInGoogleFeed: true,
-      excludeOutOfStockItems: true,
-      ignoreShopifyInventoryInGoogleFeed: true,
-      inventorySourceMode: true,
       selectedInventoryLocationIds: true,
-      disableUtmParameters: true,
-      disablePrimaryCurrencyParameter: true,
-      checkoutLinkMode: true,
     },
   });
   const selectedInventoryLocationIds =
@@ -380,49 +382,15 @@ export async function saveConfigurationForShop(
       sizeOption: null,
     },
   });
-  const feedUrlSettingsChanged =
-    previousConfiguration === null
-      ? input.showSalePriceInGoogleFeed ||
-        input.useProductImageAsMainImage ||
-        input.includeShippingWeightInGoogleFeed ||
-        input.excludeOutOfStockItems ||
-        input.ignoreShopifyInventoryInGoogleFeed ||
-        input.inventorySourceMode !== "ALL_LOCATIONS" ||
-        input.selectedInventoryLocationIds.length > 0 ||
-        input.disableUtmParameters ||
-        input.disablePrimaryCurrencyParameter ||
-        input.checkoutLinkMode !== "DISABLED"
-      : previousConfiguration.showSalePriceInGoogleFeed !==
-          input.showSalePriceInGoogleFeed ||
-        previousConfiguration.useProductImageAsMainImage !==
-          input.useProductImageAsMainImage ||
-        previousConfiguration.includeShippingWeightInGoogleFeed !==
-          input.includeShippingWeightInGoogleFeed ||
-        previousConfiguration.excludeOutOfStockItems !==
-          input.excludeOutOfStockItems ||
-        previousConfiguration.ignoreShopifyInventoryInGoogleFeed !==
-          input.ignoreShopifyInventoryInGoogleFeed ||
-        previousConfiguration.inventorySourceMode !==
-          input.inventorySourceMode ||
-        [...previousConfiguration.selectedInventoryLocationIds]
-          .sort()
-          .join("\u0000") !==
-          [...input.selectedInventoryLocationIds].sort().join("\u0000") ||
-        previousConfiguration.disableUtmParameters !==
-          input.disableUtmParameters ||
-        previousConfiguration.disablePrimaryCurrencyParameter !==
-          input.disablePrimaryCurrencyParameter ||
-        previousConfiguration.checkoutLinkMode !== input.checkoutLinkMode;
-
-  if (feedUrlSettingsChanged) {
-    await prisma.xmlLink.updateMany({
-      where: {
-        gcsObjectName: { not: null },
-        storeId: store.id,
-      },
-      data: { requiresRefresh: true },
-    });
-  }
+  // Feed generation reads the saved configuration as a whole, so any edit
+  // invalidates every already-published XML for this store.
+  await prisma.xmlLink.updateMany({
+    where: {
+      gcsObjectName: { not: null },
+      storeId: store.id,
+    },
+    data: { requiresRefresh: true },
+  });
   const staleFeedCount = await prisma.xmlLink.count({
     where: {
       gcsObjectName: { not: null },

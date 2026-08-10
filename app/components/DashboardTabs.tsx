@@ -13,7 +13,7 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { useQuery } from "@tanstack/react-query";
 import { HiHome } from "react-icons/hi2";
 import { IoMdSettings } from "react-icons/io";
-import { MdOutlineCreditCard } from "react-icons/md";
+import { MdOutlineCreditCard, MdOutlineSupportAgent } from "react-icons/md";
 import { SiGoogleanalytics } from "react-icons/si";
 import { TbFileTypeXml } from "react-icons/tb";
 
@@ -29,13 +29,20 @@ import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
 import { FeedsPanel } from "./FeedsPanel";
 import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
+import { SupportPanel } from "./SupportPanel";
 import type {
   ProductStatistics,
   StoreInformation,
 } from "../services/dashboard.server";
+import type { AdditionalFeedsResponse } from "../routes/app.additional-feeds";
+import type { FeedDataResponse, FeedStatus } from "../routes/app.feed-data";
 import { configurationQueryOptions } from "../services/configuration-query";
 import type { DiagnosticsQueryScope } from "../services/diagnostics-query";
-import type { FeedQueryScope } from "../services/feed-query";
+import {
+  additionalFeedsQueryOptions,
+  primaryFeedQueryOptions,
+  type FeedQueryScope,
+} from "../services/feed-query";
 import type { SubscriptionView } from "../billing/types";
 import styles from "../styles/dashboard.module.css";
 
@@ -44,6 +51,7 @@ const tabs = [
   { icon: TbFileTypeXml, id: "feeds", label: "Feeds" },
   { icon: SiGoogleanalytics, id: "diagnostics", label: "Diagnostics" },
   { icon: IoMdSettings, id: "configurations", label: "Configurations" },
+  { icon: MdOutlineSupportAgent, id: "support", label: "Support" },
   { icon: MdOutlineCreditCard, id: "plan", label: "Plan" },
 ] as const;
 
@@ -77,6 +85,12 @@ interface StoreInformationProps {
   alertsEmail?: string | null;
   alertsEmailState: SectionState;
   store?: StoreInformation;
+  state: SectionState;
+}
+
+interface FeedOverviewProps {
+  additional?: AdditionalFeedsResponse;
+  primary?: FeedDataResponse;
   state: SectionState;
 }
 
@@ -262,6 +276,119 @@ function StoreInformationCard({
   );
 }
 
+function feedStatusLabel(status: FeedStatus, requiresRefresh: boolean) {
+  if (requiresRefresh) return "Refresh required";
+  if (status === "COMPLETED") return "Up to date";
+  if (status === "PROCESSING") return "Generating";
+  if (status === "QUEUED") return "Queued";
+  if (status === "FAILED") return "Failed";
+  return "Not generated";
+}
+
+function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
+  const primaryData = primary?.ok ? primary : null;
+  const additionalData = additional?.ok ? additional : null;
+  const rows = [
+    ...(primaryData?.feed
+      ? [
+          {
+            country:
+              primaryData.market?.countryName ??
+              primaryData.market?.countryCode ??
+              "Not available",
+            currency: primaryData.market?.currencyCode || "Not available",
+            id: primaryData.feed.id,
+            language:
+              primaryData.market?.languageName ??
+              primaryData.market?.locale.toUpperCase() ??
+              "Not available",
+            market: primaryData.market?.name ?? "Primary market",
+            status: feedStatusLabel(
+              primaryData.feed.status,
+              primaryData.feed.requiresRefresh,
+            ),
+            type: "Primary",
+          },
+        ]
+      : []),
+    ...(additionalData?.feeds.map(({ feed, market }) => ({
+      country: market.countryName ?? market.countryCode ?? "Not available",
+      currency: market.currencyCode || "Not available",
+      id: feed.id,
+      language: market.languageName ?? market.locale.toUpperCase(),
+      market: market.name,
+      status: feedStatusLabel(feed.status, feed.requiresRefresh),
+      type: "Additional",
+    })) ?? []),
+  ];
+
+  return (
+    <div className={styles.feedOverview}>
+      <s-section>
+        <div className={styles.feedOverviewHeader}>
+          <div>
+            <s-heading>Feeds</s-heading>
+            <s-paragraph color="subdued">
+              Generated and configured XML feeds for this store.
+            </s-paragraph>
+          </div>
+          {state === "loading" ? (
+            <InlineLoadingValue label="Loading feed count" />
+          ) : (
+            <s-badge tone={state === "error" ? "critical" : "info"}>
+              {state === "error"
+                ? "Unavailable"
+                : `${rows.length} ${rows.length === 1 ? "feed" : "feeds"}`}
+            </s-badge>
+          )}
+        </div>
+
+        {state === "loading" ? (
+          <div className={styles.feedOverviewLoading}>
+            <span />
+            <span />
+            <span />
+          </div>
+        ) : state === "error" ? (
+          <s-text color="subdued">
+            Feed details are temporarily unavailable. Use Retry above to load
+            them again.
+          </s-text>
+        ) : rows.length === 0 ? (
+          <s-text color="subdued">
+            This store does not have any configured XML feeds yet.
+          </s-text>
+        ) : (
+          <div className={styles.feedOverviewTable}>
+            <s-table>
+              <s-table-header-row>
+                <s-table-header format="base" listSlot="primary">Feed</s-table-header>
+                <s-table-header format="base" listSlot="labeled">Market</s-table-header>
+                <s-table-header format="base" listSlot="labeled">Country</s-table-header>
+                <s-table-header format="base" listSlot="labeled">Language</s-table-header>
+                <s-table-header format="base" listSlot="labeled">Currency</s-table-header>
+                <s-table-header format="base" listSlot="labeled">Status</s-table-header>
+              </s-table-header-row>
+              <s-table-body>
+                {rows.map((row) => (
+                  <s-table-row key={row.id}>
+                    <s-table-cell><strong>{row.type}</strong></s-table-cell>
+                    <s-table-cell>{row.market}</s-table-cell>
+                    <s-table-cell>{row.country}</s-table-cell>
+                    <s-table-cell>{row.language}</s-table-cell>
+                    <s-table-cell>{row.currency}</s-table-cell>
+                    <s-table-cell>{row.status}</s-table-cell>
+                  </s-table-row>
+                ))}
+              </s-table-body>
+            </s-table>
+          </div>
+        )}
+      </s-section>
+    </div>
+  );
+}
+
 function DashboardSectionResult({
   children,
   failed,
@@ -278,6 +405,7 @@ function DashboardPanelContent({
   active,
   initialSubscription,
   diagnosticsScope,
+  feedScope,
   statistics,
   storeInformation,
   isRefreshing,
@@ -298,6 +426,25 @@ function DashboardPanelContent({
       Boolean(initialSubscription?.canUseApp) &&
       Boolean(diagnosticsScope),
   });
+  const safeFeedScope = feedScope ?? {
+    locale: null,
+    sessionId: "pending-session",
+    shop: "pending-shop",
+  };
+  const primaryFeedQuery = useQuery({
+    ...primaryFeedQueryOptions(safeFeedScope),
+    enabled:
+      active &&
+      Boolean(initialSubscription?.canUseApp) &&
+      Boolean(feedScope),
+  });
+  const additionalFeedsQuery = useQuery({
+    ...additionalFeedsQueryOptions(safeFeedScope),
+    enabled:
+      active &&
+      Boolean(initialSubscription?.canUseApp) &&
+      Boolean(feedScope),
+  });
   const alertsEmailState: SectionState =
     !diagnosticsScope ||
     (configurationQuery.isPending && !configurationQuery.data)
@@ -309,6 +456,10 @@ function DashboardPanelContent({
     onRefresh();
     if (diagnosticsScope) {
       void configurationQuery.refetch();
+    }
+    if (feedScope) {
+      void primaryFeedQuery.refetch();
+      void additionalFeedsQuery.refetch();
     }
   };
   const tabAlerts: TabAlert[] = [];
@@ -347,6 +498,32 @@ function DashboardPanelContent({
       tone: "critical",
     });
   }
+  if (primaryFeedQuery.isError || additionalFeedsQuery.isError) {
+    tabAlerts.push({
+      actionLabel: "Retry",
+      actionLoading:
+        primaryFeedQuery.isFetching || additionalFeedsQuery.isFetching,
+      heading: "Feed details couldn't be loaded",
+      id: "dashboard-feed-details",
+      message:
+        primaryFeedQuery.error?.message ??
+        additionalFeedsQuery.error?.message ??
+        "Try loading the store feeds again.",
+      onAction: () => {
+        void primaryFeedQuery.refetch();
+        void additionalFeedsQuery.refetch();
+      },
+      tone: "critical",
+    });
+  }
+  const feedOverviewState: SectionState =
+    !feedScope ||
+    (primaryFeedQuery.isPending && !primaryFeedQuery.data) ||
+    (additionalFeedsQuery.isPending && !additionalFeedsQuery.data)
+      ? "loading"
+      : primaryFeedQuery.isError || additionalFeedsQuery.isError
+        ? "error"
+        : "ready";
 
   return (
     <>
@@ -479,6 +656,12 @@ function DashboardPanelContent({
                 </Await>
               </Suspense>
             </s-section>
+
+            <FeedOverviewCard
+              additional={additionalFeedsQuery.data}
+              primary={primaryFeedQuery.data}
+              state={feedOverviewState}
+            />
           </div>
         </>
       )}
@@ -716,6 +899,19 @@ export function DashboardTabs(props: DashboardTabsProps) {
               />
             ) : null}
           </BillingAccessGate>
+        </div>
+
+        <div
+          aria-labelledby="tab-support"
+          className={styles.panel}
+          hidden={activeTab !== "support"}
+          id="panel-support"
+          role="tabpanel"
+          tabIndex={0}
+        >
+          {activeTab === "support" ? (
+            <SupportPanel active scope={props.diagnosticsScope} />
+          ) : null}
         </div>
 
         <div

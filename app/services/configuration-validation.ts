@@ -71,8 +71,8 @@ const MAX_OPTION_NAME_LENGTH = 100;
 const MAX_TITLE_TERMS = 100;
 const MAX_SELECTED_INVENTORY_LOCATIONS = 250;
 
-export const DEFAULT_COLOR_OPTIONS = ["Color", "Colour"] as const;
-export const DEFAULT_SIZE_OPTIONS = ["Size"] as const;
+export const DEFAULT_COLOR_OPTIONS: readonly string[] = [];
+export const DEFAULT_SIZE_OPTIONS: readonly string[] = [];
 
 export function normalizeConfigurationText(value: string) {
   return value.normalize("NFKC").trim().replace(/\s+/g, " ");

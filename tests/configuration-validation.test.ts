@@ -24,9 +24,9 @@ test("title terms are trimmed and de-duplicated case-insensitively", () => {
   );
 });
 
-test("default Color and Size mappings use standard Shopify option names", () => {
-  assert.deepEqual([...DEFAULT_COLOR_OPTIONS], ["Color", "Colour"]);
-  assert.deepEqual([...DEFAULT_SIZE_OPTIONS], ["Size"]);
+test("Color and Size mappings are empty until the merchant selects them", () => {
+  assert.deepEqual([...DEFAULT_COLOR_OPTIONS], []);
+  assert.deepEqual([...DEFAULT_SIZE_OPTIONS], []);
 });
 
 test("option names are normalized and de-duplicated case-insensitively", () => {
@@ -62,7 +62,7 @@ test("legacy single options migrate without overriding initialized empty arrays"
   );
   assert.deepEqual(
     resolveStoredOptionNames([], null, false, DEFAULT_COLOR_OPTIONS),
-    ["Color", "Colour"],
+    [],
   );
   assert.deepEqual(
     resolveStoredOptionNames([], "Legacy", true, DEFAULT_COLOR_OPTIONS),

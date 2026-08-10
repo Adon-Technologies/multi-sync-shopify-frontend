@@ -83,18 +83,15 @@ test("Plan provides confirmed deferred cancellation and updates only subscriptio
   assert.match(modal, /isCanceling/);
 });
 
-test("scheduled cancellation offers Shopify-hosted reactivation", () => {
+test("scheduled cancellation preserves paid access without early resubscription", () => {
   const panel = readFileSync(
     new URL("../app/components/SubscriptionStatus.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(panel, /Reactivate subscription/);
-  assert.match(panel, /href=\{planSelectionUrl\}/);
-  assert.match(panel, /target="_top"/);
-  assert.match(
-    panel,
-    /query\.data\.cancelAtEndOfCycle && cycleEnd && planSelectionUrl/,
-  );
+  assert.match(panel, /Your paid access remains active/);
+  assert.match(panel, /do not need to subscribe again before then/);
+  assert.match(panel, /Access active until/);
+  assert.doesNotMatch(panel, /Reactivate subscription/);
 });
 
 test("inactive access remains navigable with one shared banner on all paid tabs", () => {

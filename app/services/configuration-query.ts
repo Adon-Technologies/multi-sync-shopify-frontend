@@ -23,7 +23,7 @@ export interface ConfigurationQueryScope {
   sessionId: string;
 }
 
-interface ConfigurationResponse {
+export interface ConfigurationResponse {
   ok: true;
   intent: "configuration";
   configuration: PublicConfiguration;

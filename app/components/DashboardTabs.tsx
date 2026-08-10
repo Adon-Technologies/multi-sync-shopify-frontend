@@ -894,6 +894,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
             {activeTab === "configurations" ? (
               <ConfigurationsPanel
                 active={canUseApp}
+                onOpenFeeds={() => void selectTab("feeds", 1)}
                 onUnsavedChangesChange={setHasUnsavedConfigurationChanges}
                 scope={props.diagnosticsScope}
               />

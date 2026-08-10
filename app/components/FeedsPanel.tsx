@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -22,6 +22,11 @@ import {
   visibleAdditionalFeedEntries,
   type AdditionalMarketFormState,
 } from "../services/additional-feed-forms";
+import {
+  configurationKeys,
+  configurationQueryOptions,
+  type ConfigurationResponse,
+} from "../services/configuration-query";
 import {
   additionalFeedsQueryOptions,
   additionalLanguagesQueryOptions,
@@ -598,6 +603,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   >([]);
   const [refreshAllRunId, setRefreshAllRunId] = useState<string | null>(null);
   const wasActive = useRef(false);
+  const previousFeedRefreshRequired = useRef<boolean | null>(null);
   const endpoint = "/app/feed-data";
   const additionalEndpoint = "/app/additional-feeds";
   const queryScope = scope ?? {
@@ -605,6 +611,37 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     sessionId: "pending",
     shop: "pending",
   };
+  const synchronizeConfigurationRefreshState = useCallback(
+    async (feedsAreFresh = false) => {
+      if (!scope) return;
+
+      const queryKey = configurationKeys.configuration(scope);
+      if (feedsAreFresh) {
+        queryClient.setQueryData<ConfigurationResponse>(queryKey, (current) =>
+          current
+            ? {
+                ...current,
+                feedRefreshRequired: false,
+              }
+            : current,
+        );
+        return;
+      }
+
+      try {
+        await queryClient.fetchQuery({
+          ...configurationQueryOptions(scope),
+          staleTime: 0,
+        });
+      } catch {
+        await queryClient.invalidateQueries({
+          queryKey,
+          refetchType: "none",
+        });
+      }
+    },
+    [queryClient, scope],
+  );
   const query = useQuery({
     ...primaryFeedQueryOptions(queryScope, endpoint),
     enabled: active && Boolean(scope),
@@ -854,6 +891,17 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     () => additionalData?.feeds ?? [],
     [additionalData],
   );
+  const feedRefreshRequired = Boolean(
+    feed?.requiresRefresh ||
+      additionalFeeds.some(({ feed: candidate }) => candidate.requiresRefresh),
+  );
+  useEffect(() => {
+    const previous = previousFeedRefreshRequired.current;
+    previousFeedRefreshRequired.current = feedRefreshRequired;
+    if (previous === true && !feedRefreshRequired) {
+      void synchronizeConfigurationRefreshState(true);
+    }
+  }, [feedRefreshRequired, synchronizeConfigurationRefreshState]);
   const visibleAdditionalFeeds = useMemo(
     () => visibleAdditionalFeedEntries(additionalFeeds, additionalForms),
     [additionalFeeds, additionalForms],
@@ -908,7 +956,11 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     }
 
     setRefreshAllRunId(null);
-    void Promise.all([refetchFeed(), refetchAdditionalFeeds()]);
+    void Promise.all([
+      refetchFeed(),
+      refetchAdditionalFeeds(),
+      synchronizeConfigurationRefreshState(result.status === "SUCCESS"),
+    ]);
 
     if (result.status === "SUCCESS") {
       shopify.toast.show(
@@ -930,6 +982,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   }, [
     refreshAllRunId,
     refreshAllStatusQuery.data,
+    synchronizeConfigurationRefreshState,
     refetchAdditionalFeeds,
     refetchFeed,
     shopify,

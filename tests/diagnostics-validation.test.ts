@@ -321,11 +321,19 @@ test("exclusion priority suppresses regular warning classification", () => {
 });
 
 test("category counts remain mutually exclusive and sum to all products", () => {
+  const standardMappings = {
+    ...noExclusions,
+    colorOptions: ["Color"],
+    sizeOptions: ["Size"],
+  };
   const diagnostics = [
-    validateDiagnosticProduct(product({ id: "1" })),
-    validateDiagnosticProduct(product({ id: "2", options: [] })),
+    validateDiagnosticProduct(product({ id: "1" }), standardMappings),
+    validateDiagnosticProduct(
+      product({ id: "2", options: [] }),
+      standardMappings,
+    ),
     validateDiagnosticProduct(product({ id: "3", title: "Gift card" }), {
-      ...noExclusions,
+      ...standardMappings,
       excludedTitleTerms: ["gift card"],
     }),
   ];

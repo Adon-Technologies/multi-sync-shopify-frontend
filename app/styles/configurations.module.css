@@ -517,3 +517,26 @@
     flex-direction: column;
   }
 }
+.xmlRefreshWarningContent {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.xmlRefreshWarningAction {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+@media (max-width: 640px) {
+  .xmlRefreshWarningContent {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .xmlRefreshWarningAction {
+    align-self: flex-end;
+  }
+}

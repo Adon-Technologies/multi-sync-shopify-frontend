@@ -138,9 +138,16 @@ test("a saved configuration that made XML stale shows its warning at the top", (
   assert.ok(headerStart >= 0);
   assert.ok(warningStart > headerStart && warningStart < cardsStart);
   assert.match(panelSource, /configurationQuery\.data\?\.feedRefreshRequired/);
+  assert.match(panelSource, /refetchOnMount: "always"/);
   assert.match(
     panelSource,
     /published XML still[\s\S]*uses the previous settings/,
   );
+  assert.match(panelSource, /onClick=\{onOpenFeeds\}/);
+  assert.match(panelSource, />\s*Open Feeds\s*<\/s-button>/);
+  assert.match(panelSource, /styles\.xmlRefreshWarningContent/);
+  assert.match(panelSource, /styles\.xmlRefreshWarningAction/);
+  assert.match(panelSource, /variant="secondary"/);
+  assert.match(panelStyles, /\.xmlRefreshWarningAction\s*\{[\s\S]*margin-inline-start:\s*auto/);
   assert.match(panelSource, /refetchType: "all"/);
 });

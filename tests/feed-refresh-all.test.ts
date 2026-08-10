@@ -42,7 +42,16 @@ test("the refresh-all action uses the durable backend batch endpoint", () => {
   assert.match(panelSource, /setRefreshAllRunId\(result\.runId\)/);
   assert.match(
     panelSource,
-    /void Promise\.all\(\[refetchFeed\(\), refetchAdditionalFeeds\(\)\]\)/,
+    /void Promise\.all\(\[[\s\S]*refetchFeed\(\)[\s\S]*refetchAdditionalFeeds\(\)[\s\S]*synchronizeConfigurationRefreshState\(result\.status === "SUCCESS"\)/,
+  );
+  assert.match(panelSource, /configurationKeys\.configuration\(scope\)/);
+  assert.match(
+    panelSource,
+    /queryClient\.setQueryData<ConfigurationResponse>[\s\S]*feedRefreshRequired: false/,
+  );
+  assert.match(
+    panelSource,
+    /synchronizeConfigurationRefreshState\(true\)/,
   );
 });
 

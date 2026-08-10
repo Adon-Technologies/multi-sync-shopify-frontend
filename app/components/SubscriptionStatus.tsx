@@ -321,9 +321,10 @@ export function SubscriptionPanel({
         </dl>
         {query.data.cancelAtEndOfCycle ? (
           <s-banner heading="Cancellation scheduled" tone="warning">
-            Your plan remains active
+            Your paid access remains active
             {cycleEnd ? ` until ${formatSubscriptionDate(cycleEnd)}` : ""}. You
-            will not be charged again.
+            do not need to subscribe again before then. Billing will not renew
+            automatically.
           </s-banner>
         ) : null}
         {cancellation.isError ? (
@@ -341,17 +342,9 @@ export function SubscriptionPanel({
           >
             Cancel subscription
           </s-button>
-        ) : query.data.cancelAtEndOfCycle && cycleEnd && planSelectionUrl ? (
-          <s-button
-            href={planSelectionUrl}
-            target="_top"
-            variant="primary"
-          >
-            Reactivate subscription
-          </s-button>
         ) : query.data.cancelAtEndOfCycle && cycleEnd ? (
           <s-button disabled variant="secondary">
-            Cancels on {formatSubscriptionDate(cycleEnd)}
+            Access active until {formatSubscriptionDate(cycleEnd)}
           </s-button>
         ) : null}
       </s-section>

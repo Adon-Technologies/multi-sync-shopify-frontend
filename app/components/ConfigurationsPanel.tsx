@@ -34,6 +34,7 @@ import styles from "../styles/configurations.module.css";
 
 interface ConfigurationsPanelProps {
   active: boolean;
+  onOpenFeeds: () => void;
   onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
   scope: ConfigurationQueryScope | null;
 }
@@ -757,6 +758,7 @@ function TitleTermsSelector({
 
 export function ConfigurationsPanel({
   active,
+  onOpenFeeds,
   onUnsavedChangesChange,
   scope,
 }: ConfigurationsPanelProps) {
@@ -778,6 +780,7 @@ export function ConfigurationsPanel({
   const configurationQuery = useQuery({
     ...configurationQueryOptions(queryScope),
     enabled: Boolean(scope) && active,
+    refetchOnMount: "always",
   });
   const locationsQuery = useQuery({
     ...shopifyLocationsQueryOptions(queryScope),
@@ -979,9 +982,18 @@ export function ConfigurationsPanel({
 
       {configurationQuery.data?.feedRefreshRequired ? (
         <s-banner heading="XML feed refresh required" tone="warning">
-          Your configuration changes are saved, but the published XML still
-          uses the previous settings. Open Feeds and refresh the affected XML
-          feeds to apply them.
+          <div className={styles.xmlRefreshWarningContent}>
+            <s-paragraph>
+              Your configuration changes are saved, but the published XML still
+              uses the previous settings. Open Feeds and refresh the affected
+              XML feeds to apply them.
+            </s-paragraph>
+            <div className={styles.xmlRefreshWarningAction}>
+              <s-button onClick={onOpenFeeds} variant="secondary">
+                Open Feeds
+              </s-button>
+            </div>
+          </div>
         </s-banner>
       ) : null}
 

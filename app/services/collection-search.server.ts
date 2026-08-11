@@ -6,6 +6,7 @@ import {
   queryShopifyAdmin,
   type AdminGraphQLClient,
 } from "./shopify-admin.server";
+import { buildCollectionSearch } from "./collection-search";
 
 const COLLECTION_SEARCH_LIMIT = 20;
 const COLLECTION_LOOKUP_LIMIT = 250;
@@ -63,15 +64,6 @@ export class CollectionVerificationError extends Error {
     );
     this.name = "CollectionVerificationError";
   }
-}
-
-function buildCollectionSearch(search: string) {
-  if (!search) {
-    return null;
-  }
-
-  const escaped = search.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  return `title:"${escaped}*"`;
 }
 
 export async function searchShopCollections(

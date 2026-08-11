@@ -191,9 +191,7 @@ function RuleCollectionPicker({
   }, [cursor, debouncedSearch, query.data]);
 
   const selectedIds = new Set(selected.map(({ id }) => id));
-  const visible = results.filter(
-    ({ id }) => !selectedIds.has(id) && !unavailableCollectionIds.has(id),
-  );
+  const visible = results.filter(({ id }) => !selectedIds.has(id));
 
   return (
     <div className={styles.ruleCollectionPicker}>
@@ -292,12 +290,24 @@ function RuleCollectionPicker({
                 <s-stack direction="block" gap="small-100">
                   {visible.map((collection) => (
                     <s-button
+                      disabled={
+                        unavailableCollectionIds.has(collection.id)
+                          ? true
+                          : undefined
+                      }
                       icon="collection"
                       key={collection.id}
-                      onClick={() => onChange([...selected, collection])}
+                      onClick={() => {
+                        if (!unavailableCollectionIds.has(collection.id)) {
+                          onChange([...selected, collection]);
+                        }
+                      }}
                       variant="tertiary"
                     >
                       {collection.title}
+                      {unavailableCollectionIds.has(collection.id)
+                        ? " — Used in another rule"
+                        : ""}
                     </s-button>
                   ))}
                 </s-stack>

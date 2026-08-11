@@ -10,6 +10,10 @@ const panelStyles = readFileSync(
   new URL("../app/styles/configurations.module.css", import.meta.url),
   "utf8",
 );
+const attributeRulesSource = readFileSync(
+  new URL("../app/components/AttributeRulesCard.tsx", import.meta.url),
+  "utf8",
+);
 
 test("the compact Attributes and Exclusions editor exposes four accessible View actions", () => {
   const labels = [
@@ -126,6 +130,14 @@ test("Gender and Age rule dialogs keep one full-dialog scrollbar", () => {
   );
   const rulesList = panelStyles.match(/\.rulesList\s*\{([^}]*)\}/)?.[1] ?? "";
   assert.doesNotMatch(rulesList, /overflow-y|max-height/);
+});
+
+test("collection rule search explains matches already assigned to another rule", () => {
+  assert.match(attributeRulesSource, /Used in another rule/);
+  assert.match(
+    attributeRulesSource,
+    /disabled=\{[\s\S]*unavailableCollectionIds\.has\(collection\.id\)/,
+  );
 });
 
 test("a saved configuration that made XML stale shows its warning at the top", () => {

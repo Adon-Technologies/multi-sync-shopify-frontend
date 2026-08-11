@@ -8,6 +8,8 @@ import { MongoDBSessionStorage } from "@shopify/shopify-app-session-storage-mong
 import { redirect as reactRouterRedirect } from "react-router";
 
 import { cleanPlanSelectionReturnPath } from "./billing/types";
+import { ensureConfigurationForSession } from "./services/configuration.server";
+import { requestPrimaryFeedInstallBootstrap } from "./services/feed-backend.server";
 import { upsertInstalledStore } from "./services/store.server";
 import { assertStoreAccessAllowed } from "./services/store-access.server";
 import { getSubscriptionForSession } from "./services/subscription.server";
@@ -54,16 +56,32 @@ const shopify = shopifyApp({
   sessionStorage: mongoSessionStorage,
   distribution: AppDistribution.AppStore,
   hooks: {
-    afterAuth: async ({ session }) => {
+    afterAuth: async ({ admin, session }) => {
       await upsertInstalledStore(session, { allowReinstall: true });
-      await getSubscriptionForSession(session, { force: true }).catch(
-        (error) => {
-          console.error("[billing] post-authentication sync failed", {
-            category: error instanceof Error ? error.name : "UNKNOWN",
-            shop: session.shop,
-          });
-        },
-      );
+      let configurationReady = false;
+      try {
+        await ensureConfigurationForSession(admin, session);
+        configurationReady = true;
+      } catch (error) {
+        console.error("[configuration] post-authentication setup failed", {
+          category: error instanceof Error ? error.name : "UNKNOWN",
+          shop: session.shop,
+        });
+      }
+
+      try {
+        const subscription = await getSubscriptionForSession(session, {
+          force: true,
+        });
+        if (configurationReady && subscription.canUseApp) {
+          await requestPrimaryFeedInstallBootstrap(session);
+        }
+      } catch (error) {
+        console.error("[feeds] post-authentication bootstrap failed", {
+          category: error instanceof Error ? error.name : "UNKNOWN",
+          shop: session.shop,
+        });
+      }
     },
   },
   future: {

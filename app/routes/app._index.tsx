@@ -19,6 +19,8 @@ import {
   type ProductStatistics,
   type StoreInformation,
 } from "../services/dashboard.server";
+import { ensureConfigurationForSession } from "../services/configuration.server";
+import { requestPrimaryFeedInstallBootstrap } from "../services/feed-backend.server";
 import {
   getPlanSelectionForSession,
   getSubscriptionForSession,
@@ -55,6 +57,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
   if (returnedFromPlanSelection) {
     throw redirect(cleanPlanSelectionReturnPath(request.url));
+  }
+  if (subscription?.canUseApp) {
+    try {
+      await ensureConfigurationForSession(admin, session);
+      await requestPrimaryFeedInstallBootstrap(session);
+    } catch (error) {
+      console.error("[feeds] install setup retry failed", {
+        category: error instanceof Error ? error.name : "UNKNOWN",
+        shop: session.shop,
+      });
+    }
   }
   const initialTab = parseDashboardTab(requestUrl.searchParams.get("tab"));
   const planSelection = await getPlanSelectionForSession(session).catch(

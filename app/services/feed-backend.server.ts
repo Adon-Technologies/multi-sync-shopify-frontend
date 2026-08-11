@@ -108,6 +108,7 @@ export async function requestFeedBackend<TResponse>(
 
 export async function requestStoreUninstallCleanup(
   shop: string,
+  uninstalledAt: Date,
   accessToken?: string,
 ) {
   const shopDomain = shop.normalize("NFKC").trim().toLowerCase();
@@ -124,6 +125,7 @@ export async function requestStoreUninstallCleanup(
   const method = "POST";
   const pathname = "/api/stores/uninstall-cleanup";
   const timestamp = Date.now().toString();
+  const body = JSON.stringify({ uninstalledAt: uninstalledAt.toISOString() });
   let response: Response;
 
   try {
@@ -131,16 +133,18 @@ export async function requestStoreUninstallCleanup(
       method,
       headers: {
         Accept: "application/json",
+        "Content-Type": "application/json",
         "x-multi-sync-shop": shopDomain,
         "x-multi-sync-signature": signature(
           secret,
           timestamp,
           method,
           pathname,
-          "",
+          body,
         ),
         "x-multi-sync-timestamp": timestamp,
       },
+      body,
     });
   } catch {
     throw new FeedBackendError(
@@ -160,4 +164,14 @@ export async function requestStoreUninstallCleanup(
   }
 
   return payload;
+}
+
+export function requestPrimaryFeedInstallBootstrap<TResponse = unknown>(
+  session: FeedSession,
+) {
+  return requestFeedBackend<TResponse>(
+    session,
+    "POST",
+    "/api/feeds/primary/bootstrap",
+  );
 }

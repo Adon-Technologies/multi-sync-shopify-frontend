@@ -28,6 +28,7 @@ import {
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
 import { FeedsPanel } from "./FeedsPanel";
+import { FeedStatusBadge } from "./FeedStatusBadge";
 import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 import { SupportPanel } from "./SupportPanel";
 import type {
@@ -35,7 +36,7 @@ import type {
   StoreInformation,
 } from "../services/dashboard.server";
 import type { AdditionalFeedsResponse } from "../routes/app.additional-feeds";
-import type { FeedDataResponse, FeedStatus } from "../routes/app.feed-data";
+import type { FeedDataResponse } from "../routes/app.feed-data";
 import { configurationQueryOptions } from "../services/configuration-query";
 import type { DiagnosticsQueryScope } from "../services/diagnostics-query";
 import {
@@ -276,15 +277,6 @@ function StoreInformationCard({
   );
 }
 
-function feedStatusLabel(status: FeedStatus, requiresRefresh: boolean) {
-  if (requiresRefresh) return "Refresh required";
-  if (status === "COMPLETED") return "Up to date";
-  if (status === "PROCESSING") return "Generating";
-  if (status === "QUEUED") return "Queued";
-  if (status === "FAILED") return "Failed";
-  return "Not generated";
-}
-
 function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
   const primaryData = primary?.ok ? primary : null;
   const additionalData = additional?.ok ? additional : null;
@@ -303,10 +295,8 @@ function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
               primaryData.market?.locale.toUpperCase() ??
               "Not available",
             market: primaryData.market?.name ?? "Primary market",
-            status: feedStatusLabel(
-              primaryData.feed.status,
-              primaryData.feed.requiresRefresh,
-            ),
+            requiresRefresh: primaryData.feed.requiresRefresh,
+            status: primaryData.feed.status,
             type: "Primary",
           },
         ]
@@ -317,7 +307,8 @@ function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
       id: feed.id,
       language: market.languageName ?? market.locale.toUpperCase(),
       market: market.name,
-      status: feedStatusLabel(feed.status, feed.requiresRefresh),
+      requiresRefresh: feed.requiresRefresh,
+      status: feed.status,
       type: "Additional",
     })) ?? []),
   ];
@@ -377,7 +368,12 @@ function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
                     <s-table-cell>{row.country}</s-table-cell>
                     <s-table-cell>{row.language}</s-table-cell>
                     <s-table-cell>{row.currency}</s-table-cell>
-                    <s-table-cell>{row.status}</s-table-cell>
+                    <s-table-cell>
+                      <FeedStatusBadge
+                        requiresRefresh={row.requiresRefresh}
+                        status={row.status}
+                      />
+                    </s-table-cell>
                   </s-table-row>
                 ))}
               </s-table-body>

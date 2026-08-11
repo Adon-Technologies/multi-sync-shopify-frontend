@@ -255,7 +255,7 @@ async function ensureDiagnosticsRevision(
   });
 }
 
-export async function getConfigurationPageData(
+export async function ensureConfigurationForSession(
   admin: AdminGraphQLClient,
   session: { accessToken?: string; shop: string },
 ) {
@@ -264,54 +264,65 @@ export async function getConfigurationPageData(
   const existingConfiguration = await prisma.configuration.findUnique({
     where: { storeId: store.id },
   });
-  let bootstrap: ConfigurationBootstrapQuery | null = null;
-
-  try {
-    bootstrap = await queryShopifyAdmin<ConfigurationBootstrapQuery>(
-      admin,
-      CONFIGURATION_BOOTSTRAP_QUERY,
-    );
-  } catch (error) {
-    if (!existingConfiguration) {
-      throw error;
-    }
+  if (existingConfiguration) {
+    const migratedConfiguration =
+      await ensureOptionMappings(existingConfiguration);
+    return {
+      configuration:
+        await ensureDiagnosticsRevision(migratedConfiguration),
+      store,
+    };
   }
 
-  const initialConfiguration =
-    existingConfiguration ??
-    (await prisma.configuration.upsert({
-      where: { storeId: store.id },
-      update: {},
-      create: {
-        alertsEmail:
-          bootstrap?.shop.contactEmail ?? bootstrap?.shop.email ?? "",
-        countryCode:
-          bootstrap?.shop.billingAddress.countryCodeV2?.toUpperCase() ?? "",
-        colorOptions: [...DEFAULT_COLOR_OPTIONS],
-        diagnosticsRevision: createDiagnosticsConfigurationRevision({
-          colorOptions: DEFAULT_COLOR_OPTIONS,
-          sizeOptions: DEFAULT_SIZE_OPTIONS,
-        }),
-        excludedCollections: [] as Prisma.InputJsonValue,
-        excludedTitleTerms: [],
-        optionMappingsInitialized: true,
-        showSalePriceInGoogleFeed: false,
-        useProductImageAsMainImage: false,
-        includeShippingWeightInGoogleFeed: false,
-        excludeOutOfStockItems: false,
-        ignoreShopifyInventoryInGoogleFeed: false,
-        inventorySourceMode: "ALL_LOCATIONS",
-        selectedInventoryLocationIds: [],
-        disableUtmParameters: false,
-        disablePrimaryCurrencyParameter: false,
-        checkoutLinkMode: "DISABLED",
-        sizeOptions: [...DEFAULT_SIZE_OPTIONS],
-        storeId: store.id,
-      },
-    }));
+  const bootstrap = await queryShopifyAdmin<ConfigurationBootstrapQuery>(
+    admin,
+    CONFIGURATION_BOOTSTRAP_QUERY,
+  );
+
+  const initialConfiguration = await prisma.configuration.upsert({
+    where: { storeId: store.id },
+    update: {},
+    create: {
+      alertsEmail: bootstrap.shop.contactEmail ?? bootstrap.shop.email ?? "",
+      countryCode:
+        bootstrap.shop.billingAddress.countryCodeV2?.toUpperCase() ?? "",
+      colorOptions: [...DEFAULT_COLOR_OPTIONS],
+      diagnosticsRevision: createDiagnosticsConfigurationRevision({
+        colorOptions: DEFAULT_COLOR_OPTIONS,
+        sizeOptions: DEFAULT_SIZE_OPTIONS,
+      }),
+      excludedCollections: [] as Prisma.InputJsonValue,
+      excludedTitleTerms: [],
+      optionMappingsInitialized: true,
+      showSalePriceInGoogleFeed: false,
+      useProductImageAsMainImage: false,
+      includeShippingWeightInGoogleFeed: false,
+      excludeOutOfStockItems: false,
+      ignoreShopifyInventoryInGoogleFeed: false,
+      inventorySourceMode: "ALL_LOCATIONS",
+      selectedInventoryLocationIds: [],
+      disableUtmParameters: false,
+      disablePrimaryCurrencyParameter: false,
+      checkoutLinkMode: "DISABLED",
+      sizeOptions: [...DEFAULT_SIZE_OPTIONS],
+      storeId: store.id,
+    },
+  });
   const migratedConfiguration =
     await ensureOptionMappings(initialConfiguration);
   const configuration = await ensureDiagnosticsRevision(migratedConfiguration);
+
+  return { configuration, store };
+}
+
+export async function getConfigurationPageData(
+  admin: AdminGraphQLClient,
+  session: { accessToken?: string; shop: string },
+) {
+  const { configuration, store } = await ensureConfigurationForSession(
+    admin,
+    session,
+  );
   const [ruleJobs, staleFeedCount] = await Promise.all([
     getAttributeRuleJobStatuses(store.id),
     prisma.xmlLink.count({

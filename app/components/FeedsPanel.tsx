@@ -45,6 +45,7 @@ import { useHydrated } from "../hooks/useHydrated";
 import { shouldPollPrimaryFeed } from "../services/feed-generation-state";
 import styles from "../styles/feeds.module.css";
 import { AutomaticRefreshCard } from "./AutomaticRefreshCard";
+import { FeedStatusBadge } from "./FeedStatusBadge";
 import {
   TabAlertNavigator,
   type TabAlert,
@@ -111,44 +112,6 @@ function formatRefreshDate(value: string, locale: string | null) {
       timeStyle: "short",
     }).format(new Date(value));
   }
-}
-
-function statusLabel(status: FeedStatus) {
-  switch (status) {
-    case "QUEUED":
-      return "Queued";
-    case "PROCESSING":
-      return "Generating";
-    case "COMPLETED":
-      return "Up to date";
-    case "FAILED":
-      return "Failed";
-    default:
-      return "Not generated";
-  }
-}
-
-function StatusBadge({
-  requiresRefresh,
-  status,
-}: {
-  requiresRefresh: boolean;
-  status: FeedStatus;
-}) {
-  if (status === "COMPLETED" && requiresRefresh) {
-    return <s-badge tone="warning">Refresh required</s-badge>;
-  }
-
-  const tone =
-    status === "COMPLETED"
-      ? "success"
-      : status === "FAILED"
-        ? "critical"
-        : status === "QUEUED" || status === "PROCESSING"
-          ? "info"
-          : "neutral";
-
-  return <s-badge tone={tone}>{statusLabel(status)}</s-badge>;
 }
 
 function LoadingRow() {
@@ -1237,7 +1200,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                     </span>
                     {feed ? (
                       <span className={styles.statusStack}>
-                        <StatusBadge
+                        <FeedStatusBadge
                           requiresRefresh={feed.requiresRefresh}
                           status={feed.status}
                         />
@@ -1498,7 +1461,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                           Additional feed
                         </span>
                         <span className={styles.statusStack}>
-                          <StatusBadge
+                          <FeedStatusBadge
                             requiresRefresh={candidate.requiresRefresh}
                             status={candidate.status}
                           />

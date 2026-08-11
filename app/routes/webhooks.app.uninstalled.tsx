@@ -5,18 +5,41 @@ import {
   requestStoreUninstallCleanup,
 } from "../services/feed-backend.server";
 import { deleteShopifySessionsForShop } from "../services/shopify-session-cleanup";
-import { markStoreUninstalled } from "../services/store.server";
+import {
+  getCurrentStoreUninstallMarker,
+  markStoreUninstalled,
+} from "../services/store.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, session, topic } = await authenticate.webhook(request);
+  const triggeredAtHeader = request.headers.get("x-shopify-triggered-at");
+  const triggeredAtValue = triggeredAtHeader
+    ? new Date(triggeredAtHeader)
+    : new Date();
+  const uninstalledAt = Number.isFinite(triggeredAtValue.getTime())
+    ? triggeredAtValue
+    : new Date();
 
   console.log(`Received ${topic} webhook for ${shop}`);
 
   // authenticate.webhook verifies Shopify's HMAC before this handler runs.
-  // The backend first disables background work, removes every GCS feed object
-  // for this shop, and deletes only the explicitly scoped store data.
+  // Mark the exact Shopify uninstall event before cleanup. A delayed webhook
+  // from an older installation cannot overwrite a newer reinstall because the
+  // update is conditional on installedAt being no newer than this event.
+  const marked = await markStoreUninstalled(shop, uninstalledAt);
+  if (marked.count === 0) {
+    console.info(`Ignored stale ${topic} webhook for ${shop}`);
+    return new Response();
+  }
+
+  // The backend removes every GCS feed object and only the explicitly scoped
+  // store data while this uninstall marker is still current.
   try {
-    await requestStoreUninstallCleanup(shop, session?.accessToken);
+    await requestStoreUninstallCleanup(
+      shop,
+      uninstalledAt,
+      session?.accessToken,
+    );
   } catch (error) {
     console.error(`Uninstall cleanup failed for ${shop}`, {
       category: error instanceof Error ? error.name : "UNKNOWN",
@@ -30,12 +53,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  // Keep the Store record for lifecycle history, but invalidate its tokens.
-  await markStoreUninstalled(shop);
-
-  // Delete every offline and online session for this shop. This remains safe
-  // when Shopify retries the webhook after the sessions were already removed.
-  await deleteShopifySessionsForShop(shop, sessionStorage);
+  // Do not delete sessions created by a reinstall that completed while the
+  // backend cleanup was running.
+  const currentMarker = await getCurrentStoreUninstallMarker(shop);
+  if (
+    currentMarker?.uninstalledAt?.getTime() === uninstalledAt.getTime()
+  ) {
+    await deleteShopifySessionsForShop(shop, sessionStorage);
+  }
 
   return new Response();
 };

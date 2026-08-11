@@ -74,7 +74,30 @@ export async function markStoreUninstalled(
   uninstalledAt = new Date(),
 ) {
   return prisma.store.updateMany({
-    where: { shopDomain: normalizeShopDomain(shop) },
+    where: {
+      shopDomain: normalizeShopDomain(shop),
+      OR: [
+        {
+          installedAt: { lte: uninstalledAt },
+          status: "INSTALLED",
+        },
+        {
+          status: "UNINSTALLED",
+          uninstalledAt: { lte: uninstalledAt },
+        },
+      ],
+    },
     data: buildUninstalledStoreUpdate(uninstalledAt),
+  });
+}
+
+export async function getCurrentStoreUninstallMarker(shop: string) {
+  return prisma.store.findFirst({
+    where: {
+      shopDomain: normalizeShopDomain(shop),
+      status: "UNINSTALLED",
+      uninstalledAt: { not: null },
+    },
+    select: { uninstalledAt: true },
   });
 }

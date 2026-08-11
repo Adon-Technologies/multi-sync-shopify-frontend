@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import {
   FeedBackendError,
+  requestPrimaryFeedInstallBootstrap,
   requestFeedBackend,
 } from "../services/feed-backend.server";
 import { getStoredPrimaryFeedMetadata } from "../services/feed-metadata.server";
@@ -97,11 +98,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticateSubscribedAdmin(request);
 
   try {
-    const result = await requestFeedBackend<FeedDataResponse>(
+    let result = await requestFeedBackend<FeedDataResponse>(
       session,
       "GET",
       "/api/feeds/primary",
     );
+    // Recover automatically if an uninstall cleanup overlapped a very fast
+    // reinstall and reset the persistent Primary record after afterAuth ran.
+    if (result.ok && result.feed?.status === "NOT_GENERATED") {
+      result = await requestPrimaryFeedInstallBootstrap<FeedDataResponse>(
+        session,
+      );
+    }
     return Response.json(withBackendAvailability(result));
   } catch (error) {
     if (isBackendUnavailable(error)) {

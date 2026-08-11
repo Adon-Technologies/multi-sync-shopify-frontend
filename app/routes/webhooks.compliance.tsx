@@ -6,7 +6,7 @@ import {
   requestStoreUninstallCleanup,
 } from "../services/feed-backend.server";
 import { deleteShopifySessionsForShop } from "../services/shopify-session-cleanup";
-import { markStoreUninstalled } from "../services/store.server";
+import { getCurrentStoreUninstallMarker } from "../services/store.server";
 
 /**
  * Multi Sync doesn't request customer or order scopes and doesn't persist
@@ -27,9 +27,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    await requestStoreUninstallCleanup(shop);
-    await markStoreUninstalled(shop);
-    await deleteShopifySessionsForShop(shop, sessionStorage);
+    const marker = await getCurrentStoreUninstallMarker(shop);
+    if (marker?.uninstalledAt) {
+      await requestStoreUninstallCleanup(shop, marker.uninstalledAt);
+      await deleteShopifySessionsForShop(shop, sessionStorage);
+    }
   } catch (error) {
     console.error("[privacy] shop redaction cleanup failed", {
       category: error instanceof Error ? error.name : "UNKNOWN",

@@ -22,6 +22,12 @@ test("Dashboard shows feed count and each Market detail requested", () => {
   assert.match(dashboardSource, /additionalData\?\.feeds\.map/);
 });
 
+test("Dashboard renders each feed status with the shared colored badge", () => {
+  assert.match(dashboardSource, /<FeedStatusBadge/);
+  assert.match(dashboardSource, /requiresRefresh=\{row\.requiresRefresh\}/);
+  assert.match(dashboardSource, /status=\{row\.status\}/);
+});
+
 test("Dashboard refresh also refreshes feed inventory without recreating QueryClient", () => {
   assert.match(dashboardSource, /void primaryFeedQuery\.refetch\(\)/);
   assert.match(dashboardSource, /void additionalFeedsQuery\.refetch\(\)/);

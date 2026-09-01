@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { flushSync } from "react-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAppBridge } from "@shopify/app-bridge-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CiWarning } from "react-icons/ci";
 import { IoCheckmarkDoneOutline } from "react-icons/io5";
 import { VscCircleSlash, VscError } from "react-icons/vsc";
@@ -30,16 +37,41 @@ import {
 } from "../services/diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "../services/diagnostics-search";
 import {
+  DEFAULT_DIAGNOSTICS_PAGE_SIZE,
+  DIAGNOSTICS_PAGE_SIZES,
+  type DiagnosticsPageSize,
+} from "../services/diagnostics-pagination";
+import {
   DEFAULT_DIAGNOSTICS_SORT,
   normalizeDiagnosticsSort,
   type DiagnosticsSort,
 } from "../services/diagnostics-sort";
 import type { DiagnosticProduct } from "../services/diagnostics-validation";
-import styles from "../styles/diagnostics.module.css";
 import {
-  TabAlertNavigator,
-  type TabAlert,
-} from "./TabAlertNavigator";
+  createDiagnosticsBulkSelectionScope,
+  diagnosticsBulkSelectionCount,
+  diagnosticsPageSelectionState,
+  emptyDiagnosticsBulkSelection,
+  isDiagnosticsProductSelected,
+  MAX_CUSTOM_LABEL_LENGTH,
+  MAX_PRODUCT_TYPE_LENGTH,
+  selectAllMatchingDiagnosticsProducts,
+  serializeDiagnosticsBulkSelection,
+  toggleDiagnosticsPage,
+  toggleDiagnosticsProduct,
+  undoAllMatchingDiagnosticsProducts,
+  type DiagnosticsBulkEditRequest,
+  type DiagnosticsBulkEditJob,
+  type DiagnosticsBulkEdit,
+  type DiagnosticsBulkSelection,
+  type DiagnosticsBulkSelectionScope,
+} from "../services/diagnostics-bulk-edit";
+import {
+  diagnosticsBulkEditStatusQueryOptions,
+  requestDiagnosticsBulkEdit,
+} from "../services/diagnostics-bulk-edit-query";
+import styles from "../styles/diagnostics.module.css";
+import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 
 const diagnosticTabs: Array<{
   id: DiagnosticsTab;
@@ -70,6 +102,34 @@ const FILTER_POPOVER_ID = "diagnostics-product-filter-popover";
 const FILTER_FIELD_POPOVER_ID = "diagnostics-filter-field-popover";
 const FILTER_VALUE_POPOVER_ID = "diagnostics-filter-value-popover";
 const SORT_POPOVER_ID = "diagnostics-sort-popover";
+const BULK_EDIT_POPOVER_ID = "diagnostics-bulk-edit-popover";
+const PAGE_SIZE_POPOVER_ID = "diagnostics-page-size-popover";
+const BULK_EDIT_MODAL_ID = "diagnostics-bulk-edit-modal";
+const CLEAR_BULK_EDIT_MODAL_ID = "diagnostics-clear-bulk-edit-confirmation";
+
+type DiagnosticsBulkEditTarget =
+  | { kind: "productType" }
+  | { index: 0 | 1 | 2 | 3 | 4; kind: "customLabel" };
+
+const customLabelTargets: Array<{
+  index: 0 | 1 | 2 | 3 | 4;
+  kind: "customLabel";
+}> = [0, 1, 2, 3, 4].map((index) => ({
+  index: index as 0 | 1 | 2 | 3 | 4,
+  kind: "customLabel",
+}));
+
+function bulkEditFieldName(target: DiagnosticsBulkEditTarget) {
+  return target.kind === "productType"
+    ? "product type"
+    : `custom_label_${target.index}`;
+}
+
+function bulkEditFieldLabel(target: DiagnosticsBulkEditTarget) {
+  return target.kind === "productType"
+    ? "Product type"
+    : `Custom label ${target.index}`;
+}
 
 const diagnosticsFilterFieldOptions = diagnosticsFilterFields.map((field) => ({
   label: diagnosticsFilterLabels[field],
@@ -103,18 +163,27 @@ interface DiagnosticsRefreshFallback {
 }
 
 interface DiagnosticsTableProps {
+  activeJob: DiagnosticsBulkEditJob | null;
+  bulkSelection: DiagnosticsBulkSelection;
   canGoPrevious: boolean;
   error: string | null;
   isLoading: boolean;
   isRefreshing: boolean;
+  pageSize: DiagnosticsPageSize;
   pageIndex: number;
   pageInfo?: DiagnosticsPageInfo;
   products: DiagnosticProduct[];
   searchTerm: string;
   totalProducts?: number;
+  onOpenBulkEdit: (target: DiagnosticsBulkEditTarget) => void;
   onNext: () => void;
+  onPageSizeChange: (pageSize: DiagnosticsPageSize) => void;
   onPrevious: () => void;
   onRefresh: () => void;
+  onSelectAllMatching: () => void;
+  onTogglePage: (checked: boolean) => void;
+  onToggleProduct: (productId: string, checked: boolean) => void;
+  onUndoAllMatching: () => void;
 }
 
 function PolarisOptionPicker({
@@ -158,9 +227,7 @@ function PolarisOptionPicker({
         <span className={styles.pickerTriggerContent}>
           <span className={styles.pickerTriggerLabel}>
             {showSortIcon ? <s-icon type="sort" /> : null}
-            <s-text color={value ? "base" : "subdued"}>
-              {selectedLabel}
-            </s-text>
+            <s-text color={value ? "base" : "subdued"}>{selectedLabel}</s-text>
           </span>
           <s-icon color="subdued" type="chevron-down" />
         </span>
@@ -191,6 +258,10 @@ function PolarisOptionPicker({
 
 function formatCount(value: number) {
   return new Intl.NumberFormat().format(value);
+}
+
+function isActiveBulkEditJob(job: DiagnosticsBulkEditJob | null | undefined) {
+  return job?.status === "QUEUED" || job?.status === "PROCESSING";
 }
 
 function BadgeValue({
@@ -303,6 +374,9 @@ function SkeletonRows() {
           <td>
             <span className={styles.skeletonCategory} />
           </td>
+          <td>
+            <span className={styles.skeletonCategory} />
+          </td>
           <td className={styles.statusCell}>
             <span className={styles.skeletonStatus} />
           </td>
@@ -317,25 +391,46 @@ function SkeletonRows() {
 }
 
 function DiagnosticsTable({
+  activeJob,
+  bulkSelection,
   canGoPrevious,
   error,
   isLoading,
   isRefreshing,
+  pageSize,
   pageIndex,
   pageInfo,
   products,
   searchTerm,
   totalProducts,
+  onOpenBulkEdit,
   onNext,
+  onPageSizeChange,
   onPrevious,
   onRefresh,
+  onSelectAllMatching,
+  onTogglePage,
+  onToggleProduct,
+  onUndoAllMatching,
 }: DiagnosticsTableProps) {
   const emptyMessage = normalizeDiagnosticsSearch(searchTerm)
     ? "No products match your search."
     : "No products are available in this view.";
-  const firstProduct = products.length === 0 ? 0 : pageIndex * 25 + 1;
+  const firstProduct = products.length === 0 ? 0 : pageIndex * pageSize + 1;
   const lastProduct =
     products.length === 0 ? 0 : firstProduct + products.length - 1;
+  const displayedProductIds = products.map(({ id }) => id);
+  const pageSelection = diagnosticsPageSelectionState(
+    bulkSelection,
+    displayedProductIds,
+  );
+  const selectedCount = diagnosticsBulkSelectionCount(bulkSelection);
+  const bulkMode = selectedCount > 0;
+  const selectionLocked = isActiveBulkEditJob(activeJob);
+  const canSelectAllMatching =
+    bulkSelection.mode === "explicit" &&
+    pageSelection.checked &&
+    Boolean(totalProducts && totalProducts > products.length);
 
   return (
     <>
@@ -345,41 +440,131 @@ function DiagnosticsTable({
             ? "Loading products"
             : `Showing ${formatCount(firstProduct)} to ${formatCount(
                 lastProduct,
-              )} of ${formatCount(
-                totalProducts ?? products.length,
-              )} Products`}
+              )} of ${formatCount(totalProducts ?? products.length)} Products`}
         </span>
       </div>
 
       <div className={styles.tableViewport}>
         <table className={styles.diagnosticsTable}>
+          <colgroup>
+            <col className={styles.productColumn} />
+            <col className={styles.categoryColumn} />
+            <col className={styles.productTypeColumn} />
+            <col className={styles.statusColumn} />
+            <col className={styles.errorColumn} />
+          </colgroup>
           <thead>
             <tr>
-              <th scope="col">Product</th>
               <th scope="col">
-                <span className={styles.categoryColumnAnchor}>
-                  Google product category
-                </span>
-              </th>
-              <th className={styles.googleHeader} scope="col">
-                <img alt="Google" src="/google-icon-1.png" />
-              </th>
-              <th scope="col">
-                <div className={styles.errorHeader}>
-                  <span>Error from merchant center</span>
-                  <s-button
-                    accessibilityLabel="Refresh product errors"
-                    disabled={isRefreshing}
-                    icon="refresh"
-                    loading={isRefreshing ? true : undefined}
-                    onClick={onRefresh}
-                    tone="critical"
-                    variant="tertiary"
-                  >
-                    Refresh product Errors
-                  </s-button>
+                <div className={styles.productHeader}>
+                  <s-checkbox
+                    accessibilityLabel="Select all products on this page"
+                    checked={pageSelection.checked}
+                    disabled={
+                      isLoading || products.length === 0 || selectionLocked
+                    }
+                    indeterminate={pageSelection.indeterminate}
+                    onChange={(event) =>
+                      onTogglePage(event.currentTarget.checked)
+                    }
+                  />
+                  <span>Product</span>
+                  {bulkSelection.mode === "allMatching" ? (
+                    <s-button
+                      disabled={selectionLocked}
+                      onClick={onUndoAllMatching}
+                      variant="tertiary"
+                    >
+                      <span className={styles.underlinedAction}>Undo</span>
+                    </s-button>
+                  ) : canSelectAllMatching ? (
+                    <s-button onClick={onSelectAllMatching} variant="tertiary">
+                      <span className={styles.underlinedAction}>
+                        Select all products
+                      </span>
+                    </s-button>
+                  ) : null}
+                  {bulkMode ? (
+                    <span aria-live="polite" className={styles.selectionCount}>
+                      {formatCount(selectedCount)} product
+                      {selectedCount === 1 ? "" : "s"} selected
+                    </span>
+                  ) : null}
                 </div>
               </th>
+              {bulkMode ? (
+                <th colSpan={4} scope="col">
+                  <div className={styles.bulkHeaderActions}>
+                    <s-button
+                      accessibilityLabel="Bulk edit selected products"
+                      command="--show"
+                      commandFor={BULK_EDIT_POPOVER_ID}
+                      disabled={selectionLocked}
+                      variant="secondary"
+                    >
+                      <span className={styles.bulkEditButtonContent}>
+                        Bulk edit
+                        <s-icon type="chevron-down" />
+                      </span>
+                    </s-button>
+                    <s-popover id={BULK_EDIT_POPOVER_ID}>
+                      <s-box padding="small-200">
+                        <div className={styles.bulkEditActions}>
+                          <s-button
+                            command="--hide"
+                            commandFor={BULK_EDIT_POPOVER_ID}
+                            onClick={() =>
+                              onOpenBulkEdit({ kind: "productType" })
+                            }
+                            variant="tertiary"
+                          >
+                            Assign product type
+                          </s-button>
+                          {customLabelTargets.map((target) => (
+                            <s-button
+                              command="--hide"
+                              commandFor={BULK_EDIT_POPOVER_ID}
+                              key={target.index}
+                              onClick={() => onOpenBulkEdit(target)}
+                              variant="tertiary"
+                            >
+                              Assign custom_label_{target.index}
+                            </s-button>
+                          ))}
+                        </div>
+                      </s-box>
+                    </s-popover>
+                  </div>
+                </th>
+              ) : (
+                <>
+                  <th scope="col">
+                    <span className={styles.categoryColumnAnchor}>
+                      Google product category
+                    </span>
+                  </th>
+                  <th scope="col">Product type</th>
+                  <th className={styles.googleHeader} scope="col">
+                    <img alt="Google" src="/google-icon-1.png" />
+                  </th>
+                  <th scope="col">
+                    <div className={styles.errorHeader}>
+                      <span>Error from merchant center</span>
+                      <s-button
+                        accessibilityLabel="Refresh product errors"
+                        disabled={isRefreshing}
+                        icon="refresh"
+                        loading={isRefreshing ? true : undefined}
+                        onClick={onRefresh}
+                        tone="critical"
+                        variant="tertiary"
+                      >
+                        Refresh product Errors
+                      </s-button>
+                    </div>
+                  </th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -387,13 +572,13 @@ function DiagnosticsTable({
               <SkeletonRows />
             ) : error && products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={4}>
+                <td className={styles.emptyCell} colSpan={5}>
                   {error}
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={4}>
+                <td className={styles.emptyCell} colSpan={5}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -402,6 +587,20 @@ function DiagnosticsTable({
                 <tr key={product.id}>
                   <td>
                     <div className={styles.productCell}>
+                      <s-checkbox
+                        accessibilityLabel={`Select ${product.title || "untitled product"}`}
+                        checked={isDiagnosticsProductSelected(
+                          bulkSelection,
+                          product.id,
+                        )}
+                        disabled={selectionLocked}
+                        onChange={(event) =>
+                          onToggleProduct(
+                            product.id,
+                            event.currentTarget.checked,
+                          )
+                        }
+                      />
                       <ProductImage product={product} />
                       <a
                         className={styles.productTitle}
@@ -430,6 +629,14 @@ function DiagnosticsTable({
                       )}
                     </span>
                   </td>
+                  <td>
+                    <span
+                      className={styles.productTypeValue}
+                      title={product.productType ?? "No product type assigned"}
+                    >
+                      {product.productType || "—"}
+                    </span>
+                  </td>
                   <td className={styles.statusCell}>
                     <StatusIcon status={product.status} />
                   </td>
@@ -454,6 +661,37 @@ function DiagnosticsTable({
       </div>
 
       <div className={styles.pagination}>
+        <div className={styles.pageSizeControl}>
+          <s-button
+            accessibilityLabel="Products displayed per page"
+            command="--show"
+            commandFor={PAGE_SIZE_POPOVER_ID}
+            disabled={isLoading || isRefreshing}
+            variant="secondary"
+          >
+            <span className={styles.pageSizeButtonContent}>
+              {pageSize}
+              <s-icon type="chevron-down" />
+            </span>
+          </s-button>
+          <s-popover id={PAGE_SIZE_POPOVER_ID}>
+            <s-box padding="small-100">
+              <div className={styles.pageSizeOptions}>
+                {DIAGNOSTICS_PAGE_SIZES.map((option) => (
+                  <s-button
+                    command="--hide"
+                    commandFor={PAGE_SIZE_POPOVER_ID}
+                    key={option}
+                    onClick={() => onPageSizeChange(option)}
+                    variant="tertiary"
+                  >
+                    {option}
+                  </s-button>
+                ))}
+              </div>
+            </s-box>
+          </s-popover>
+        </div>
         <div
           aria-label="Diagnostics pagination"
           className={styles.paginationButtons}
@@ -478,6 +716,7 @@ function DiagnosticsTable({
             Next
           </s-button>
         </div>
+        <span aria-hidden="true" className={styles.paginationSpacer} />
       </div>
     </>
   );
@@ -488,13 +727,25 @@ export function DiagnosticsPanel({
   dataEndpoint = "/app/diagnostics-data",
   scope,
 }: DiagnosticsPanelProps) {
+  const shopify = useAppBridge();
   const queryClient = useQueryClient();
   const queryScope = scope ?? {
     shop: "pending-shop",
     sessionId: "pending-session",
   };
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const bulkEditModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
+  const clearBulkEditModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
+  const handledBulkJobs = useRef(new Set<string>());
+  const observedActiveBulkJobs = useRef(new Set<string>());
   const [selectedTab, setSelectedTab] = useState<DiagnosticsTab>("all");
+  const [bulkSelection, setBulkSelection] = useState<DiagnosticsBulkSelection>(
+    emptyDiagnosticsBulkSelection,
+  );
+  const [bulkEditTarget, setBulkEditTarget] =
+    useState<DiagnosticsBulkEditTarget>({ kind: "productType" });
+  const [bulkEditValue, setBulkEditValue] = useState("");
+  const [bulkEditError, setBulkEditError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<DiagnosticsFilter | null>(
@@ -504,6 +755,9 @@ export function DiagnosticsPanel({
     useState<DiagnosticsFilterField | null>(null);
   const [draftFilterValue, setDraftFilterValue] = useState("");
   const [selectedSort, setSelectedSort] = useState<DiagnosticsSort | "">("");
+  const [pageSize, setPageSize] = useState<DiagnosticsPageSize>(
+    DEFAULT_DIAGNOSTICS_PAGE_SIZE,
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshFallback, setRefreshFallback] =
@@ -545,6 +799,7 @@ export function DiagnosticsPanel({
       endpoint: dataEndpoint,
       filter: activeFilter,
       force: isRefreshing,
+      pageSize,
       search: normalizedSearch,
       sort: activeSort,
     },
@@ -563,6 +818,40 @@ export function DiagnosticsPanel({
   const countsLoading = summaryQuery.isPending && !storeWideCounts;
   const countsRefreshing = isRefreshing && summaryQuery.isFetching;
   const pageLoading = pageQuery.isPending && !page;
+  const bulkEditStatusQuery = useQuery({
+    ...diagnosticsBulkEditStatusQueryOptions(queryScope),
+    enabled: Boolean(scope),
+    refetchInterval: (query) =>
+      active && isActiveBulkEditJob(query.state.data) ? 2_000 : false,
+  });
+  const activeBulkJob = bulkEditStatusQuery.data ?? null;
+  const bulkEditMutation = useMutation({
+    mutationFn: (request: DiagnosticsBulkEditRequest) =>
+      requestDiagnosticsBulkEdit(request),
+    onSuccess: (job) => {
+      queryClient.setQueryData(
+        diagnosticsBulkEditStatusQueryOptions(queryScope).queryKey,
+        job,
+      );
+      setBulkEditError(null);
+      bulkEditModalRef.current?.hideOverlay();
+      clearBulkEditModalRef.current?.hideOverlay();
+      const fieldName = bulkEditFieldName(job.edit);
+      shopify.toast.show(
+        job.edit.value
+          ? `${fieldName} is being added.`
+          : `${fieldName} is being cleared.`,
+      );
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "The catalog bulk edit could not be started.";
+      setBulkEditError(message);
+      shopify.toast.show(message, { isError: true });
+    },
+  });
   const selectedTabDefinition = diagnosticTabs.find(
     ({ id }) => id === selectedTab,
   );
@@ -570,6 +859,16 @@ export function DiagnosticsPanel({
     storeWideCounts?.hasSnapshot && selectedTabDefinition
       ? storeWideCounts[selectedTabDefinition.countKey]
       : undefined;
+  const currentSelectionScope = useMemo<DiagnosticsBulkSelectionScope>(
+    () =>
+      createDiagnosticsBulkSelectionScope({
+        diagnosticsTab: selectedTab,
+        filter: activeFilter,
+        search: normalizedSearch,
+        snapshotVersion: page?.scanVersion ?? "",
+      }),
+    [activeFilter, normalizedSearch, page?.scanVersion, selectedTab],
+  );
   const filterSnapshotVersion =
     page?.scanVersion ?? storeWideCounts?.scanVersion ?? null;
   const filterOptionsQuery = useQuery({
@@ -587,6 +886,66 @@ export function DiagnosticsPanel({
       Boolean(filterSnapshotVersion),
   });
   const filterOptions = filterOptionsQuery.data?.options ?? [];
+
+  useEffect(() => {
+    setBulkSelection(emptyDiagnosticsBulkSelection());
+    setBulkEditError(null);
+  }, [scope?.shop]);
+
+  useEffect(() => {
+    const job = bulkEditStatusQuery.data;
+    if (!scope || !job) {
+      return;
+    }
+    if (isActiveBulkEditJob(job)) {
+      observedActiveBulkJobs.current.add(job.id);
+      return;
+    }
+    if (
+      handledBulkJobs.current.has(job.id) ||
+      !observedActiveBulkJobs.current.has(job.id)
+    ) {
+      return;
+    }
+    handledBulkJobs.current.add(job.id);
+
+    if (job.status === "COMPLETED") {
+      setBulkSelection(emptyDiagnosticsBulkSelection());
+      setBulkEditError(null);
+      bulkEditModalRef.current?.hideOverlay();
+      clearBulkEditModalRef.current?.hideOverlay();
+      if (job.edit.kind === "productType") {
+        void queryClient.invalidateQueries({
+          queryKey: diagnosticsKeys.shop(scope.shop),
+        });
+      }
+      const fieldName = bulkEditFieldName(job.edit);
+      shopify.toast.show(
+        job.edit.value
+          ? `${fieldName} added to ${formatCount(job.successfulCount)} products.`
+          : `${fieldName} cleared from ${formatCount(job.successfulCount)} products.`,
+      );
+    } else if (job.status === "PARTIALLY_COMPLETED") {
+      setBulkSelection(emptyDiagnosticsBulkSelection());
+      bulkEditModalRef.current?.hideOverlay();
+      clearBulkEditModalRef.current?.hideOverlay();
+      if (job.edit.kind === "productType") {
+        void queryClient.invalidateQueries({
+          queryKey: diagnosticsKeys.shop(scope.shop),
+        });
+      }
+      shopify.toast.show(
+        `${formatCount(job.successfulCount)} products updated. ${formatCount(job.failedCount)} products could not be updated.`,
+        { isError: true },
+      );
+    } else {
+      const message =
+        job.errorSamples[0] ??
+        "The catalog bulk edit failed. Your selection is still available.";
+      setBulkEditError(message);
+      shopify.toast.show(message, { isError: true });
+    }
+  }, [bulkEditStatusQuery.data, queryClient, scope, shopify]);
 
   useEffect(() => {
     const nextSearch = normalizeDiagnosticsSearch(searchTerm);
@@ -632,6 +991,7 @@ export function DiagnosticsPanel({
         abortOnUnmount: true,
         endpoint: dataEndpoint,
         filter: activeFilter,
+        pageSize,
         search: normalizedSearch,
         sort: activeSort,
       },
@@ -667,6 +1027,7 @@ export function DiagnosticsPanel({
     dataEndpoint,
     isRefreshing,
     normalizedSearch,
+    pageSize,
     pageQuery.data,
     pageQuery.isError,
     pageQuery.isFetching,
@@ -683,7 +1044,18 @@ export function DiagnosticsPanel({
     }
   };
 
+  const clearSelectionForScopeChange = () => {
+    if (diagnosticsBulkSelectionCount(bulkSelection) === 0) return;
+    setBulkSelection(emptyDiagnosticsBulkSelection());
+    bulkEditModalRef.current?.hideOverlay();
+    clearBulkEditModalRef.current?.hideOverlay();
+    shopify.toast.show(
+      "Product selection cleared because the Diagnostics scope changed.",
+    );
+  };
+
   const selectTab = (tab: DiagnosticsTab, index?: number) => {
+    if (tab !== selectedTab) clearSelectionForScopeChange();
     setSelectedTab(tab);
     setSearchTerm("");
     setDebouncedSearch("");
@@ -691,6 +1063,83 @@ export function DiagnosticsPanel({
     if (index !== undefined) {
       tabRefs.current[index]?.focus();
     }
+  };
+
+  const toggleProductSelection = (productId: string, checked: boolean) => {
+    setBulkSelection((selection) =>
+      toggleDiagnosticsProduct(selection, productId, checked),
+    );
+  };
+
+  const togglePageSelection = (checked: boolean) => {
+    const productIds = (page?.products ?? []).map(({ id }) => id);
+    setBulkSelection((selection) =>
+      toggleDiagnosticsPage(selection, productIds, checked),
+    );
+  };
+
+  const selectAllMatching = () => {
+    if (!page?.scanVersion || !page.totalProducts) return;
+    setBulkSelection(
+      selectAllMatchingDiagnosticsProducts(
+        currentSelectionScope,
+        page.totalProducts,
+      ),
+    );
+  };
+
+  const undoAllMatching = () => {
+    const productIds = (page?.products ?? []).map(({ id }) => id);
+    setBulkSelection((selection) =>
+      undoAllMatchingDiagnosticsProducts(selection, productIds),
+    );
+  };
+
+  const openBulkEditModal = (target: DiagnosticsBulkEditTarget) => {
+    setBulkEditTarget(target);
+    setBulkEditValue("");
+    setBulkEditError(null);
+    window.setTimeout(() => bulkEditModalRef.current?.showOverlay());
+  };
+
+  const submitBulkEdit = () => {
+    if (
+      diagnosticsBulkSelectionCount(bulkSelection) === 0 ||
+      !currentSelectionScope.snapshotVersion ||
+      isActiveBulkEditJob(activeBulkJob)
+    ) {
+      return;
+    }
+    const edit: DiagnosticsBulkEdit =
+      bulkEditTarget.kind === "productType"
+        ? { kind: "productType", value: bulkEditValue }
+        : {
+            index: bulkEditTarget.index,
+            kind: "customLabel",
+            value: bulkEditValue,
+          };
+    bulkEditMutation.mutate(
+      serializeDiagnosticsBulkSelection(
+        bulkSelection,
+        currentSelectionScope,
+        edit,
+        crypto.randomUUID(),
+      ),
+    );
+  };
+
+  const applyBulkEdit = () => {
+    if (bulkEditValue.trim()) {
+      submitBulkEdit();
+      return;
+    }
+    bulkEditModalRef.current?.hideOverlay();
+    window.setTimeout(() => clearBulkEditModalRef.current?.showOverlay());
+  };
+
+  const cancelBulkEditClear = () => {
+    clearBulkEditModalRef.current?.hideOverlay();
+    window.setTimeout(() => bulkEditModalRef.current?.showOverlay());
   };
 
   const handleTabKeyDown = (
@@ -720,6 +1169,8 @@ export function DiagnosticsPanel({
     if (!scope || isRefreshing) {
       return;
     }
+
+    clearSelectionForScopeChange();
 
     const nextState = createDiagnosticsClientState(
       Math.max(Date.now(), clientState.generation + 1),
@@ -772,6 +1223,7 @@ export function DiagnosticsPanel({
           {
             endpoint: dataEndpoint,
             filter: activeFilter,
+            pageSize,
             sort: activeSort,
           },
         ),
@@ -882,6 +1334,12 @@ export function DiagnosticsPanel({
     });
   };
 
+  const changePageSize = (nextPageSize: DiagnosticsPageSize) => {
+    if (nextPageSize === pageSize) return;
+    setPageSize(nextPageSize);
+    storeClientState(createDiagnosticsClientState(clientState.generation));
+  };
+
   const changeSort = (value: string) => {
     const nextSort = normalizeDiagnosticsSort(value);
     setSelectedSort(nextSort);
@@ -910,11 +1368,18 @@ export function DiagnosticsPanel({
       field: draftFilterField,
       value: draftFilterValue,
     };
+    if (
+      activeFilter?.field !== nextFilter.field ||
+      activeFilter.value !== nextFilter.value
+    ) {
+      clearSelectionForScopeChange();
+    }
     setActiveFilter(nextFilter);
     storeClientState(createDiagnosticsClientState(clientState.generation));
   };
 
   const clearFilter = () => {
+    if (activeFilter) clearSelectionForScopeChange();
     setActiveFilter(null);
     setDraftFilterField(null);
     setDraftFilterValue("");
@@ -955,21 +1420,28 @@ export function DiagnosticsPanel({
       tone: "warning",
     });
   }
+  const selectedProductCount = diagnosticsBulkSelectionCount(bulkSelection);
+  const activeJobInProgress = isActiveBulkEditJob(activeBulkJob);
+  const bulkEditField = bulkEditFieldName(bulkEditTarget);
+  const bulkEditLabel = bulkEditFieldLabel(bulkEditTarget);
+  const bulkEditMaxLength =
+    bulkEditTarget.kind === "productType"
+      ? MAX_PRODUCT_TYPE_LENGTH
+      : MAX_CUSTOM_LABEL_LENGTH;
 
   return (
     <div className={styles.diagnostics}>
-      <div className={styles.header}>
-        <div>
-          <s-heading>Diagnostics</s-heading>
-          <s-paragraph color="subdued">
-            Review products before they are submitted to Google.
-          </s-paragraph>
-        </div>
-      </div>
-
       {tabAlerts.length > 0 ? (
         <div className={styles.errorBanner}>
           <TabAlertNavigator alerts={tabAlerts} />
+        </div>
+      ) : null}
+
+      {bulkEditError ? (
+        <div className={styles.bulkJobBanner}>
+          <s-banner heading="Catalog bulk edit needs attention" tone="critical">
+            <s-paragraph>{bulkEditError}</s-paragraph>
+          </s-banner>
         </div>
       ) : null}
 
@@ -1044,9 +1516,7 @@ export function DiagnosticsPanel({
               >
                 <span className={styles.pickerTriggerContent}>
                   <span className={styles.pickerTriggerLabel}>
-                    <s-text>
-                      Filter Products{activeFilter ? " (1)" : ""}
-                    </s-text>
+                    <s-text>Filter Products{activeFilter ? " (1)" : ""}</s-text>
                   </span>
                   <s-icon color="subdued" type="chevron-down" />
                 </span>
@@ -1151,6 +1621,11 @@ export function DiagnosticsPanel({
                 labelAccessibilityVisibility="exclusive"
                 onInput={(event) => {
                   const nextValue = event.currentTarget.value;
+                  if (
+                    normalizeDiagnosticsSearch(nextValue) !== normalizedSearch
+                  ) {
+                    clearSelectionForScopeChange();
+                  }
                   setSearchTerm(nextValue);
 
                   if (!normalizeDiagnosticsSearch(nextValue)) {
@@ -1176,13 +1651,22 @@ export function DiagnosticsPanel({
           </div>
 
           <DiagnosticsTable
+            activeJob={activeBulkJob}
+            bulkSelection={bulkSelection}
             canGoPrevious={navigation.index > 0}
             error={pageError}
             isLoading={pageLoading}
             isRefreshing={isRefreshing}
+            onOpenBulkEdit={openBulkEditModal}
             onNext={loadNext}
+            onPageSizeChange={changePageSize}
             onPrevious={loadPrevious}
             onRefresh={refresh}
+            onSelectAllMatching={selectAllMatching}
+            onTogglePage={togglePageSelection}
+            onToggleProduct={toggleProductSelection}
+            onUndoAllMatching={undoAllMatching}
+            pageSize={pageSize}
             pageIndex={navigation.index}
             pageInfo={page?.pageInfo}
             products={page?.products ?? []}
@@ -1191,6 +1675,130 @@ export function DiagnosticsPanel({
           />
         </div>
       </div>
+
+      <s-modal
+        accessibilityLabel={`Assign ${bulkEditField} to selected products`}
+        heading={`Assign ${bulkEditField}`}
+        id={BULK_EDIT_MODAL_ID}
+        padding="none"
+        ref={bulkEditModalRef}
+        size="base"
+      >
+        <s-box padding="base">
+          <div className={styles.productTypeModalContent}>
+            {bulkEditError ? (
+              <s-banner
+                heading="The bulk edit could not be started"
+                tone="critical"
+              >
+                <s-paragraph>{bulkEditError}</s-paragraph>
+              </s-banner>
+            ) : null}
+            <s-text-field
+              disabled={activeJobInProgress || bulkEditMutation.isPending}
+              label={
+                bulkEditTarget.kind === "customLabel"
+                  ? "Custom label value"
+                  : bulkEditLabel
+              }
+              maxLength={bulkEditMaxLength}
+              name="bulkEditValue"
+              onInput={(event) => {
+                setBulkEditValue(event.currentTarget.value);
+                setBulkEditError(null);
+              }}
+              placeholder={
+                bulkEditTarget.kind === "customLabel"
+                  ? "Enter a custom label"
+                  : `Enter ${bulkEditField}`
+              }
+              value={bulkEditValue}
+            />
+            <s-banner
+              heading={`Empty values clear ${bulkEditField}`}
+              tone="warning"
+            >
+              <s-paragraph>
+                {bulkEditTarget.kind === "customLabel"
+                  ? "Leaving this field blank and clicking Apply in bulk will clear this custom label from all variants of the selected products."
+                  : "Leaving this field blank and clicking Apply in bulk will erase the currently assigned product type from all selected products."}
+              </s-paragraph>
+            </s-banner>
+            <s-paragraph color="subdued">
+              This change will be applied to {formatCount(selectedProductCount)}{" "}
+              selected product{selectedProductCount === 1 ? "" : "s"}
+              {bulkEditTarget.kind === "productType"
+                ? " in Shopify."
+                : " and included in the next generated feeds."}
+            </s-paragraph>
+          </div>
+        </s-box>
+        <s-button
+          disabled={activeJobInProgress || bulkEditMutation.isPending}
+          loading={bulkEditMutation.isPending ? true : undefined}
+          onClick={applyBulkEdit}
+          slot="primary-action"
+          variant="primary"
+        >
+          Apply in bulk
+        </s-button>
+        <s-button
+          command="--hide"
+          commandFor={BULK_EDIT_MODAL_ID}
+          disabled={activeJobInProgress || bulkEditMutation.isPending}
+          slot="secondary-actions"
+          variant="secondary"
+        >
+          Cancel
+        </s-button>
+      </s-modal>
+
+      <s-modal
+        accessibilityLabel={`Confirm clearing ${bulkEditField}`}
+        heading={`Clear ${bulkEditField}?`}
+        id={CLEAR_BULK_EDIT_MODAL_ID}
+        padding="none"
+        ref={clearBulkEditModalRef}
+        size="base"
+      >
+        <s-box padding="base">
+          <div className={styles.productTypeModalContent}>
+            {bulkEditError ? (
+              <s-banner
+                heading="The bulk edit could not be started"
+                tone="critical"
+              >
+                <s-paragraph>{bulkEditError}</s-paragraph>
+              </s-banner>
+            ) : null}
+            <s-banner heading="This removes existing data" tone="warning">
+              <s-paragraph>
+                This will clear the assigned {bulkEditField} from all{" "}
+                {formatCount(selectedProductCount)} selected product
+                {selectedProductCount === 1 ? "" : "s"}.
+              </s-paragraph>
+            </s-banner>
+          </div>
+        </s-box>
+        <s-button
+          disabled={activeJobInProgress || bulkEditMutation.isPending}
+          loading={bulkEditMutation.isPending ? true : undefined}
+          onClick={submitBulkEdit}
+          slot="primary-action"
+          tone="critical"
+          variant="primary"
+        >
+          Clear {bulkEditField}
+        </s-button>
+        <s-button
+          disabled={activeJobInProgress || bulkEditMutation.isPending}
+          onClick={cancelBulkEditClear}
+          slot="secondary-actions"
+          variant="secondary"
+        >
+          Cancel
+        </s-button>
+      </s-modal>
     </div>
   );
 }

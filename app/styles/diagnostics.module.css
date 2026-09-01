@@ -24,6 +24,10 @@
   margin-bottom: 16px;
 }
 
+.bulkJobBanner {
+  margin-bottom: 16px;
+}
+
 .card {
   display: flex;
   width: 100%;
@@ -300,7 +304,7 @@
 }
 
 .tableViewport {
-  height: clamp(410px, 58dvh, 600px);
+  height: clamp(490px, 68dvh, 730px);
   min-height: 0;
   flex: 0 1 auto;
   overflow: auto;
@@ -310,7 +314,7 @@
 
 .diagnosticsTable {
   width: 100%;
-  min-width: 900px;
+  min-width: 1050px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
@@ -325,27 +329,31 @@
   padding: 6px 12px;
   border-bottom: 1px solid #d4d4d4;
   background: #f7f7f7;
-  color: #303030;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 20px;
+  color: #4a4a4a;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
   text-align: left;
 }
 
-.diagnosticsTable th:first-child {
-  width: 30%;
+.productColumn {
+  width: 29%;
 }
 
-.diagnosticsTable th:nth-child(2) {
-  width: 27%;
+.categoryColumn {
+  width: 23%;
 }
 
-.diagnosticsTable th:nth-child(3) {
-  width: 10%;
+.productTypeColumn {
+  width: 16%;
 }
 
-.diagnosticsTable th:nth-child(4) {
-  width: 33%;
+.statusColumn {
+  width: 8%;
+}
+
+.errorColumn {
+  width: 24%;
 }
 
 .diagnosticsTable td {
@@ -390,6 +398,70 @@
   min-width: 0;
 }
 
+.productCell s-checkbox {
+  flex: 0 0 auto;
+}
+
+.productHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.productHeader > span:not(.underlinedAction) {
+  flex: 0 0 auto;
+}
+
+.productHeader s-button {
+  min-width: 0;
+}
+
+.underlinedAction {
+  overflow: hidden;
+  text-decoration: underline;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectionCount {
+  overflow: hidden;
+  color: #616161;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulkHeaderActions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.bulkEditButtonContent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.bulkEditActions {
+  display: grid;
+  min-width: 180px;
+}
+
+.bulkEditActions s-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.productTypeModalContent {
+  display: grid;
+  gap: 16px;
+}
+
 .productImage,
 .imageFallback,
 .skeletonImage {
@@ -431,6 +503,14 @@
 .productCategory {
   overflow-wrap: anywhere;
   color: #42474c;
+}
+
+.productTypeValue {
+  display: block;
+  overflow: hidden;
+  color: #42474c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .emptyCategory {
@@ -522,20 +602,50 @@
 }
 
 .pagination {
-  display: flex;
+  display: grid;
   box-sizing: border-box;
   min-height: 44px;
+  grid-template-columns: minmax(128px, 1fr) auto minmax(128px, 1fr);
   align-items: center;
-  justify-content: center;
   gap: 8px;
   padding: 6px 12px;
   background: #fff;
 }
 
+.pageSizeControl {
+  width: max-content;
+  justify-self: start;
+}
+
+.pageSizeButtonContent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pageSizeOptions {
+  display: grid;
+  width: max-content;
+  min-width: 0;
+  gap: 2px;
+}
+
+.pageSizeOptions s-button {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
 .paginationButtons {
   display: flex;
+  justify-self: center;
   gap: 8px;
   align-items: center;
+}
+
+.paginationSpacer {
+  min-width: 0;
 }
 
 .skeletonImage,
@@ -631,14 +741,29 @@
   }
 
   .tableViewport {
-    height: clamp(330px, 52dvh, 470px);
+    height: clamp(390px, 60dvh, 540px);
     min-height: 0;
   }
 
+  .bulkHeaderActions {
+    gap: 8px;
+  }
+
+  .bulkHeaderActions > span {
+    max-width: 150px;
+  }
+
   .pagination {
-    align-items: center;
-    flex-direction: row;
+    grid-template-columns: auto 1fr;
     padding-inline: 12px;
+  }
+
+  .paginationButtons {
+    justify-self: end;
+  }
+
+  .paginationSpacer {
+    display: none;
   }
 }
 

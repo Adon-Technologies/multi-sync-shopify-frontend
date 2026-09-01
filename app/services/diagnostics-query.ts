@@ -13,6 +13,11 @@ import type {
 } from "./diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "./diagnostics-search";
 import {
+  DEFAULT_DIAGNOSTICS_PAGE_SIZE,
+  normalizeDiagnosticsPageSize,
+  type DiagnosticsPageSize,
+} from "./diagnostics-pagination";
+import {
   normalizeDiagnosticsSort,
   type DiagnosticsSort,
 } from "./diagnostics-sort";
@@ -50,6 +55,7 @@ interface QueryRequestOptions {
 interface ProductsQueryRequestOptions extends QueryRequestOptions {
   abortOnUnmount?: boolean;
   filter?: DiagnosticsFilter | null;
+  pageSize?: DiagnosticsPageSize;
   search?: string;
   sort?: DiagnosticsSort | string;
 }
@@ -83,6 +89,7 @@ export const diagnosticsKeys = {
     filter: DiagnosticsFilter | null,
     search: string,
     sort: DiagnosticsSort,
+    pageSize: DiagnosticsPageSize,
     snapshotVersion: string | null | undefined,
     endpoint = defaultEndpoint,
   ) =>
@@ -99,6 +106,7 @@ export const diagnosticsKeys = {
       filter?.value ?? "",
       normalizeDiagnosticsSearch(search),
       sort,
+      pageSize,
       snapshotVersion ?? "latest",
       endpoint,
     ] as const,
@@ -276,12 +284,14 @@ export function diagnosticsProductsQueryOptions(
     endpoint = defaultEndpoint,
     filter = null,
     force = false,
+    pageSize = DEFAULT_DIAGNOSTICS_PAGE_SIZE,
     search = "",
     sort,
   }: ProductsQueryRequestOptions = {},
 ) {
   const normalizedSearch = normalizeDiagnosticsSearch(search);
   const normalizedSort = normalizeDiagnosticsSort(sort);
+  const normalizedPageSize = normalizeDiagnosticsPageSize(pageSize);
 
   return queryOptions({
     ...diagnosticsSessionCacheOptions,
@@ -293,6 +303,7 @@ export function diagnosticsProductsQueryOptions(
       filter,
       normalizedSearch,
       normalizedSort,
+      normalizedPageSize,
       request.snapshotVersion,
       endpoint,
     ),
@@ -303,6 +314,7 @@ export function diagnosticsProductsQueryOptions(
           filterField: filter?.field,
           filterValue: filter?.value,
           intent: "page",
+          pageSize: String(normalizedPageSize),
           refresh: force ? "1" : null,
           refreshToken: force ? String(generation) : null,
           search: normalizedSearch || null,

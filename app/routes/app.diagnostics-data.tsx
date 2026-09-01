@@ -15,6 +15,7 @@ import {
   type DiagnosticsFilterField,
 } from "../services/diagnostics-filter";
 import { normalizeDiagnosticsSort } from "../services/diagnostics-sort";
+import { normalizeDiagnosticsPageSize } from "../services/diagnostics-pagination";
 import { authenticateSubscribedAdmin } from "../shopify.server";
 
 export type DiagnosticsDataResponse =
@@ -117,6 +118,9 @@ export const loader = async ({
           url.searchParams.get("filterValue"),
         ),
         force,
+        pageSize: normalizeDiagnosticsPageSize(
+          url.searchParams.get("pageSize"),
+        ),
         refreshToken,
         search: url.searchParams.get("search"),
         sort: normalizeDiagnosticsSort(url.searchParams.get("sort")),

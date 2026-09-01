@@ -335,13 +335,26 @@ export async function discardDiagnosticsSnapshot(
 }
 
 async function pruneOldDiagnosticsSnapshots(shop: string) {
-  const snapshots = await prisma.diagnosticsSnapshot.findMany({
-    where: { shop, status: READY_STATUS },
-    orderBy: { completedAt: "desc" },
-    select: { scanVersion: true },
-  });
+  const [snapshots, activeBulkEdits] = await Promise.all([
+    prisma.diagnosticsSnapshot.findMany({
+      where: { shop, status: READY_STATUS },
+      orderBy: { completedAt: "desc" },
+      select: { scanVersion: true },
+    }),
+    prisma.bulkProductTypeJob.findMany({
+      where: {
+        status: { in: ["QUEUED", "PROCESSING"] },
+        store: { is: { shopDomain: normalizeShop(shop) } },
+      },
+      select: { snapshotVersion: true },
+    }),
+  ]);
+  const protectedVersions = new Set(
+    activeBulkEdits.map(({ snapshotVersion }) => snapshotVersion),
+  );
   const obsoleteVersions = snapshots
     .slice(SNAPSHOTS_TO_RETAIN)
+    .filter(({ scanVersion }) => !protectedVersions.has(scanVersion))
     .map((snapshot) => snapshot.scanVersion);
 
   if (obsoleteVersions.length === 0) {
@@ -398,15 +411,6 @@ export async function readDiagnosticsSnapshotPage(
     return null;
   }
 
-  const status: DiagnosticStatus | undefined =
-    tab === "submitted"
-      ? "submitted"
-      : tab === "warnings"
-        ? "warning"
-        : tab === "excluded"
-          ? "error"
-          : undefined;
-  const normalizedSearch = normalizeDiagnosticsSearch(options.search ?? "");
   const sort = normalizeDiagnosticsSort(options.sort);
   const isBackward = Boolean(options.before);
   const cursorOffset =
@@ -433,21 +437,13 @@ export async function readDiagnosticsSnapshotPage(
       : sort === "title-asc" || sort === "title-desc"
         ? [{ title: sortDirection }, { position: "asc" as const }]
         : [{ productType: sortDirection }, { position: "asc" as const }];
-  const filterWhere = getDiagnosticsFilterWhere(options.filter);
-  const productWhere: Prisma.DiagnosticsSnapshotProductWhereInput = {
-    shop: normalizedShop,
+  const productWhere = buildDiagnosticsSnapshotProductWhere({
+    filter: options.filter,
     scanVersion: snapshot.scanVersion,
-    ...(status ? { status } : {}),
-    ...(normalizedSearch
-      ? {
-          title: {
-            contains: normalizedSearch,
-            mode: "insensitive" as const,
-          },
-        }
-      : {}),
-    ...filterWhere,
-  };
+    search: options.search,
+    shop: normalizedShop,
+    tab,
+  });
   const [storedProducts, totalProducts] = await Promise.all([
     prisma.diagnosticsSnapshotProduct.findMany({
       where: productWhere,
@@ -510,6 +506,38 @@ function getDiagnosticsFilterWhere(
     case "tag":
       return { tags: { has: filter.value } };
   }
+}
+
+export function buildDiagnosticsSnapshotProductWhere({
+  filter,
+  scanVersion,
+  search,
+  shop,
+  tab,
+}: {
+  filter?: DiagnosticsFilter | null;
+  scanVersion: string;
+  search?: string | null;
+  shop: string;
+  tab: "all" | "submitted" | "warnings" | "excluded";
+}): Prisma.DiagnosticsSnapshotProductWhereInput {
+  const status = getStatusForTab(tab);
+  const normalizedSearch = normalizeDiagnosticsSearch(search ?? "");
+
+  return {
+    shop: normalizeShop(shop),
+    scanVersion,
+    ...(status ? { status } : {}),
+    ...(normalizedSearch
+      ? {
+          title: {
+            contains: normalizedSearch,
+            mode: "insensitive" as const,
+          },
+        }
+      : {}),
+    ...getDiagnosticsFilterWhere(filter),
+  };
 }
 
 function getStatusForTab(

@@ -70,6 +70,8 @@ model Store {
   subscription           StoreSubscription?
   xmlLinks               XmlLink[]
   attributeRuleJobs      AttributeRuleJob[]
+  bulkProductTypeJobs    BulkProductTypeJob[]
+  customLabels           CustomLabel[]
   feedRefreshSchedule    FeedRefreshSchedule?
   feedGenerationFeedId   String?
   feedGenerationLockedAt DateTime?
@@ -277,6 +279,81 @@ model DiagnosticsSnapshotProduct {
   @@index([shop, scanVersion, status, title, position])
   @@index([shop, scanVersion, productType, position])
   @@index([shop, scanVersion, status, productType, position])
+}
+
+enum BulkProductTypeSelectionMode {
+  EXPLICIT
+  ALL_MATCHING
+}
+
+enum BulkProductTypeJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  PARTIALLY_COMPLETED
+  FAILED
+}
+
+enum BulkCatalogEditAction {
+  PRODUCT_TYPE
+  CUSTOM_LABEL
+}
+
+model BulkProductTypeJob {
+  id                     String                       @id @default(auto()) @map("_id") @db.ObjectId
+  storeId                String                       @db.ObjectId
+  store                  Store                        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  idempotencyKey         String
+  selectionMode          BulkProductTypeSelectionMode
+  productIds             String[]                     @default([])
+  excludedProductIds     String[]                     @default([])
+  diagnosticsTab         String
+  diagnosticsSearch      String                       @default("")
+  diagnosticsFilterField String?
+  diagnosticsFilterValue String?
+  snapshotVersion        String
+  action                 BulkCatalogEditAction        @default(PRODUCT_TYPE)
+  productType            String                       @default("")
+  customLabelIndex       Int?
+  customLabelValue       String?
+  status                 BulkProductTypeJobStatus     @default(QUEUED)
+  attemptCount           Int                          @default(0)
+  requestedCount         Int
+  processedCount         Int                          @default(0)
+  successfulCount        Int                          @default(0)
+  failedCount            Int                          @default(0)
+  shopifyBulkOperationId String?
+  shopifyStatus          String?
+  errorSamples           String[]                     @default([])
+  lastError              String?
+  startedAt              DateTime?
+  completedAt            DateTime?
+  leaseOwner             String?
+  leaseExpiresAt         DateTime?
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+
+  @@unique([storeId, idempotencyKey])
+  @@index([status, leaseExpiresAt])
+  @@index([storeId, createdAt])
+}
+
+model CustomLabel {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  storeId      String   @db.ObjectId
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: NoAction)
+  productId    String
+  variantId    String
+  customLabel0 String?
+  customLabel1 String?
+  customLabel2 String?
+  customLabel3 String?
+  customLabel4 String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([storeId, variantId])
+  @@index([storeId, productId])
 }
 
 enum XmlFeedStatus {

@@ -12,6 +12,11 @@ import type {
 } from "./diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "./diagnostics-search";
 import {
+  DEFAULT_DIAGNOSTICS_PAGE_SIZE,
+  normalizeDiagnosticsPageSize,
+  type DiagnosticsPageSize,
+} from "./diagnostics-pagination";
+import {
   normalizeDiagnosticsSort,
   type DiagnosticsSort,
 } from "./diagnostics-sort";
@@ -51,7 +56,6 @@ const MAX_CACHE_ENTRIES = 500;
 // Raw Shopify batches are only a short coalescing window. Capping this cache
 // prevents a complete large catalog from being retained in server memory.
 const MAX_RAW_PRODUCT_PAGE_CACHE_ENTRIES = 8;
-const TABLE_PAGE_SIZE = 25;
 const MAX_METAFIELD_KEYS = 64;
 const MAX_REFERENCE_IDS_PER_REQUEST = 250;
 const MIN_SHOPIFY_SCAN_BATCH_SIZE = 25;
@@ -119,6 +123,7 @@ interface DiagnosticsPageOptions {
   before?: string | null;
   filter?: DiagnosticsFilter | null;
   force?: boolean;
+  pageSize?: DiagnosticsPageSize;
   refreshToken?: string | null;
   search?: string | null;
   sort?: DiagnosticsSort | string | null;
@@ -1223,6 +1228,7 @@ async function fetchUnfilteredPage(
   rawGeneration: string,
   metafieldSelection: DiagnosticMetafieldSelection,
   exclusionContext: DiagnosticsExclusionContext,
+  pageSize: DiagnosticsPageSize,
   after?: string | null,
   before?: string | null,
 ): Promise<DiagnosticsPage> {
@@ -1236,13 +1242,13 @@ async function fetchUnfilteredPage(
     {
       after: decodedAfter?.shopifyCursor ?? after,
       before: decodedBefore?.shopifyCursor ?? before,
-      first: before ? null : TABLE_PAGE_SIZE,
-      last: before ? TABLE_PAGE_SIZE : null,
+      first: before ? null : pageSize,
+      last: before ? pageSize : null,
     },
   );
   const displayedEdges = before
-    ? result.page.edges.slice(-TABLE_PAGE_SIZE)
-    : result.page.edges.slice(0, TABLE_PAGE_SIZE);
+    ? result.page.edges.slice(-pageSize)
+    : result.page.edges.slice(0, pageSize);
   const classifiedProducts = await classifyProductEdges(
     admin,
     displayedEdges,
@@ -1255,10 +1261,10 @@ async function fetchUnfilteredPage(
     pageInfo: {
       hasNextPage: before
         ? result.page.pageInfo.hasNextPage
-        : result.page.edges.length > TABLE_PAGE_SIZE ||
+        : result.page.edges.length > pageSize ||
           result.page.pageInfo.hasNextPage,
       hasPreviousPage: before
-        ? result.page.edges.length > TABLE_PAGE_SIZE ||
+        ? result.page.edges.length > pageSize ||
           result.page.pageInfo.hasPreviousPage
         : result.page.pageInfo.hasPreviousPage,
       startCursor: displayedEdges[0]
@@ -1279,6 +1285,7 @@ async function fetchForwardFilteredPage(
   metafieldSelection: DiagnosticMetafieldSelection,
   exclusionContext: DiagnosticsExclusionContext,
   tab: DiagnosticsTab,
+  pageSize: DiagnosticsPageSize,
   after?: string | null,
 ): Promise<DiagnosticsPage> {
   let batchSize = getScanBatchSize(metafieldSelection.keys.length);
@@ -1287,7 +1294,7 @@ async function fetchForwardFilteredPage(
   let scanCursor = decodedAfter?.shopifyCursor ?? after ?? null;
   let previousPayload: GraphQLPayload<unknown> | null = null;
 
-  while (matches.length <= TABLE_PAGE_SIZE) {
+  while (matches.length <= pageSize) {
     if (previousPayload) {
       const delay = throttleDelay(previousPayload);
       if (delay > 0) {
@@ -1321,12 +1328,12 @@ async function fetchForwardFilteredPage(
         matches.push({ cursor: edge.cursor, product });
       }
 
-      if (matches.length > TABLE_PAGE_SIZE) {
+      if (matches.length > pageSize) {
         break;
       }
     }
 
-    if (matches.length > TABLE_PAGE_SIZE || !result.page.pageInfo.hasNextPage) {
+    if (matches.length > pageSize || !result.page.pageInfo.hasNextPage) {
       break;
     }
 
@@ -1338,12 +1345,12 @@ async function fetchForwardFilteredPage(
     previousPayload = result.payload;
   }
 
-  const displayed = matches.slice(0, TABLE_PAGE_SIZE);
+  const displayed = matches.slice(0, pageSize);
 
   return {
     products: displayed.map((match) => match.product),
     pageInfo: {
-      hasNextPage: matches.length > TABLE_PAGE_SIZE,
+      hasNextPage: matches.length > pageSize,
       hasPreviousPage: Boolean(after),
       startCursor: displayed[0]
         ? encodeDiagnosticsSnapshotCursor({
@@ -1373,6 +1380,7 @@ async function fetchBackwardFilteredPage(
   metafieldSelection: DiagnosticMetafieldSelection,
   exclusionContext: DiagnosticsExclusionContext,
   tab: DiagnosticsTab,
+  pageSize: DiagnosticsPageSize,
   before: string,
 ): Promise<DiagnosticsPage> {
   let batchSize = getScanBatchSize(metafieldSelection.keys.length);
@@ -1384,7 +1392,7 @@ async function fetchBackwardFilteredPage(
   let scanCursor: string | null = decodedBefore?.shopifyCursor ?? before;
   let previousPayload: GraphQLPayload<unknown> | null = null;
 
-  while (nearestMatches.length <= TABLE_PAGE_SIZE) {
+  while (nearestMatches.length <= pageSize) {
     if (previousPayload) {
       const delay = throttleDelay(previousPayload);
       if (delay > 0) {
@@ -1419,13 +1427,13 @@ async function fetchBackwardFilteredPage(
         nearestMatches.push({ cursor: edge.cursor, product });
       }
 
-      if (nearestMatches.length > TABLE_PAGE_SIZE) {
+      if (nearestMatches.length > pageSize) {
         break;
       }
     }
 
     if (
-      nearestMatches.length > TABLE_PAGE_SIZE ||
+      nearestMatches.length > pageSize ||
       !result.page.pageInfo.hasPreviousPage
     ) {
       break;
@@ -1439,13 +1447,13 @@ async function fetchBackwardFilteredPage(
     previousPayload = result.payload;
   }
 
-  const displayed = nearestMatches.slice(0, TABLE_PAGE_SIZE).reverse();
+  const displayed = nearestMatches.slice(0, pageSize).reverse();
 
   return {
     products: displayed.map((match) => match.product),
     pageInfo: {
       hasNextPage: true,
-      hasPreviousPage: nearestMatches.length > TABLE_PAGE_SIZE,
+      hasPreviousPage: nearestMatches.length > pageSize,
       startCursor: displayed[0]
         ? encodeDiagnosticsSnapshotCursor({
             productId: displayed[0].product.id,
@@ -1473,11 +1481,14 @@ async function fetchDiagnosticsPage(
   rawGeneration: string,
   options: DiagnosticsPageOptions,
 ) {
+  const pageSize = normalizeDiagnosticsPageSize(
+    options.pageSize ?? DEFAULT_DIAGNOSTICS_PAGE_SIZE,
+  );
   if (!options.force) {
     const snapshotPage = await readDiagnosticsSnapshotPage(shop, options.tab, {
       after: options.after,
       before: options.before,
-      pageSize: TABLE_PAGE_SIZE,
+      pageSize,
       search: options.search,
       scanVersion: options.snapshotVersion,
       sort: options.sort,
@@ -1508,6 +1519,7 @@ async function fetchDiagnosticsPage(
       rawGeneration,
       metafieldSelection,
       exclusionContext,
+      pageSize,
       options.after,
       options.before,
     );
@@ -1521,6 +1533,7 @@ async function fetchDiagnosticsPage(
       metafieldSelection,
       exclusionContext,
       options.tab,
+      pageSize,
       options.before,
     );
   }
@@ -1532,6 +1545,7 @@ async function fetchDiagnosticsPage(
     metafieldSelection,
     exclusionContext,
     options.tab,
+    pageSize,
     options.after,
   );
 }
@@ -1647,6 +1661,9 @@ export async function getDiagnosticsPage(
   const force = options.force ?? false;
   const normalizedSearch = normalizeDiagnosticsSearch(options.search ?? "");
   const sort = normalizeDiagnosticsSort(options.sort);
+  const pageSize = normalizeDiagnosticsPageSize(
+    options.pageSize ?? DEFAULT_DIAGNOSTICS_PAGE_SIZE,
+  );
   let readySnapshot = force
     ? null
     : await findReadyDiagnosticsSnapshot(shop, options.snapshotVersion);
@@ -1688,6 +1705,7 @@ export async function getDiagnosticsPage(
     sort,
     options.filter?.field ?? "no-filter",
     encodeURIComponent(options.filter?.value ?? ""),
+    pageSize,
   ].join("|");
 
   return getCachedValue(pageCache, key, PAGE_CACHE_TTL_MS, () =>
@@ -1696,6 +1714,7 @@ export async function getDiagnosticsPage(
       force: false,
       search: normalizedSearch,
       sort,
+      pageSize,
       snapshotVersion: readySnapshot.scanVersion,
     }),
   );

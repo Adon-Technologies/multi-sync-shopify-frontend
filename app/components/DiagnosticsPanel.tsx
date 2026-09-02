@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type UIEvent,
 } from "react";
 import { flushSync } from "react-dom";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -20,6 +21,7 @@ import type {
 } from "../services/diagnostics.server";
 import {
   createDiagnosticsClientState,
+  diagnosticsCollectionsQueryOptions,
   diagnosticsFilterOptionsQueryOptions,
   diagnosticsKeys,
   diagnosticsProductsQueryOptions,
@@ -30,12 +32,21 @@ import {
   type DiagnosticsQueryScope,
 } from "../services/diagnostics-query";
 import {
+  normalizeConfigurationText,
+  type SelectedCollection,
+} from "../services/configuration-validation";
+import {
+  configurationKeys,
+  productTypeSuggestionsQueryOptions,
+} from "../services/configuration-query";
+import {
   diagnosticsFilterFields,
   diagnosticsFilterLabels,
   type DiagnosticsFilter,
   type DiagnosticsFilterField,
 } from "../services/diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "../services/diagnostics-search";
+import { filterProductTypeSuggestions } from "../services/product-type-suggestions";
 import {
   DEFAULT_DIAGNOSTICS_PAGE_SIZE,
   DIAGNOSTICS_PAGE_SIZES,
@@ -101,9 +112,12 @@ const badgeToneClass: Record<DiagnosticsTab, string> = {
 const FILTER_POPOVER_ID = "diagnostics-product-filter-popover";
 const FILTER_FIELD_POPOVER_ID = "diagnostics-filter-field-popover";
 const FILTER_VALUE_POPOVER_ID = "diagnostics-filter-value-popover";
+const FILTER_COLLECTION_POPOVER_ID = "diagnostics-filter-collection-popover";
 const SORT_POPOVER_ID = "diagnostics-sort-popover";
 const BULK_EDIT_POPOVER_ID = "diagnostics-bulk-edit-popover";
 const PAGE_SIZE_POPOVER_ID = "diagnostics-page-size-popover";
+const PRODUCT_TYPE_SUGGESTIONS_POPOVER_ID =
+  "diagnostics-product-type-suggestions-popover";
 const BULK_EDIT_MODAL_ID = "diagnostics-bulk-edit-modal";
 const CLEAR_BULK_EDIT_MODAL_ID = "diagnostics-clear-bulk-edit-confirmation";
 
@@ -123,12 +137,6 @@ function bulkEditFieldName(target: DiagnosticsBulkEditTarget) {
   return target.kind === "productType"
     ? "product type"
     : `custom_label_${target.index}`;
-}
-
-function bulkEditFieldLabel(target: DiagnosticsBulkEditTarget) {
-  return target.kind === "productType"
-    ? "Product type"
-    : `Custom label ${target.index}`;
 }
 
 const diagnosticsFilterFieldOptions = diagnosticsFilterFields.map((field) => ({
@@ -249,6 +257,373 @@ function PolarisOptionPicker({
                 </span>
               </s-button>
             ))}
+          </div>
+        </s-box>
+      </s-popover>
+    </div>
+  );
+}
+
+function CollectionFilterPicker({
+  disabled,
+  endpoint,
+  onChange,
+  scope,
+  value,
+}: {
+  disabled: boolean;
+  endpoint: string;
+  onChange: (collection: SelectedCollection) => void;
+  scope: DiagnosticsQueryScope;
+  value: SelectedCollection | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [results, setResults] = useState<SelectedCollection[]>([]);
+  const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const query = useQuery({
+    ...diagnosticsCollectionsQueryOptions(scope, debouncedSearch, cursor, {
+      endpoint,
+    }),
+    enabled: open && !disabled,
+  });
+
+  useEffect(() => {
+    const normalized = normalizeConfigurationText(search);
+    if (!normalized) {
+      setDebouncedSearch("");
+      return;
+    }
+
+    const timer = window.setTimeout(() => setDebouncedSearch(normalized), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setCursor(null);
+    setResults([]);
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    const page = query.data;
+    if (
+      !open ||
+      !page ||
+      normalizeConfigurationText(page.search) !==
+        normalizeConfigurationText(debouncedSearch)
+    ) {
+      return;
+    }
+
+    setResults((current) => {
+      const next = cursor ? [...current] : [];
+      const seen = new Set(next.map(({ id }) => id));
+      for (const collection of page.collections) {
+        if (!seen.has(collection.id)) {
+          seen.add(collection.id);
+          next.push(collection);
+        }
+      }
+      return next;
+    });
+  }, [cursor, debouncedSearch, open, query.data]);
+
+  const loadNextPage = () => {
+    const pageInfo = query.data?.pageInfo;
+    if (
+      query.isFetching ||
+      !pageInfo?.hasNextPage ||
+      !pageInfo.endCursor ||
+      pageInfo.endCursor === cursor
+    ) {
+      return;
+    }
+    setCursor(pageInfo.endCursor);
+  };
+
+  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    const element = event.currentTarget;
+    if (element.scrollHeight - element.scrollTop - element.clientHeight <= 24) {
+      loadNextPage();
+    }
+  };
+
+  return (
+    <div className={styles.polarisPicker}>
+      <s-clickable
+        accessibilityLabel="Select Collection"
+        background="base"
+        blockSize="32px"
+        border="small-100"
+        borderColor="base"
+        borderRadius="base"
+        borderStyle="solid"
+        command="--show"
+        commandFor={FILTER_COLLECTION_POPOVER_ID}
+        disabled={disabled}
+        inlineSize="100%"
+        padding="none"
+      >
+        <span className={styles.pickerTriggerContent}>
+          <span className={styles.pickerTriggerLabel}>
+            <s-text color={value ? "base" : "subdued"}>
+              {value?.title ?? "Select Collection..."}
+            </s-text>
+          </span>
+          <s-icon color="subdued" type="chevron-down" />
+        </span>
+      </s-clickable>
+      <s-popover
+        id={FILTER_COLLECTION_POPOVER_ID}
+        inlineSize="336px"
+        onHide={() => setOpen(false)}
+        onShow={() => {
+          setOpen(true);
+          setSearch("");
+          setDebouncedSearch("");
+          setCursor(null);
+          setResults([]);
+          window.requestAnimationFrame(() => searchRef.current?.focus());
+        }}
+      >
+        <s-box padding="small-200">
+          <div className={styles.collectionPickerContent}>
+            <s-search-field
+              label="Search store collections"
+              labelAccessibilityVisibility="exclusive"
+              onInput={(event) => setSearch(event.currentTarget.value)}
+              placeholder="Search collections"
+              ref={searchRef}
+              value={search}
+            />
+            <div
+              aria-label="Store collections"
+              className={styles.collectionPickerResults}
+              onScroll={handleScroll}
+              role="list"
+            >
+              {query.isPending && results.length === 0 ? (
+                <div className={styles.collectionPickerState}>
+                  <s-spinner
+                    accessibilityLabel="Loading collections"
+                    size="base"
+                  />
+                </div>
+              ) : query.isError && results.length === 0 ? (
+                <div className={styles.collectionPickerState}>
+                  <s-text color="subdued">
+                    Collections could not be loaded.
+                  </s-text>
+                  <s-button onClick={() => query.refetch()} variant="secondary">
+                    Retry
+                  </s-button>
+                </div>
+              ) : results.length === 0 ? (
+                <div className={styles.collectionPickerState}>
+                  <s-text color="subdued">No collections found.</s-text>
+                </div>
+              ) : (
+                results.map((collection) => (
+                  <s-button
+                    command="--hide"
+                    commandFor={FILTER_COLLECTION_POPOVER_ID}
+                    icon="collection"
+                    key={collection.id}
+                    onClick={() => onChange(collection)}
+                    variant="tertiary"
+                  >
+                    <span className={styles.collectionPickerOption}>
+                      <span>{collection.title}</span>
+                      {value?.id === collection.id ? (
+                        <s-icon type="check" />
+                      ) : null}
+                    </span>
+                  </s-button>
+                ))
+              )}
+              {query.isError && results.length > 0 ? (
+                <div className={styles.collectionPickerLoadingMore}>
+                  <s-text color="subdued">
+                    More collections could not be loaded.
+                  </s-text>
+                  <s-button onClick={() => query.refetch()} variant="tertiary">
+                    Retry
+                  </s-button>
+                </div>
+              ) : query.isFetching && results.length > 0 ? (
+                <div className={styles.collectionPickerLoadingMore}>
+                  <s-spinner
+                    accessibilityLabel="Loading more collections"
+                    size="base"
+                  />
+                  <s-text color="subdued">Loading more...</s-text>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </s-box>
+      </s-popover>
+    </div>
+  );
+}
+
+function ProductTypeSelector({
+  disabled,
+  loading,
+  onChange,
+  productTypes,
+  value,
+}: {
+  disabled: boolean;
+  loading: boolean;
+  onChange: (value: string) => void;
+  productTypes: string[];
+  value: string;
+}) {
+  const [suggestionSearch, setSuggestionSearch] = useState("");
+  const [popoverInlineSize, setPopoverInlineSize] =
+    useState<`${number}px`>("520px");
+  const selectorRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const normalizedSearch = normalizeConfigurationText(suggestionSearch).slice(
+    0,
+    MAX_PRODUCT_TYPE_LENGTH,
+  );
+  const visibleProductTypes = filterProductTypeSuggestions(
+    productTypes,
+    normalizedSearch,
+  );
+  const selectedProductType = productTypes.find(
+    (productType) =>
+      productType.toLocaleLowerCase() === value.trim().toLocaleLowerCase(),
+  );
+  const exactSearchMatch = productTypes.some(
+    (productType) =>
+      productType.toLocaleLowerCase() === normalizedSearch.toLocaleLowerCase(),
+  );
+  const syncPopoverWidth = () => {
+    const width = selectorRef.current?.getBoundingClientRect().width;
+    if (width) setPopoverInlineSize(`${Math.round(width)}px`);
+  };
+
+  return (
+    <div className={styles.productTypeSelector} ref={selectorRef}>
+      <s-text>Product type</s-text>
+      <s-clickable
+        accessibilityLabel="Choose or enter a product type"
+        background="base"
+        blockSize="38px"
+        border="small-100"
+        borderColor="base"
+        borderRadius="base"
+        borderStyle="solid"
+        command="--show"
+        commandFor={PRODUCT_TYPE_SUGGESTIONS_POPOVER_ID}
+        disabled={disabled}
+        inlineSize="100%"
+        onClick={syncPopoverWidth}
+        padding="small-200 base"
+      >
+        <span className={styles.productTypeTriggerContent}>
+          <s-text color={value ? "base" : "subdued"}>
+            {value || "Type or select a product type"}
+          </s-text>
+          <span className={styles.productTypeTriggerMeta}>
+            {value.length}/{MAX_PRODUCT_TYPE_LENGTH}
+            <s-icon color="subdued" type="chevron-down" />
+          </span>
+        </span>
+      </s-clickable>
+
+      <s-popover
+        id={PRODUCT_TYPE_SUGGESTIONS_POPOVER_ID}
+        inlineSize={popoverInlineSize}
+        onHide={(event) => {
+          event.stopPropagation();
+          setSuggestionSearch("");
+        }}
+        onShow={() => {
+          syncPopoverWidth();
+          setSuggestionSearch(value);
+          window.requestAnimationFrame(() => searchRef.current?.focus());
+        }}
+      >
+        <s-box padding="small-200">
+          <div className={styles.productTypeSuggestionDialog}>
+            <s-search-field
+              autocomplete="off"
+              label="Search product types"
+              labelAccessibilityVisibility="exclusive"
+              maxLength={MAX_PRODUCT_TYPE_LENGTH}
+              onInput={(event) => {
+                const nextValue = event.currentTarget.value;
+                setSuggestionSearch(nextValue);
+                onChange(
+                  normalizeConfigurationText(nextValue).slice(
+                    0,
+                    MAX_PRODUCT_TYPE_LENGTH,
+                  ),
+                );
+              }}
+              placeholder="Search product types"
+              ref={searchRef}
+              value={suggestionSearch}
+            />
+            <div
+              aria-label="Available product types"
+              className={styles.productTypeSuggestionOptions}
+              role="region"
+            >
+              {normalizedSearch && !exactSearchMatch ? (
+                <s-button
+                  command="--hide"
+                  commandFor={PRODUCT_TYPE_SUGGESTIONS_POPOVER_ID}
+                  onClick={() => onChange(normalizedSearch)}
+                  variant="tertiary"
+                >
+                  <span className={styles.productTypeSuggestion}>
+                    <span>Use &quot;{normalizedSearch}&quot;</span>
+                    <s-icon type="plus" />
+                  </span>
+                </s-button>
+              ) : null}
+              {loading ? (
+                <div className={styles.productTypeSuggestionState}>
+                  <s-spinner
+                    accessibilityLabel="Loading product type suggestions"
+                    size="base"
+                  />
+                  <s-text color="subdued">Loading product types...</s-text>
+                </div>
+              ) : visibleProductTypes.length > 0 ? (
+                visibleProductTypes.map((productType) => (
+                  <s-button
+                    accessibilityLabel={`Use ${productType} as the product type`}
+                    command="--hide"
+                    commandFor={PRODUCT_TYPE_SUGGESTIONS_POPOVER_ID}
+                    key={productType.toLocaleLowerCase()}
+                    onClick={() => onChange(productType)}
+                    variant="tertiary"
+                  >
+                    <span className={styles.productTypeSuggestion}>
+                      <span>{productType}</span>
+                      {selectedProductType === productType ? (
+                        <s-icon type="check" />
+                      ) : null}
+                    </span>
+                  </s-button>
+                ))
+              ) : normalizedSearch ? null : (
+                <div className={styles.productTypeSuggestionState}>
+                  <s-text color="subdued">
+                    No product type suggestions found. Search to use a new
+                    product type.
+                  </s-text>
+                </div>
+              )}
+            </div>
           </div>
         </s-box>
       </s-popover>
@@ -746,6 +1121,7 @@ export function DiagnosticsPanel({
     useState<DiagnosticsBulkEditTarget>({ kind: "productType" });
   const [bulkEditValue, setBulkEditValue] = useState("");
   const [bulkEditError, setBulkEditError] = useState<string | null>(null);
+  const [bulkEditModalOpen, setBulkEditModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<DiagnosticsFilter | null>(
@@ -754,6 +1130,10 @@ export function DiagnosticsPanel({
   const [draftFilterField, setDraftFilterField] =
     useState<DiagnosticsFilterField | null>(null);
   const [draftFilterValue, setDraftFilterValue] = useState("");
+  const [activeCollection, setActiveCollection] =
+    useState<SelectedCollection | null>(null);
+  const [draftCollection, setDraftCollection] =
+    useState<SelectedCollection | null>(null);
   const [selectedSort, setSelectedSort] = useState<DiagnosticsSort | "">("");
   const [pageSize, setPageSize] = useState<DiagnosticsPageSize>(
     DEFAULT_DIAGNOSTICS_PAGE_SIZE,
@@ -778,6 +1158,13 @@ export function DiagnosticsPanel({
     : tabNavigation;
   const pageRequest = navigation.history[navigation.index];
   const queriesEnabled = Boolean(scope) && active;
+  const productTypeSuggestionsQuery = useQuery({
+    ...productTypeSuggestionsQueryOptions(queryScope),
+    enabled:
+      queriesEnabled &&
+      bulkEditModalOpen &&
+      bulkEditTarget.kind === "productType",
+  });
   const fallbackPage =
     refreshFallback?.page?.tab === selectedTab
       ? refreshFallback.page.value
@@ -883,6 +1270,7 @@ export function DiagnosticsPanel({
     enabled:
       queriesEnabled &&
       Boolean(draftFilterField) &&
+      draftFilterField !== "collection" &&
       Boolean(filterSnapshotVersion),
   });
   const filterOptions = filterOptionsQuery.data?.options ?? [];
@@ -918,6 +1306,18 @@ export function DiagnosticsPanel({
         void queryClient.invalidateQueries({
           queryKey: diagnosticsKeys.shop(scope.shop),
         });
+        void queryClient
+          .invalidateQueries({
+            exact: true,
+            queryKey: configurationKeys.productTypes(scope),
+            refetchType: "none",
+          })
+          .then(() =>
+            queryClient.fetchQuery(
+              productTypeSuggestionsQueryOptions(scope, { force: true }),
+            ),
+          )
+          .catch(() => undefined);
       }
       const fieldName = bulkEditFieldName(job.edit);
       shopify.toast.show(
@@ -933,6 +1333,18 @@ export function DiagnosticsPanel({
         void queryClient.invalidateQueries({
           queryKey: diagnosticsKeys.shop(scope.shop),
         });
+        void queryClient
+          .invalidateQueries({
+            exact: true,
+            queryKey: configurationKeys.productTypes(scope),
+            refetchType: "none",
+          })
+          .then(() =>
+            queryClient.fetchQuery(
+              productTypeSuggestionsQueryOptions(scope, { force: true }),
+            ),
+          )
+          .catch(() => undefined);
       }
       shopify.toast.show(
         `${formatCount(job.successfulCount)} products updated. ${formatCount(job.failedCount)} products could not be updated.`,
@@ -1099,6 +1511,7 @@ export function DiagnosticsPanel({
     setBulkEditTarget(target);
     setBulkEditValue("");
     setBulkEditError(null);
+    setBulkEditModalOpen(true);
     window.setTimeout(() => bulkEditModalRef.current?.showOverlay());
   };
 
@@ -1139,6 +1552,7 @@ export function DiagnosticsPanel({
 
   const cancelBulkEditClear = () => {
     clearBulkEditModalRef.current?.hideOverlay();
+    setBulkEditModalOpen(true);
     window.setTimeout(() => bulkEditModalRef.current?.showOverlay());
   };
 
@@ -1352,11 +1766,20 @@ export function DiagnosticsPanel({
   const resetDraftFilter = () => {
     setDraftFilterField(activeFilter?.field ?? null);
     setDraftFilterValue(activeFilter?.value ?? "");
+    setDraftCollection(
+      activeFilter?.field === "collection" ? activeCollection : null,
+    );
   };
 
   const changeDraftFilterField = (value: string) => {
     setDraftFilterField(value as DiagnosticsFilterField);
     setDraftFilterValue("");
+    setDraftCollection(null);
+  };
+
+  const changeDraftCollection = (collection: SelectedCollection) => {
+    setDraftCollection(collection);
+    setDraftFilterValue(collection.id);
   };
 
   const applyFilter = () => {
@@ -1375,6 +1798,9 @@ export function DiagnosticsPanel({
       clearSelectionForScopeChange();
     }
     setActiveFilter(nextFilter);
+    setActiveCollection(
+      nextFilter.field === "collection" ? draftCollection : null,
+    );
     storeClientState(createDiagnosticsClientState(clientState.generation));
   };
 
@@ -1383,6 +1809,8 @@ export function DiagnosticsPanel({
     setActiveFilter(null);
     setDraftFilterField(null);
     setDraftFilterValue("");
+    setActiveCollection(null);
+    setDraftCollection(null);
     storeClientState(createDiagnosticsClientState(clientState.generation));
   };
 
@@ -1423,7 +1851,6 @@ export function DiagnosticsPanel({
   const selectedProductCount = diagnosticsBulkSelectionCount(bulkSelection);
   const activeJobInProgress = isActiveBulkEditJob(activeBulkJob);
   const bulkEditField = bulkEditFieldName(bulkEditTarget);
-  const bulkEditLabel = bulkEditFieldLabel(bulkEditTarget);
   const bulkEditMaxLength =
     bulkEditTarget.kind === "productType"
       ? MAX_PRODUCT_TYPE_LENGTH
@@ -1548,28 +1975,40 @@ export function DiagnosticsPanel({
                     {draftFilterField ? (
                       <div className={styles.filterCondition}>
                         <s-text>is</s-text>
-                        <PolarisOptionPicker
-                          accessibilityLabel={`Select ${diagnosticsFilterLabels[draftFilterField]}`}
-                          disabled={
-                            filterOptionsQuery.isPending ||
-                            filterOptionsQuery.isError ||
-                            filterOptions.length === 0
-                          }
-                          id={FILTER_VALUE_POPOVER_ID}
-                          onChange={setDraftFilterValue}
-                          options={filterOptions}
-                          placeholder={
-                            filterOptionsQuery.isPending
-                              ? "Loading values..."
-                              : `Select ${diagnosticsFilterLabels[draftFilterField]}...`
-                          }
-                          value={draftFilterValue}
-                        />
-                        {filterOptionsQuery.isError ? (
+                        {draftFilterField === "collection" ? (
+                          <CollectionFilterPicker
+                            disabled={!queriesEnabled}
+                            endpoint={dataEndpoint}
+                            onChange={changeDraftCollection}
+                            scope={queryScope}
+                            value={draftCollection}
+                          />
+                        ) : (
+                          <PolarisOptionPicker
+                            accessibilityLabel={`Select ${diagnosticsFilterLabels[draftFilterField]}`}
+                            disabled={
+                              filterOptionsQuery.isPending ||
+                              filterOptionsQuery.isError ||
+                              filterOptions.length === 0
+                            }
+                            id={FILTER_VALUE_POPOVER_ID}
+                            onChange={setDraftFilterValue}
+                            options={filterOptions}
+                            placeholder={
+                              filterOptionsQuery.isPending
+                                ? "Loading values..."
+                                : `Select ${diagnosticsFilterLabels[draftFilterField]}...`
+                            }
+                            value={draftFilterValue}
+                          />
+                        )}
+                        {draftFilterField !== "collection" &&
+                        filterOptionsQuery.isError ? (
                           <s-text tone="critical">
                             Filter values couldn&apos;t be loaded.
                           </s-text>
-                        ) : !filterOptionsQuery.isPending &&
+                        ) : draftFilterField !== "collection" &&
+                          !filterOptionsQuery.isPending &&
                           filterOptions.length === 0 ? (
                           <s-text color="subdued">
                             No values are available for this filter.
@@ -1680,6 +2119,11 @@ export function DiagnosticsPanel({
         accessibilityLabel={`Assign ${bulkEditField} to selected products`}
         heading={`Assign ${bulkEditField}`}
         id={BULK_EDIT_MODAL_ID}
+        onHide={(event) => {
+          if (event.target === event.currentTarget) {
+            setBulkEditModalOpen(false);
+          }
+        }}
         padding="none"
         ref={bulkEditModalRef}
         size="base"
@@ -1694,26 +2138,49 @@ export function DiagnosticsPanel({
                 <s-paragraph>{bulkEditError}</s-paragraph>
               </s-banner>
             ) : null}
-            <s-text-field
-              disabled={activeJobInProgress || bulkEditMutation.isPending}
-              label={
-                bulkEditTarget.kind === "customLabel"
-                  ? "Custom label value"
-                  : bulkEditLabel
-              }
-              maxLength={bulkEditMaxLength}
-              name="bulkEditValue"
-              onInput={(event) => {
-                setBulkEditValue(event.currentTarget.value);
-                setBulkEditError(null);
-              }}
-              placeholder={
-                bulkEditTarget.kind === "customLabel"
-                  ? "Enter a custom label"
-                  : `Enter ${bulkEditField}`
-              }
-              value={bulkEditValue}
-            />
+            {bulkEditTarget.kind === "productType" ? (
+              <>
+                <ProductTypeSelector
+                  disabled={activeJobInProgress || bulkEditMutation.isPending}
+                  loading={productTypeSuggestionsQuery.isPending}
+                  onChange={(value) => {
+                    setBulkEditValue(value);
+                    setBulkEditError(null);
+                  }}
+                  productTypes={productTypeSuggestionsQuery.data ?? []}
+                  value={bulkEditValue}
+                />
+                {productTypeSuggestionsQuery.isError ? (
+                  <s-banner
+                    heading="Product type suggestions are unavailable"
+                    tone="warning"
+                  >
+                    <s-paragraph>
+                      You can still type and apply a new product type.
+                    </s-paragraph>
+                    <s-button
+                      onClick={() => productTypeSuggestionsQuery.refetch()}
+                      variant="secondary"
+                    >
+                      Retry suggestions
+                    </s-button>
+                  </s-banner>
+                ) : null}
+              </>
+            ) : (
+              <s-text-field
+                disabled={activeJobInProgress || bulkEditMutation.isPending}
+                label="Custom label value"
+                maxLength={bulkEditMaxLength}
+                name="bulkEditValue"
+                onInput={(event) => {
+                  setBulkEditValue(event.currentTarget.value);
+                  setBulkEditError(null);
+                }}
+                placeholder="Enter a custom label"
+                value={bulkEditValue}
+              />
+            )}
             <s-banner
               heading={`Empty values clear ${bulkEditField}`}
               tone="warning"

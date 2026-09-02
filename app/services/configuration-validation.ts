@@ -21,6 +21,7 @@ export interface ConfigurationInput {
   sizeOptions: string[];
   excludedCollections: SelectedCollection[];
   excludedTitleTerms: string[];
+  productTypes: string[];
   showSalePriceInGoogleFeed: boolean;
   useProductImageAsMainImage: boolean;
   includeShippingWeightInGoogleFeed: boolean;
@@ -40,6 +41,7 @@ export interface ConfigurationFieldErrors {
   sizeOptions?: string;
   excludedCollections?: string;
   excludedTitleTerms?: string;
+  productTypes?: string;
   showSalePriceInGoogleFeed?: string;
   useProductImageAsMainImage?: string;
   includeShippingWeightInGoogleFeed?: string;
@@ -69,6 +71,8 @@ const MAX_COLLECTIONS = 100;
 const MAX_OPTION_NAMES = 100;
 const MAX_OPTION_NAME_LENGTH = 100;
 const MAX_TITLE_TERMS = 100;
+const MAX_PRODUCT_TYPES = 100;
+const MAX_PRODUCT_TYPE_LENGTH = 255;
 const MAX_SELECTED_INVENTORY_LOCATIONS = 250;
 
 export const DEFAULT_COLOR_OPTIONS: readonly string[] = [];
@@ -178,6 +182,36 @@ export function normalizeExcludedTitleTerms(values: unknown) {
   return normalizedTerms;
 }
 
+export function normalizeProductTypes(values: unknown) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const productTypes: string[] = [];
+
+  for (const value of values) {
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const productType = normalizeConfigurationText(value).slice(
+      0,
+      MAX_PRODUCT_TYPE_LENGTH,
+    );
+    const comparable = productType.toLocaleLowerCase();
+
+    if (!productType || seen.has(comparable)) {
+      continue;
+    }
+
+    seen.add(comparable);
+    productTypes.push(productType);
+  }
+
+  return productTypes;
+}
+
 export function normalizeSelectedCollections(values: unknown) {
   if (!Array.isArray(values)) {
     return [];
@@ -246,6 +280,16 @@ export function normalizeInventoryLocationIds(values: unknown) {
   return ids;
 }
 
+export function configurationRequiresFeedRefresh(
+  previous: ConfigurationInput,
+  next: ConfigurationInput,
+) {
+  return (
+    JSON.stringify({ ...previous, productTypes: undefined }) !==
+    JSON.stringify({ ...next, productTypes: undefined })
+  );
+}
+
 export function validateConfigurationInput(value: unknown): ConfigurationInput {
   const fields: ConfigurationFieldErrors = {};
   const input: Record<string, unknown> =
@@ -268,6 +312,7 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
   const excludedTitleTerms = normalizeExcludedTitleTerms(
     input.excludedTitleTerms,
   );
+  const productTypes = normalizeProductTypes(input.productTypes);
   const showSalePriceInGoogleFeed = input.showSalePriceInGoogleFeed === true;
   const useProductImageAsMainImage = input.useProductImageAsMainImage === true;
   const includeShippingWeightInGoogleFeed =
@@ -351,6 +396,26 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     fields.excludedTitleTerms = "Remove empty product-title terms.";
   }
 
+  if (input.productTypes !== undefined && !Array.isArray(input.productTypes)) {
+    fields.productTypes = "Add valid product types.";
+  } else if (
+    Array.isArray(input.productTypes) &&
+    input.productTypes.length > MAX_PRODUCT_TYPES
+  ) {
+    fields.productTypes = `Add no more than ${MAX_PRODUCT_TYPES} product types.`;
+  } else if (
+    Array.isArray(input.productTypes) &&
+    input.productTypes.some(
+      (productType) =>
+        typeof productType !== "string" ||
+        !normalizeConfigurationText(productType) ||
+        normalizeConfigurationText(productType).length >
+          MAX_PRODUCT_TYPE_LENGTH,
+    )
+  ) {
+    fields.productTypes = "Remove invalid product types.";
+  }
+
   if (
     input.showSalePriceInGoogleFeed !== undefined &&
     typeof input.showSalePriceInGoogleFeed !== "boolean"
@@ -409,15 +474,13 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
       "Select valid Shopify inventory locations.";
   } else if (
     Array.isArray(input.selectedInventoryLocationIds) &&
-    input.selectedInventoryLocationIds.length >
-    MAX_SELECTED_INVENTORY_LOCATIONS
+    input.selectedInventoryLocationIds.length > MAX_SELECTED_INVENTORY_LOCATIONS
   ) {
-    fields.selectedInventoryLocationIds =
-      `Select no more than ${MAX_SELECTED_INVENTORY_LOCATIONS} inventory locations.`;
+    fields.selectedInventoryLocationIds = `Select no more than ${MAX_SELECTED_INVENTORY_LOCATIONS} inventory locations.`;
   } else if (
     Array.isArray(input.selectedInventoryLocationIds) &&
     selectedInventoryLocationIds.length !==
-    input.selectedInventoryLocationIds.length
+      input.selectedInventoryLocationIds.length
   ) {
     fields.selectedInventoryLocationIds =
       "One or more selected inventory locations are invalid.";
@@ -458,6 +521,7 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     sizeOptions,
     excludedCollections,
     excludedTitleTerms,
+    productTypes,
     showSalePriceInGoogleFeed,
     useProductImageAsMainImage,
     includeShippingWeightInGoogleFeed,

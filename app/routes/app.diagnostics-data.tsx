@@ -1,6 +1,10 @@
 import type { LoaderFunctionArgs } from "react-router";
 
 import {
+  searchShopCollections,
+  type CollectionSearchPage,
+} from "../services/collection-search.server";
+import {
   getDiagnosticsCounts,
   getDiagnosticsFilterOptions,
   getDiagnosticsPage,
@@ -32,13 +36,18 @@ export type DiagnosticsDataResponse =
     }
   | {
       ok: true;
+      intent: "collections";
+      page: CollectionSearchPage;
+    }
+  | {
+      ok: true;
       intent: "page";
       tab: DiagnosticsTab;
       page: DiagnosticsPage;
     }
   | {
       ok: false;
-      intent: "counts" | "filter-options" | "page";
+      intent: "collections" | "counts" | "filter-options" | "page";
       error: string;
     };
 
@@ -58,9 +67,11 @@ export const loader = async ({
   const intent =
     requestedIntent === "counts"
       ? "counts"
-      : requestedIntent === "filter-options"
-        ? "filter-options"
-        : "page";
+      : requestedIntent === "collections"
+        ? "collections"
+        : requestedIntent === "filter-options"
+          ? "filter-options"
+          : "page";
   const force = url.searchParams.get("refresh") === "1";
   const refreshToken = url.searchParams.get("refreshToken");
 
@@ -73,6 +84,18 @@ export const loader = async ({
           force,
           refreshToken,
         }),
+      };
+    }
+
+    if (intent === "collections") {
+      return {
+        ok: true,
+        intent,
+        page: await searchShopCollections(
+          admin,
+          url.searchParams.get("search"),
+          url.searchParams.get("after"),
+        ),
       };
     }
 
@@ -136,9 +159,11 @@ export const loader = async ({
       error:
         intent === "counts"
           ? "Diagnostic totals couldn't be calculated. Refresh to try again."
-          : intent === "filter-options"
-            ? "Filter options couldn't be loaded. Try again."
-            : "Products couldn't be loaded. Refresh to try again.",
+          : intent === "collections"
+            ? "Collections couldn't be loaded. Try again."
+            : intent === "filter-options"
+              ? "Filter options couldn't be loaded. Try again."
+              : "Products couldn't be loaded. Refresh to try again.",
     };
   }
 };

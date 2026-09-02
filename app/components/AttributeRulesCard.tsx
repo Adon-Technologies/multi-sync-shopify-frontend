@@ -171,6 +171,7 @@ function RuleCollectionPicker({
   useEffect(() => {
     const page = query.data;
     if (
+      !open ||
       !page ||
       normalizeConfigurationText(page.search) !==
         normalizeConfigurationText(debouncedSearch)
@@ -188,7 +189,7 @@ function RuleCollectionPicker({
       }
       return next;
     });
-  }, [cursor, debouncedSearch, query.data]);
+  }, [cursor, debouncedSearch, open, query.data]);
 
   const selectedIds = new Set(selected.map(({ id }) => id));
   const visible = results.filter(({ id }) => !selectedIds.has(id));

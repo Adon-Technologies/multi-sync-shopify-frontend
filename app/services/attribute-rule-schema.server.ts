@@ -5,7 +5,7 @@ let migrationPromise: Promise<void> | null = null;
 /**
  * Prisma db push creates MongoDB indexes but does not backfill scalar defaults
  * in existing documents. Run this small, idempotent migration before any code
- * reads the new required version and URL-option fields.
+ * reads newly required Configuration fields.
  */
 export function ensureAttributeRuleConfigurationFields() {
   if (!migrationPromise) {
@@ -89,6 +89,11 @@ export function ensureAttributeRuleConfigurationFields() {
             multi: true,
             q: { selectedInventoryLocationIds: { $exists: false } },
             u: { $set: { selectedInventoryLocationIds: [] } },
+          },
+          {
+            multi: true,
+            q: { productTypes: { $exists: false } },
+            u: { $set: { productTypes: [] } },
           },
         ],
       })

@@ -25,3 +25,16 @@ test("Diagnostics filter values are trimmed without changing their casing", () =
     value: "Summer Sale",
   });
 });
+
+test("Shopify collection IDs are accepted as Diagnostics filter values", () => {
+  assert.deepEqual(
+    normalizeDiagnosticsFilter(
+      "collection",
+      "  gid://shopify/Collection/123  ",
+    ),
+    {
+      field: "collection",
+      value: "gid://shopify/Collection/123",
+    },
+  );
+});

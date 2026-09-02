@@ -160,6 +160,7 @@ model Configuration {
   optionMappingsInitialized          Boolean             @default(false)
   excludedCollections                Json
   excludedTitleTerms                 String[]
+  productTypes                       String[]            @default([])
   diagnosticsRevision                String              @default("")
   showSalePriceInGoogleFeed          Boolean             @default(false)
   useProductImageAsMainImage         Boolean             @default(false)

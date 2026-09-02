@@ -15,12 +15,13 @@ const attributeRulesSource = readFileSync(
   "utf8",
 );
 
-test("the compact Attributes and Exclusions editor exposes four accessible View actions", () => {
+test("the compact Attributes and Exclusions editor exposes five accessible View actions", () => {
   const labels = [
     "View and edit Color options",
     "View and edit Size options",
     "View and edit excluded collections",
     "View and edit excluded product titles",
+    "View and edit configured product types",
   ];
 
   for (const label of labels) {
@@ -30,15 +31,12 @@ test("the compact Attributes and Exclusions editor exposes four accessible View 
   assert.match(panelSource, /command="--show"[\s\S]*commandFor=\{viewTarget\}/);
 });
 
-test("all four editors use named Polaris modals and removable Polaris chips", () => {
-  for (const heading of ["Excluded collections", "Excluded product titles"]) {
-    assert.match(
-      panelSource,
-      new RegExp(`<s-modal\\s+[\\s\\S]*?heading="${heading}"`),
-    );
-  }
-
+test("all five editors use Polaris modals and removable Polaris chips", () => {
+  assert.match(panelSource, /<s-modal[\s\S]*?heading="Excluded collections"/);
   assert.match(panelSource, /heading=\{`\$\{attribute\} options`\}/);
+  assert.match(panelSource, /<s-modal[\s\S]*?heading=\{heading\}/);
+  assert.match(panelSource, /heading="Excluded product titles"/);
+  assert.match(panelSource, /heading="Product types"/);
   assert.equal(panelSource.match(/<s-clickable-chip/g)?.length, 3);
   assert.equal(panelSource.match(/removable/g)?.length, 3);
 });
@@ -49,10 +47,39 @@ test("dialog edits remain drafts until Confirm and main fields show compact summ
     panelSource,
     /onClick=\{\(\) => onChange\(normalizeOptionNames\(draftValue\)\)\}/,
   );
-  assert.match(panelSource, /onClick=\{\(\) => onChange\(draftValue\)\}/);
+  assert.match(
+    panelSource,
+    /onClick=\{\(\) => onChange\(normalize\(draftValue\)\)\}/,
+  );
   assert.match(panelSource, /\$\{value\.length\} option name/);
   assert.match(panelSource, /\$\{value\.length\} collection/);
-  assert.match(panelSource, /\$\{value\.length\} title term/);
+  assert.match(panelSource, /\$\{count\} title term/);
+  assert.match(panelSource, /\$\{count\} product type/);
+});
+
+test("Product Type reuses the draft dialog workflow below Exclude collection", () => {
+  const excludeCollection = panelSource.indexOf('title="Exclude collection"');
+  const productType = panelSource.indexOf('title="Add Product type"');
+  const titleExclusion = panelSource.indexOf(
+    'title="Exclude product by title"',
+  );
+
+  assert.ok(excludeCollection >= 0);
+  assert.ok(productType > excludeCollection);
+  assert.ok(productType > titleExclusion);
+  assert.match(panelSource, /fieldLabel="Product type"/);
+  assert.match(panelSource, /placeholder="Type to add product type"/);
+  assert.match(panelSource, /inputName="productTypeDraft"/);
+  assert.match(panelSource, /onSubmit=\{\(event\) => \{/);
+  assert.match(panelSource, /setDraftValue\(\(current\) =>/);
+  assert.match(panelSource, /This product type has already been added\./);
+  assert.match(panelSource, /Enter a value before adding it\./);
+  assert.match(panelSource, />\s*Confirm\s*<\/s-button>/);
+  assert.match(panelSource, />\s*Cancel\s*<\/s-button>/);
+});
+
+test("saving Configuration invalidates Product Type suggestions", () => {
+  assert.match(panelSource, /configurationKeys\.productTypes\(scope\)/);
 });
 
 test("Google feed checkboxes use a responsive two-column grid", () => {
@@ -82,16 +109,11 @@ test("Inventory and Availability is a Polaris card between feed attributes and U
   const inventory = panelSource.indexOf(
     '<s-section heading="Inventory & Availability">',
   );
-  const urlOptions = panelSource.indexOf(
-    '<s-section heading="URL Options">',
-  );
+  const urlOptions = panelSource.indexOf('<s-section heading="URL Options">');
 
   assert.ok(attributes >= 0 && attributes < inventory);
   assert.ok(inventory < urlOptions);
-  assert.match(
-    panelSource,
-    /label="Ignore Shopify inventory in Google feed"/,
-  );
+  assert.match(panelSource, /label="Ignore Shopify inventory in Google feed"/);
   assert.match(
     panelSource,
     /heading="Google may compare feed availability with your website"[\s\S]*tone="warning"/,
@@ -140,6 +162,17 @@ test("collection rule search explains matches already assigned to another rule",
   );
 });
 
+test("collection pickers restore cached results whenever they reopen", () => {
+  assert.match(
+    panelSource,
+    /\[collectionsQuery\.data, cursor, debouncedSearch, isOpen\]/,
+  );
+  assert.match(
+    attributeRulesSource,
+    /\[cursor, debouncedSearch, open, query\.data\]/,
+  );
+});
+
 test("a saved configuration that made XML stale shows its warning at the top", () => {
   const headerStart = panelSource.indexOf(`<div className={styles.header}>`);
   const warningStart = panelSource.indexOf(
@@ -160,6 +193,9 @@ test("a saved configuration that made XML stale shows its warning at the top", (
   assert.match(panelSource, /styles\.xmlRefreshWarningContent/);
   assert.match(panelSource, /styles\.xmlRefreshWarningAction/);
   assert.match(panelSource, /variant="secondary"/);
-  assert.match(panelStyles, /\.xmlRefreshWarningAction\s*\{[\s\S]*margin-inline-start:\s*auto/);
+  assert.match(
+    panelStyles,
+    /\.xmlRefreshWarningAction\s*\{[\s\S]*margin-inline-start:\s*auto/,
+  );
   assert.match(panelSource, /refetchType: "all"/);
 });

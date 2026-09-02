@@ -3,10 +3,12 @@ import test from "node:test";
 
 import {
   availableOptionNames,
+  configurationRequiresFeedRefresh,
   DEFAULT_COLOR_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
   normalizeExcludedTitleTerms,
   normalizeOptionNames,
+  normalizeProductTypes,
   resolveStoredOptionNames,
   validateConfigurationInput,
 } from "../app/services/configuration-validation.ts";
@@ -21,6 +23,20 @@ test("title terms are trimmed and de-duplicated case-insensitively", () => {
       "Gift card",
     ]),
     ["Sample", "Test product", "Gift card"],
+  );
+});
+
+test("product types are cleaned and de-duplicated case-insensitively", () => {
+  assert.deepEqual(
+    normalizeProductTypes([
+      " Shoes ",
+      "shoes",
+      "Winter   Jackets",
+      "",
+      "T-Shirts",
+      42,
+    ]),
+    ["Shoes", "Winter Jackets", "T-Shirts"],
   );
 });
 
@@ -83,6 +99,7 @@ test("configuration retains stable collection IDs and normalized store values", 
       },
     ],
     excludedTitleTerms: [" Sample "],
+    productTypes: [" Shoes ", "shoes", "Winter   Jackets"],
     showSalePriceInGoogleFeed: true,
     useProductImageAsMainImage: true,
     includeShippingWeightInGoogleFeed: true,
@@ -107,6 +124,7 @@ test("configuration retains stable collection IDs and normalized store values", 
       },
     ],
     excludedTitleTerms: ["Sample"],
+    productTypes: ["Shoes", "Winter Jackets"],
     showSalePriceInGoogleFeed: true,
     useProductImageAsMainImage: true,
     includeShippingWeightInGoogleFeed: true,
@@ -118,6 +136,59 @@ test("configuration retains stable collection IDs and normalized store values", 
     disablePrimaryCurrencyParameter: true,
     checkoutLinkMode: "CART",
   });
+});
+
+test("product type configuration rejects empty, invalid, oversized, and excessive values", () => {
+  const base = {
+    alertsEmail: "alerts@example.com",
+    countryCode: "US",
+    colorOptions: ["Color"],
+    excludedCollections: [],
+    excludedTitleTerms: [],
+    sizeOptions: ["Size"],
+  };
+
+  for (const productTypes of [
+    "Shoes",
+    ["   "],
+    [42],
+    ["x".repeat(256)],
+    Array.from({ length: 101 }, (_, index) => `Type ${index}`),
+  ]) {
+    assert.throws(
+      () => validateConfigurationInput({ ...base, productTypes }),
+      /Correct the highlighted configuration fields/,
+    );
+  }
+
+  assert.deepEqual(validateConfigurationInput(base).productTypes, []);
+});
+
+test("Product Type-only edits do not require an XML refresh", () => {
+  const previous = validateConfigurationInput({
+    alertsEmail: "alerts@example.com",
+    countryCode: "US",
+    colorOptions: ["Color"],
+    excludedCollections: [],
+    excludedTitleTerms: [],
+    productTypes: ["Shoes"],
+    sizeOptions: ["Size"],
+  });
+
+  assert.equal(
+    configurationRequiresFeedRefresh(previous, {
+      ...previous,
+      productTypes: ["Shoes", "Accessories"],
+    }),
+    false,
+  );
+  assert.equal(
+    configurationRequiresFeedRefresh(previous, {
+      ...previous,
+      countryCode: "LB",
+    }),
+    true,
+  );
 });
 
 test("sale-price feed setting defaults false and validates Boolean values", () => {
@@ -210,7 +281,12 @@ test("inventory settings default safely and preserve stable Shopify location IDs
   for (const invalid of [
     { inventorySourceMode: "SOMEWHERE" },
     { selectedInventoryLocationIds: ["gid://shopify/Product/123"] },
-    { selectedInventoryLocationIds: ["gid://shopify/Location/123", "gid://shopify/Location/123"] },
+    {
+      selectedInventoryLocationIds: [
+        "gid://shopify/Location/123",
+        "gid://shopify/Location/123",
+      ],
+    },
     { ignoreShopifyInventoryInGoogleFeed: "true" },
   ]) {
     assert.throws(

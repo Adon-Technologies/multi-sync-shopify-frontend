@@ -43,6 +43,12 @@ interface OptionNamesResponse {
   optionNames: string[];
 }
 
+interface ProductTypesResponse {
+  ok: true;
+  intent: "product-types";
+  productTypes: string[];
+}
+
 interface LocationsResponse {
   ok: true;
   intent: "locations";
@@ -107,6 +113,10 @@ export const configurationKeys = {
     { shop, sessionId }: ConfigurationQueryScope,
     endpoint = defaultEndpoint,
   ) => ["configuration-option-names", shop, sessionId, endpoint] as const,
+  productTypes: (
+    { shop, sessionId }: ConfigurationQueryScope,
+    endpoint = defaultEndpoint,
+  ) => ["configuration-product-types", shop, sessionId, endpoint] as const,
   locations: (
     { shop, sessionId }: ConfigurationQueryScope,
     endpoint = defaultEndpoint,
@@ -252,6 +262,38 @@ export function variantOptionNamesQueryOptions(
       const payload = await readJson<OptionNamesResponse>(response);
       return payload.optionNames;
     },
+  });
+}
+
+export function productTypeSuggestionsQueryOptions(
+  scope: ConfigurationQueryScope,
+  {
+    endpoint = defaultEndpoint,
+    force = false,
+  }: { endpoint?: string; force?: boolean } = {},
+) {
+  const params = new URLSearchParams({ intent: "product-types" });
+  if (force) {
+    params.set("refresh", "1");
+  }
+
+  return queryOptions({
+    gcTime: 30 * 60 * 1_000,
+    queryKey: configurationKeys.productTypes(scope, endpoint),
+    queryFn: async ({ signal }): Promise<string[]> => {
+      const response = await fetch(`${endpoint}?${params}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      const payload = await readJson<ProductTypesResponse>(response);
+      return payload.productTypes;
+    },
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    staleTime: 10 * 60 * 1_000,
   });
 }
 

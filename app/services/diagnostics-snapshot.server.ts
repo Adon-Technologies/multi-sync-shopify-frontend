@@ -386,6 +386,7 @@ export async function readDiagnosticsSnapshotPage(
     search?: string | null;
     sort?: DiagnosticsSort | string | null;
     filter?: DiagnosticsFilter | null;
+    collectionProductIds?: string[];
   },
 ): Promise<DiagnosticsSnapshotPage | null> {
   const normalizedShop = normalizeShop(shop);
@@ -430,14 +431,12 @@ export async function readDiagnosticsSnapshotPage(
     : ("asc" as const);
   const orderBy =
     sort === "created-asc" || sort === "created-desc"
-      ? [
-          { productCreatedAt: sortDirection },
-          { position: "asc" as const },
-        ]
+      ? [{ productCreatedAt: sortDirection }, { position: "asc" as const }]
       : sort === "title-asc" || sort === "title-desc"
         ? [{ title: sortDirection }, { position: "asc" as const }]
         : [{ productType: sortDirection }, { position: "asc" as const }];
   const productWhere = buildDiagnosticsSnapshotProductWhere({
+    collectionProductIds: options.collectionProductIds,
     filter: options.filter,
     scanVersion: snapshot.scanVersion,
     search: options.search,
@@ -487,6 +486,7 @@ export async function readDiagnosticsSnapshotPage(
 
 function getDiagnosticsFilterWhere(
   filter?: DiagnosticsFilter | null,
+  collectionProductIds?: string[],
 ): Prisma.DiagnosticsSnapshotProductWhereInput {
   if (!filter) {
     return {};
@@ -503,18 +503,22 @@ function getDiagnosticsFilterWhere(
       return { categoryName: filter.value };
     case "product-type":
       return { productType: filter.value };
+    case "collection":
+      return { productId: { in: collectionProductIds ?? [] } };
     case "tag":
       return { tags: { has: filter.value } };
   }
 }
 
 export function buildDiagnosticsSnapshotProductWhere({
+  collectionProductIds,
   filter,
   scanVersion,
   search,
   shop,
   tab,
 }: {
+  collectionProductIds?: string[];
   filter?: DiagnosticsFilter | null;
   scanVersion: string;
   search?: string | null;
@@ -536,7 +540,7 @@ export function buildDiagnosticsSnapshotProductWhere({
           },
         }
       : {}),
-    ...getDiagnosticsFilterWhere(filter),
+    ...getDiagnosticsFilterWhere(filter, collectionProductIds),
   };
 }
 
@@ -575,6 +579,12 @@ export async function readDiagnosticsSnapshotFilterOptions(
 
   if (!snapshot) {
     return null;
+  }
+
+  // Collections are loaded from Shopify with cursor pagination and search;
+  // they are not a finite scalar field stored in the Diagnostics snapshot.
+  if (field === "collection") {
+    return [];
   }
 
   const status = getStatusForTab(tab);

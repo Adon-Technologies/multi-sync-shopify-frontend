@@ -4,6 +4,7 @@ import { searchShopCollections } from "../services/collection-search.server";
 import {
   AttributeRuleScopeError,
   getAttributeRuleJobStatusesForShop,
+  getConfiguredProductTypes,
   getConfigurationPageData,
   retryAttributeRulesForShop,
   saveAttributeRulesForShop,
@@ -12,6 +13,11 @@ import {
 import { AttributeRulesValidationError } from "../services/attribute-rules";
 import { ConfigurationValidationError } from "../services/configuration-validation";
 import { getShopVariantOptionNames } from "../services/variant-option-discovery.server";
+import {
+  clearShopProductTypesCache,
+  getShopProductTypes,
+} from "../services/product-type-discovery.server";
+import { mergeProductTypeSuggestions } from "../services/product-type-suggestions";
 import {
   getActiveShopifyLocations,
   InventoryLocationVerificationError,
@@ -39,6 +45,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return Response.json({ ok: true, intent, optionNames });
     }
 
+    if (intent === "product-types") {
+      if (url.searchParams.get("refresh") === "1") {
+        clearShopProductTypesCache(session.shop);
+      }
+      const [configuredProductTypes, shopifyProductTypes] = await Promise.all([
+        getConfiguredProductTypes(session.shop),
+        getShopProductTypes(admin, session.shop),
+      ]);
+      const productTypes = mergeProductTypeSuggestions(
+        configuredProductTypes,
+        shopifyProductTypes,
+      );
+      return Response.json({ ok: true, intent, productTypes });
+    }
+
     if (intent === "rule-status") {
       const ruleJobs = await getAttributeRuleJobStatusesForShop(session);
       return Response.json({ ok: true, intent, ruleJobs });
@@ -61,9 +82,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             ? "Collections couldn't be loaded. Try again."
             : intent === "option-names"
               ? "Product option names couldn't be loaded. Try again."
-              : intent === "locations"
-                ? "Shopify locations couldn't be loaded. Try again."
-                : "Configuration couldn't be loaded. Try again.",
+              : intent === "product-types"
+                ? "Product types couldn't be loaded. Try again."
+                : intent === "locations"
+                  ? "Shopify locations couldn't be loaded. Try again."
+                  : "Configuration couldn't be loaded. Try again.",
       },
       { status: 500 },
     );

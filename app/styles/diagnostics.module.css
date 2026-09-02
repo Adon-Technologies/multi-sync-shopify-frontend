@@ -288,6 +288,62 @@
   white-space: nowrap;
 }
 
+.collectionPickerContent {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.collectionPickerResults {
+  max-height: 248px;
+  min-height: 104px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.collectionPickerResults s-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.collectionPickerOption {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+
+.collectionPickerOption > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collectionPickerState,
+.collectionPickerLoadingMore {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.collectionPickerState {
+  flex-direction: column;
+}
+
+.collectionPickerLoadingMore {
+  min-height: 44px;
+}
+
 .sortSelect {
   min-width: 156px;
 }
@@ -460,6 +516,72 @@
 .productTypeModalContent {
   display: grid;
   gap: 16px;
+}
+
+.productTypeSelector {
+  display: grid;
+  gap: 6px;
+}
+
+.productTypeTriggerContent,
+.productTypeTriggerMeta {
+  display: flex;
+  align-items: center;
+}
+
+.productTypeTriggerContent {
+  width: 100%;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.productTypeTriggerMeta {
+  flex: 0 0 auto;
+  gap: 8px;
+  color: #616161;
+  font-size: 12px;
+}
+
+.productTypeSuggestionDialog {
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+}
+
+.productTypeSuggestionOptions {
+  display: grid;
+  max-height: 260px;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.productTypeSuggestionOptions s-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.productTypeSuggestion {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.productTypeSuggestionState {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  text-align: center;
 }
 
 .productImage,

@@ -1,6 +1,8 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
 import type { DiagnosticsDataResponse } from "../routes/app.diagnostics-data";
+import type { CollectionSearchPage } from "./collection-search.server";
+import { normalizeConfigurationText } from "./configuration-validation";
 import type {
   DiagnosticsCounts,
   DiagnosticsFilterOptions,
@@ -128,6 +130,20 @@ export const diagnosticsKeys = {
       tab,
       field,
       snapshotVersion ?? "latest",
+      endpoint,
+    ] as const,
+  collections: (
+    { shop, sessionId }: DiagnosticsQueryScope,
+    search: string,
+    after: string | null,
+    endpoint = defaultEndpoint,
+  ) =>
+    [
+      "diagnostics-collections",
+      shop,
+      sessionId,
+      normalizeConfigurationText(search).toLocaleLowerCase(),
+      after ?? "start",
       endpoint,
     ] as const,
   shop: (shop: string) => ["diagnostics", shop] as const,
@@ -371,6 +387,43 @@ export function diagnosticsFilterOptionsQueryOptions(
       }
 
       return payload.result;
+    },
+  });
+}
+
+export function diagnosticsCollectionsQueryOptions(
+  scope: DiagnosticsQueryScope,
+  search: string,
+  after: string | null,
+  { endpoint = defaultEndpoint }: QueryRequestOptions = {},
+) {
+  const normalizedSearch = normalizeConfigurationText(search);
+
+  return queryOptions({
+    ...diagnosticsSessionCacheOptions,
+    queryKey: diagnosticsKeys.collections(
+      scope,
+      normalizedSearch,
+      after,
+      endpoint,
+    ),
+    queryFn: async ({ signal }): Promise<CollectionSearchPage> => {
+      const payload = await requestDiagnostics(
+        buildRequestUrl(endpoint, {
+          after,
+          intent: "collections",
+          search: normalizedSearch || null,
+        }),
+        signal,
+      );
+
+      if (!payload.ok || payload.intent !== "collections") {
+        throw new Error(
+          payload.ok ? "Collections couldn't be loaded." : payload.error,
+        );
+      }
+
+      return payload.page;
     },
   });
 }

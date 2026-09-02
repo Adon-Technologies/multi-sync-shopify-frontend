@@ -29,7 +29,10 @@ test("merchant navigation exposes a Shopify Polaris Support tab", () => {
 });
 
 test("ticket creation validates only the title and opens its conversation", () => {
-  assert.match(panelSource, /const canCreate = newTitle\.trim\(\)\.length >= 3/);
+  assert.match(
+    panelSource,
+    /const canCreate = newTitle\.trim\(\)\.length >= 3/,
+  );
   assert.match(panelSource, /createSupportTicket\(newTitle\)/);
   assert.match(panelSource, /setSelectedTicketId\(ticket\.id\)/);
   assert.doesNotMatch(querySource, /intent: "create"; message:/);
@@ -38,7 +41,10 @@ test("ticket creation validates only the title and opens its conversation", () =
 test("merchant requests derive store identity from the authenticated session", () => {
   assert.match(routeSource, /authenticateActiveAdmin\(request\)/);
   assert.match(routeSource, /requestFeedBackend/);
-  assert.doesNotMatch(routeSource, /body\.storeId|searchParams\.get\("storeId"\)/);
+  assert.doesNotMatch(
+    routeSource,
+    /body\.storeId|searchParams\.get\("storeId"\)/,
+  );
 });
 
 test("active conversations poll lightly and closed tickets block composing", () => {
@@ -46,4 +52,9 @@ test("active conversations poll lightly and closed tickets block composing", () 
   assert.match(panelSource, /This conversation has been closed\./);
   assert.match(panelSource, /End this support conversation\?/);
   assert.match(panelSource, /disabled={!canReply}/);
+});
+
+test("merchant conversations never expose the support user's name", () => {
+  assert.match(panelSource, /merchant \? "You" : "Support"/);
+  assert.doesNotMatch(panelSource, /message\.senderName/);
 });

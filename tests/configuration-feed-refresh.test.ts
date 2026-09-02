@@ -11,7 +11,7 @@ const configurationQuerySource = readFileSync(
   "utf8",
 );
 
-test("every saved configuration invalidates existing published XML feeds", () => {
+test("every feed-relevant Configuration change invalidates published XML feeds", () => {
   const saveStart = configurationServiceSource.indexOf(
     "export async function saveConfigurationForShop",
   );
@@ -23,13 +23,13 @@ test("every saved configuration invalidates existing published XML feeds", () =>
 
   assert.match(
     saveSource,
-    /prisma\.xmlLink\.updateMany\([\s\S]*gcsObjectName: \{ not: null \}[\s\S]*data: \{ requiresRefresh: true \}/,
+    /if \(shouldInvalidatePublishedFeeds\) \{[\s\S]*prisma\.xmlLink\.updateMany\([\s\S]*gcsObjectName: \{ not: null \}[\s\S]*data: \{ requiresRefresh: true \}/,
   );
-  assert.doesNotMatch(saveSource, /if \(feedUrlSettingsChanged\)/);
   assert.match(
     saveSource,
-    /feedRefreshRequired: staleFeedCount > 0/,
+    /configurationRequiresFeedRefresh\(previousInput, verifiedInput\)/,
   );
+  assert.match(saveSource, /feedRefreshRequired: staleFeedCount > 0/);
 });
 
 test("configuration loading exposes persisted XML refresh state", () => {

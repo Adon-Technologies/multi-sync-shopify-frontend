@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { ACTIVE_ONLINE_STORE_PRODUCT_QUERY } from "./catalog-query";
+import { getShopCollectionProductIds } from "./collection-search.server";
 import {
   getDiagnosticsConfigurationRules,
   type DiagnosticsConfigurationRules,
@@ -121,6 +122,7 @@ interface DiagnosticsPageOptions {
   tab: DiagnosticsTab;
   after?: string | null;
   before?: string | null;
+  collectionProductIds?: string[];
   filter?: DiagnosticsFilter | null;
   force?: boolean;
   pageSize?: DiagnosticsPageSize;
@@ -1493,6 +1495,7 @@ async function fetchDiagnosticsPage(
       scanVersion: options.snapshotVersion,
       sort: options.sort,
       filter: options.filter,
+      collectionProductIds: options.collectionProductIds,
     });
 
     if (snapshotPage) {
@@ -1691,6 +1694,10 @@ export async function getDiagnosticsPage(
   }
 
   const rawGeneration = getRawGeneration(shop, false, options.refreshToken);
+  const collectionProductIds =
+    options.filter?.field === "collection"
+      ? await getShopCollectionProductIds(admin, shop, options.filter.value)
+      : undefined;
 
   const direction = options.before ? "before" : "after";
   const cursor = options.before ?? options.after ?? "start";
@@ -1711,6 +1718,7 @@ export async function getDiagnosticsPage(
   return getCachedValue(pageCache, key, PAGE_CACHE_TTL_MS, () =>
     fetchDiagnosticsPage(admin, shop, rawGeneration, {
       ...options,
+      collectionProductIds,
       force: false,
       search: normalizedSearch,
       sort,

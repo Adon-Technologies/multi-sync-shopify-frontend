@@ -4,14 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PiEye } from "react-icons/pi";
 
 import { AttributeRulesCard } from "./AttributeRulesCard";
-import {
-  TabAlertNavigator,
-  type TabAlert,
-} from "./TabAlertNavigator";
+import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 import { useHydrated } from "../hooks/useHydrated";
 import type { PublicConfiguration } from "../services/configuration.server";
 import {
   collectionsQueryOptions,
+  configurationKeys,
   configurationQueryOptions,
   ConfigurationRequestError,
   saveConfigurationRequest,
@@ -25,6 +23,7 @@ import {
   normalizeConfigurationText,
   normalizeExcludedTitleTerms,
   normalizeOptionNames,
+  normalizeProductTypes,
   type ConfigurationFieldErrors,
   type ConfigurationInput,
   type SelectedCollection,
@@ -58,6 +57,7 @@ function configurationForm(
     sizeOptions: configuration.sizeOptions,
     excludedCollections: configuration.excludedCollections,
     excludedTitleTerms: configuration.excludedTitleTerms,
+    productTypes: configuration.productTypes,
     showSalePriceInGoogleFeed: configuration.showSalePriceInGoogleFeed,
     useProductImageAsMainImage: configuration.useProductImageAsMainImage,
     includeShippingWeightInGoogleFeed:
@@ -66,8 +66,7 @@ function configurationForm(
     ignoreShopifyInventoryInGoogleFeed:
       configuration.ignoreShopifyInventoryInGoogleFeed,
     inventorySourceMode: configuration.inventorySourceMode,
-    selectedInventoryLocationIds:
-      configuration.selectedInventoryLocationIds,
+    selectedInventoryLocationIds: configuration.selectedInventoryLocationIds,
     disableUtmParameters: configuration.disableUtmParameters,
     disablePrimaryCurrencyParameter:
       configuration.disablePrimaryCurrencyParameter,
@@ -353,6 +352,7 @@ function OptionNameSelector({
 
 const COLLECTIONS_MODAL_ID = "configuration-excluded-collections";
 const TITLE_TERMS_MODAL_ID = "configuration-excluded-product-titles";
+const PRODUCT_TYPES_MODAL_ID = "configuration-product-types";
 
 function CollectionSelector({
   error,
@@ -400,6 +400,7 @@ function CollectionSelector({
   useEffect(() => {
     const page = collectionsQuery.data;
     if (
+      !isOpen ||
       !page ||
       normalizeConfigurationText(page.search) !==
         normalizeConfigurationText(debouncedSearch)
@@ -418,7 +419,7 @@ function CollectionSelector({
       }
       return next;
     });
-  }, [collectionsQuery.data, cursor, debouncedSearch]);
+  }, [collectionsQuery.data, cursor, debouncedSearch, isOpen]);
 
   const visibleCollections = results.filter(
     (collection) =>
@@ -599,44 +600,80 @@ function CollectionSelector({
   );
 }
 
-function TitleTermsSelector({
+function TextListSelector({
+  accessibilityLabel,
+  chipAccessibilityLabel,
+  duplicateError,
+  emptyLabel,
   error,
+  fieldLabel,
+  heading,
+  inputName,
+  maxLength,
+  modalId,
+  normalize,
   onChange,
+  placeholder,
+  summary,
   value,
 }: {
+  accessibilityLabel: string;
+  chipAccessibilityLabel: (value: string) => string;
+  duplicateError: string;
+  emptyLabel: string;
   error?: string;
+  fieldLabel: string;
+  heading: string;
+  inputName: string;
+  maxLength: number;
+  modalId: string;
+  normalize: (value: unknown) => string[];
   onChange: (value: string[]) => void;
+  placeholder: string;
+  summary: (count: number) => string;
   value: string[];
 }) {
   const hydrated = useHydrated();
   const [draftValue, setDraftValue] = useState<string[]>(value);
-  const [term, setTerm] = useState("");
-  const [termError, setTermError] = useState<string | undefined>();
+  const [draftText, setDraftText] = useState("");
+  const [draftError, setDraftError] = useState<string | undefined>();
 
-  const addTerm = () => {
-    const normalizedTerm = normalizeConfigurationText(term);
-    if (!normalizedTerm) {
-      setTermError("Enter a word or phrase before adding it.");
+  const addValue = () => {
+    const normalizedText = normalizeConfigurationText(draftText);
+    if (!normalizedText) {
+      setDraftError("Enter a value before adding it.");
       return;
     }
 
-    const next = normalizeExcludedTitleTerms([...draftValue, term]);
+    const comparable = normalizedText.toLocaleLowerCase();
+    if (
+      draftValue.some(
+        (candidate) =>
+          normalizeConfigurationText(candidate).toLocaleLowerCase() ===
+          comparable,
+      )
+    ) {
+      setDraftError(duplicateError);
+      return;
+    }
+
+    const next = normalize([...draftValue, draftText]);
     setDraftValue(next);
-    setTerm("");
-    setTermError(undefined);
+    setDraftText("");
+    setDraftError(undefined);
   };
 
   return (
     <div className={styles.optionField}>
       <s-clickable
-        accessibilityLabel="Edit excluded product titles"
+        accessibilityLabel={accessibilityLabel}
         background="base"
         border="small-100"
         borderColor="base"
         borderRadius="base"
         borderStyle="solid"
         command="--show"
-        commandFor={TITLE_TERMS_MODAL_ID}
+        commandFor={modalId}
         inlineSize="100%"
         padding="small-200 base"
       >
@@ -647,9 +684,7 @@ function TitleTermsSelector({
           justifyContent="space-between"
         >
           <s-text color={value.length > 0 ? "base" : "subdued"}>
-            {value.length > 0
-              ? `${value.length} title term${value.length === 1 ? "" : "s"} selected`
-              : "Type a product title and press Enter"}
+            {value.length > 0 ? summary(value.length) : placeholder}
           </s-text>
           <s-icon color="subdued" type="select" />
         </s-stack>
@@ -662,15 +697,15 @@ function TitleTermsSelector({
       ) : null}
 
       <s-modal
-        accessibilityLabel="Excluded product title selection"
-        heading="Excluded product titles"
-        id={TITLE_TERMS_MODAL_ID}
+        accessibilityLabel={accessibilityLabel}
+        heading={heading}
+        id={modalId}
         onShow={
           hydrated
             ? () => {
                 setDraftValue(value);
-                setTerm("");
-                setTermError(undefined);
+                setDraftText("");
+                setDraftError(undefined);
               }
             : undefined
         }
@@ -678,57 +713,52 @@ function TitleTermsSelector({
         size="base"
       >
         <s-box padding="base">
-          <div className={styles.titleTermsModalContent}>
+          <div className={styles.textListModalContent}>
             {draftValue.length > 0 ? (
-              <div
-                aria-label="Selected excluded product titles"
-                className={styles.dialogTags}
-              >
-                {draftValue.map((titleTerm) => (
+              <div className={styles.dialogTags}>
+                {draftValue.map((item) => (
                   <s-clickable-chip
-                    accessibilityLabel={`${titleTerm}, excluded product title`}
-                    key={titleTerm.toLocaleLowerCase()}
+                    accessibilityLabel={chipAccessibilityLabel(item)}
+                    key={item.toLocaleLowerCase()}
                     onRemove={
                       hydrated
                         ? () =>
                             setDraftValue((current) =>
-                              current.filter(
-                                (candidate) => candidate !== titleTerm,
-                              ),
+                              current.filter((candidate) => candidate !== item),
                             )
                         : undefined
                     }
                     removable
                   >
-                    {titleTerm}
+                    {item}
                   </s-clickable-chip>
                 ))}
               </div>
             ) : (
-              <s-text color="subdued">No title terms selected</s-text>
+              <s-text color="subdued">{emptyLabel}</s-text>
             )}
 
             <form
               className={styles.termInput}
               onSubmit={(event) => {
                 event.preventDefault();
-                addTerm();
+                addValue();
               }}
             >
               <s-text-field
-                error={termError}
-                label="Product titles"
+                error={draftError}
+                label={fieldLabel}
                 labelAccessibilityVisibility="exclusive"
-                maxLength={100}
-                name="excludedTitleTermDraft"
+                maxLength={maxLength}
+                name={inputName}
                 onInput={(event) => {
-                  setTerm(event.currentTarget.value);
-                  setTermError(undefined);
+                  setDraftText(event.currentTarget.value);
+                  setDraftError(undefined);
                 }}
-                placeholder="Type a product title and press Enter"
-                value={term}
+                placeholder={placeholder}
+                value={draftText}
               />
-              <s-button onClick={addTerm} variant="secondary">
+              <s-button onClick={addValue} variant="secondary">
                 Add
               </s-button>
             </form>
@@ -736,8 +766,8 @@ function TitleTermsSelector({
         </s-box>
         <s-button
           command="--hide"
-          commandFor={TITLE_TERMS_MODAL_ID}
-          onClick={() => onChange(normalizeExcludedTitleTerms(draftValue))}
+          commandFor={modalId}
+          onClick={() => onChange(normalize(draftValue))}
           slot="primary-action"
           variant="primary"
         >
@@ -745,7 +775,7 @@ function TitleTermsSelector({
         </s-button>
         <s-button
           command="--hide"
-          commandFor={TITLE_TERMS_MODAL_ID}
+          commandFor={modalId}
           slot="secondary-actions"
           variant="secondary"
         >
@@ -753,6 +783,58 @@ function TitleTermsSelector({
         </s-button>
       </s-modal>
     </div>
+  );
+}
+
+function TitleTermsSelector(props: {
+  error?: string;
+  onChange: (value: string[]) => void;
+  value: string[];
+}) {
+  return (
+    <TextListSelector
+      accessibilityLabel="Edit excluded product titles"
+      chipAccessibilityLabel={(value) => `${value}, excluded product title`}
+      duplicateError="This product-title term has already been added."
+      emptyLabel="No title terms selected"
+      fieldLabel="Product titles"
+      heading="Excluded product titles"
+      inputName="excludedTitleTermDraft"
+      maxLength={100}
+      modalId={TITLE_TERMS_MODAL_ID}
+      normalize={normalizeExcludedTitleTerms}
+      placeholder="Type a product title and press Enter"
+      summary={(count) =>
+        `${count} title term${count === 1 ? "" : "s"} selected`
+      }
+      {...props}
+    />
+  );
+}
+
+function ProductTypesSelector(props: {
+  error?: string;
+  onChange: (value: string[]) => void;
+  value: string[];
+}) {
+  return (
+    <TextListSelector
+      accessibilityLabel="Edit configured product types"
+      chipAccessibilityLabel={(value) => `${value}, configured product type`}
+      duplicateError="This product type has already been added."
+      emptyLabel="No product types added"
+      fieldLabel="Product type"
+      heading="Product types"
+      inputName="productTypeDraft"
+      maxLength={255}
+      modalId={PRODUCT_TYPES_MODAL_ID}
+      normalize={normalizeProductTypes}
+      placeholder="Type to add product type"
+      summary={(count) =>
+        `${count} product type${count === 1 ? "" : "s"} added`
+      }
+      {...props}
+    />
   );
 }
 
@@ -850,6 +932,9 @@ export function ConfigurationsPanel({
               }
             : current,
       );
+      await queryClient.invalidateQueries({
+        queryKey: configurationKeys.productTypes(scope),
+      });
 
       if (result.feedRefreshRequired) {
         await queryClient.invalidateQueries({
@@ -961,10 +1046,7 @@ export function ConfigurationsPanel({
           >
             Save
           </button>
-          <button
-            disabled={saveInProgress}
-            onClick={discard}
-          >
+          <button disabled={saveInProgress} onClick={discard}>
             Discard
           </button>
         </SaveBar>
@@ -1126,6 +1208,25 @@ export function ConfigurationsPanel({
               )}
             </div>
 
+            <div className={styles.feature}>
+              <FeatureHeading
+                subtitle="Product type"
+                title="Add Product type"
+                viewAccessibilityLabel="View and edit configured product types"
+                viewDisabled={isLoading}
+                viewTarget={PRODUCT_TYPES_MODAL_ID}
+              />
+              {isLoading ? (
+                <ConfigurationSkeleton />
+              ) : (
+                <ProductTypesSelector
+                  error={fieldErrors.productTypes}
+                  onChange={(value) => updateForm("productTypes", value)}
+                  value={form?.productTypes ?? []}
+                />
+              )}
+            </div>
+
             <div className={styles.googleFeedOptions}>
               <div className={styles.googleFeedOptionsHeading}>
                 <h3>Google feed options</h3>
@@ -1213,13 +1314,9 @@ export function ConfigurationsPanel({
             ) : (
               <>
                 <s-checkbox
-                  checked={
-                    form?.ignoreShopifyInventoryInGoogleFeed ?? false
-                  }
+                  checked={form?.ignoreShopifyInventoryInGoogleFeed ?? false}
                   details="When enabled, active products are sent to Google as in stock even if Shopify inventory is 0. Use only if your storefront also remains purchasable."
-                  error={
-                    fieldErrors.ignoreShopifyInventoryInGoogleFeed
-                  }
+                  error={fieldErrors.ignoreShopifyInventoryInGoogleFeed}
                   label="Ignore Shopify inventory in Google feed"
                   onChange={(event) =>
                     updateForm(
@@ -1256,15 +1353,12 @@ export function ConfigurationsPanel({
                     onChange={(event) =>
                       updateForm(
                         "inventorySourceMode",
-                        event.currentTarget.values[0] ===
-                          "SELECTED_LOCATIONS"
+                        event.currentTarget.values[0] === "SELECTED_LOCATIONS"
                           ? "SELECTED_LOCATIONS"
                           : "ALL_LOCATIONS",
                       )
                     }
-                    values={[
-                      form?.inventorySourceMode ?? "ALL_LOCATIONS",
-                    ]}
+                    values={[form?.inventorySourceMode ?? "ALL_LOCATIONS"]}
                   >
                     <s-choice value="ALL_LOCATIONS">
                       All Shopify locations
@@ -1294,7 +1388,9 @@ export function ConfigurationsPanel({
                           className={styles.inventoryLocationState}
                           role="alert"
                         >
-                          <span>Shopify locations couldn&apos;t be loaded.</span>
+                          <span>
+                            Shopify locations couldn&apos;t be loaded.
+                          </span>
                           <s-button
                             onClick={() => void locationsQuery.refetch()}
                             variant="secondary"
@@ -1311,11 +1407,9 @@ export function ConfigurationsPanel({
                         <div className={styles.inventoryLocationList}>
                           {locationsQuery.data?.map((location) => (
                             <s-checkbox
-                              checked={
-                                form.selectedInventoryLocationIds.includes(
-                                  location.id,
-                                )
-                              }
+                              checked={form.selectedInventoryLocationIds.includes(
+                                location.id,
+                              )}
                               key={location.id}
                               label={location.name}
                               onChange={(event) =>

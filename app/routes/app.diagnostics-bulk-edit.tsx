@@ -17,11 +17,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticateSubscribedAdmin(request);
+  const { admin, session } = await authenticateSubscribedAdmin(request);
 
   try {
     const payload = (await request.json()) as DiagnosticsBulkEditRequest;
-    const job = await createDiagnosticsBulkEditJob(session.shop, payload);
+    const job = await createDiagnosticsBulkEditJob(
+      admin,
+      session.shop,
+      payload,
+    );
     return Response.json({ job, ok: true }, { status: 202 });
   } catch (error) {
     const requestError =

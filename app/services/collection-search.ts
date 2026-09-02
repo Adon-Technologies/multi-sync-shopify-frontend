@@ -12,7 +12,7 @@ export function buildCollectionSearch(search: string) {
     .map((term) => {
       const escaped = term
         .replace(/\\/g, "\\\\")
-        .replace(/([():*\"])/g, "\\$1");
+        .replace(/([():*"])/g, "\\$1");
       return `title:${escaped}*`;
     })
     .join(" ");

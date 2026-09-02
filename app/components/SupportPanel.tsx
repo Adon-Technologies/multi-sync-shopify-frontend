@@ -53,8 +53,13 @@ function readableDate(value: string | null) {
 }
 
 function statusBadge(status: SupportTicketStatus) {
-  const labels = { CLOSED: "Closed", OPEN: "Open", PENDING: "Pending" } as const;
-  if (status === "PENDING") return <Badge tone="attention">{labels[status]}</Badge>;
+  const labels = {
+    CLOSED: "Closed",
+    OPEN: "Open",
+    PENDING: "Pending",
+  } as const;
+  if (status === "PENDING")
+    return <Badge tone="attention">{labels[status]}</Badge>;
   if (status === "OPEN") return <Badge tone="info">{labels[status]}</Badge>;
   return <Badge>{labels[status]}</Badge>;
 }
@@ -80,7 +85,10 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
   const [olderCursor, setOlderCursor] = useState<string | null>(null);
   const [olderHasMore, setOlderHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const safeScope = scope ?? { sessionId: "pending-session", shop: "pending-shop" };
+  const safeScope = scope ?? {
+    sessionId: "pending-session",
+    shop: "pending-shop",
+  };
 
   const listQuery = useQuery({
     ...supportTicketListQueryOptions(safeScope, page),
@@ -88,7 +96,10 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
     refetchInterval: active && !selectedTicketId ? 10_000 : false,
   });
   const detailQuery = useQuery({
-    ...supportTicketDetailQueryOptions(safeScope, selectedTicketId ?? "pending"),
+    ...supportTicketDetailQueryOptions(
+      safeScope,
+      selectedTicketId ?? "pending",
+    ),
     enabled: active && Boolean(scope) && Boolean(selectedTicketId),
     refetchInterval: (query) =>
       active && query.state.data?.ticket.status !== "CLOSED" ? 7_000 : false,
@@ -101,7 +112,9 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
   }, [selectedTicketId]);
 
   const refreshSupport = async () => {
-    await queryClient.invalidateQueries({ queryKey: supportKeys.all(safeScope) });
+    await queryClient.invalidateQueries({
+      queryKey: supportKeys.all(safeScope),
+    });
   };
 
   const createMutation = useMutation({
@@ -132,22 +145,28 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
     () => uniqueMessages([olderMessages, detailQuery.data?.messages ?? []]),
     [detailQuery.data?.messages, olderMessages],
   );
-  const effectiveOlderCursor = olderMessages.length > 0
-    ? olderCursor
-    : detailQuery.data?.nextBefore ?? null;
-  const effectiveOlderHasMore = olderMessages.length > 0
-    ? olderHasMore
-    : detailQuery.data?.hasMore ?? false;
+  const effectiveOlderCursor =
+    olderMessages.length > 0
+      ? olderCursor
+      : (detailQuery.data?.nextBefore ?? null);
+  const effectiveOlderHasMore =
+    olderMessages.length > 0
+      ? olderHasMore
+      : (detailQuery.data?.hasMore ?? false);
   const mutationError =
     createMutation.error ?? messageMutation.error ?? closeMutation.error;
   const canCreate = newTitle.trim().length >= 3;
-  const canReply = Boolean(reply.trim()) && detailQuery.data?.ticket.status !== "CLOSED";
+  const canReply =
+    Boolean(reply.trim()) && detailQuery.data?.ticket.status !== "CLOSED";
 
   const loadEarlier = async () => {
     if (!selectedTicketId || !effectiveOlderCursor || loadingOlder) return;
     setLoadingOlder(true);
     try {
-      const result = await fetchSupportTicketPage(selectedTicketId, effectiveOlderCursor);
+      const result = await fetchSupportTicketPage(
+        selectedTicketId,
+        effectiveOlderCursor,
+      );
       setOlderMessages((current) => uniqueMessages([result.messages, current]));
       setOlderCursor(result.nextBefore);
       setOlderHasMore(result.hasMore);
@@ -158,7 +177,12 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
 
   const ticketList = listQuery.data?.tickets ?? [];
   const rows = ticketList.map((ticket, index) => (
-    <IndexTable.Row id={ticket.id} key={ticket.id} position={index} selected={false}>
+    <IndexTable.Row
+      id={ticket.id}
+      key={ticket.id}
+      position={index}
+      selected={false}
+    >
       <IndexTable.Cell>
         <button
           className={`${styles.ticketTitleButton} ${ticket.merchantUnreadCount > 0 ? styles.unread : ""}`}
@@ -173,8 +197,13 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
       <IndexTable.Cell>{readableDate(ticket.lastMessageAt)}</IndexTable.Cell>
       <IndexTable.Cell>
         <InlineStack gap="200" blockAlign="center">
-          {ticket.merchantUnreadCount > 0 ? <Badge tone="info">{`${ticket.merchantUnreadCount} unread`}</Badge> : null}
-          <Button onClick={() => setSelectedTicketId(ticket.id)} variant="plain">
+          {ticket.merchantUnreadCount > 0 ? (
+            <Badge tone="info">{`${ticket.merchantUnreadCount} unread`}</Badge>
+          ) : null}
+          <Button
+            onClick={() => setSelectedTicketId(ticket.id)}
+            variant="plain"
+          >
             {ticket.status === "CLOSED" ? "View" : "Open"}
           </Button>
         </InlineStack>
@@ -188,11 +217,22 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
         <Page
           fullWidth
           title={selectedTicketId ? "Support conversation" : "Support"}
-          backAction={selectedTicketId ? { content: "Tickets", onAction: () => setSelectedTicketId(null) } : undefined}
+          backAction={
+            selectedTicketId
+              ? {
+                  content: "Tickets",
+                  onAction: () => setSelectedTicketId(null),
+                }
+              : undefined
+          }
           primaryAction={
             selectedTicketId
               ? undefined
-              : { content: "Open ticket", icon: PlusIcon, onAction: () => setNewTicketOpen(true) }
+              : {
+                  content: "Open ticket",
+                  icon: PlusIcon,
+                  onAction: () => setNewTicketOpen(true),
+                }
           }
         >
           <BlockStack gap="400">
@@ -217,7 +257,10 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
                 ) : listQuery.isError ? (
                   <div style={{ padding: "1rem" }}>
                     <Banner
-                      action={{ content: "Retry", onAction: () => void listQuery.refetch() }}
+                      action={{
+                        content: "Retry",
+                        onAction: () => void listQuery.refetch(),
+                      }}
                       title="Tickets couldn't be loaded"
                       tone="critical"
                     >
@@ -226,11 +269,17 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
                   </div>
                 ) : ticketList.length === 0 ? (
                   <EmptyState
-                    action={{ content: "Open ticket", onAction: () => setNewTicketOpen(true) }}
+                    action={{
+                      content: "Open ticket",
+                      onAction: () => setNewTicketOpen(true),
+                    }}
                     heading="No support tickets yet"
                     image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
                   >
-                    <p>If you need help, open a ticket and our team will get back to you.</p>
+                    <p>
+                      If you need help, open a ticket and our team will get back
+                      to you.
+                    </p>
                   </EmptyState>
                 ) : (
                   <IndexTable
@@ -255,7 +304,10 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
               </Card>
             ) : detailQuery.isError || !detailQuery.data ? (
               <Banner
-                action={{ content: "Retry", onAction: () => void detailQuery.refetch() }}
+                action={{
+                  content: "Retry",
+                  onAction: () => void detailQuery.refetch(),
+                }}
                 title="Conversation couldn't be loaded"
                 tone="critical"
               >
@@ -265,11 +317,18 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
               <BlockStack gap="400">
                 <Card>
                   <BlockStack gap="300">
-                    <InlineStack align="space-between" blockAlign="center" gap="300">
+                    <InlineStack
+                      align="space-between"
+                      blockAlign="center"
+                      gap="300"
+                    >
                       <BlockStack gap="100">
-                        <Text as="h2" variant="headingMd">{detailQuery.data.ticket.title}</Text>
+                        <Text as="h2" variant="headingMd">
+                          {detailQuery.data.ticket.title}
+                        </Text>
                         <Text as="p" tone="subdued">
-                          Opened {readableDate(detailQuery.data.ticket.createdAt)}
+                          Opened{" "}
+                          {readableDate(detailQuery.data.ticket.createdAt)}
                         </Text>
                       </BlockStack>
                       <InlineStack gap="200">
@@ -291,7 +350,10 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
                       <BlockStack gap="300">
                         {effectiveOlderHasMore ? (
                           <InlineStack align="center">
-                            <Button loading={loadingOlder} onClick={() => void loadEarlier()}>
+                            <Button
+                              loading={loadingOlder}
+                              onClick={() => void loadEarlier()}
+                            >
                               Load earlier messages
                             </Button>
                           </InlineStack>
@@ -303,10 +365,13 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
                               className={`${styles.messageRow} ${merchant ? styles.messageRowMerchant : ""}`}
                               key={message.id}
                             >
-                              <div className={`${styles.messageBubble} ${merchant ? styles.messageBubbleMerchant : ""}`}>
+                              <div
+                                className={`${styles.messageBubble} ${merchant ? styles.messageBubbleMerchant : ""}`}
+                              >
                                 <Text as="p">{message.message}</Text>
                                 <div className={styles.messageMeta}>
-                                  {merchant ? "You" : message.senderName || "Multi Sync Support"} · {readableDate(message.createdAt)}
+                                  {merchant ? "You" : "Support"} ·{" "}
+                                  {readableDate(message.createdAt)}
                                 </div>
                               </div>
                             </div>
@@ -314,13 +379,19 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
                         })}
                         {displayedMessages.length === 0 ? (
                           <Banner title="Your ticket is open" tone="info">
-                            <p>Write the first message below so our support team can help.</p>
+                            <p>
+                              Write the first message below so our support team
+                              can help.
+                            </p>
                           </Banner>
                         ) : null}
                       </BlockStack>
                     </div>
                     {detailQuery.data.ticket.status === "CLOSED" ? (
-                      <Banner title="This conversation has been closed." tone="info">
+                      <Banner
+                        title="This conversation has been closed."
+                        tone="info"
+                      >
                         <p>Its message history remains available to read.</p>
                       </Banner>
                     ) : (
@@ -351,7 +422,9 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
               </BlockStack>
             )}
 
-            {!selectedTicketId && listQuery.data && listQuery.data.pagination.pageCount > 1 ? (
+            {!selectedTicketId &&
+            listQuery.data &&
+            listQuery.data.pagination.pageCount > 1 ? (
               <InlineStack align="center">
                 <Pagination
                   hasNext={page < listQuery.data.pagination.pageCount}
@@ -373,7 +446,9 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
             loading: createMutation.isPending,
             onAction: () => createMutation.mutate(),
           }}
-          secondaryActions={[{ content: "Cancel", onAction: () => setNewTicketOpen(false) }]}
+          secondaryActions={[
+            { content: "Cancel", onAction: () => setNewTicketOpen(false) },
+          ]}
           title="Open support ticket"
         >
           <Modal.Section>
@@ -399,12 +474,15 @@ export function SupportPanel({ active, scope }: SupportPanelProps) {
             loading: closeMutation.isPending,
             onAction: () => closeMutation.mutate(),
           }}
-          secondaryActions={[{ content: "Cancel", onAction: () => setEndChatOpen(false) }]}
+          secondaryActions={[
+            { content: "Cancel", onAction: () => setEndChatOpen(false) },
+          ]}
           title="End this support conversation?"
         >
           <Modal.Section>
             <Text as="p">
-              The ticket will be marked as closed and no new messages can be sent.
+              The ticket will be marked as closed and no new messages can be
+              sent.
             </Text>
           </Modal.Section>
         </Modal>

@@ -25,7 +25,9 @@ import { createDiagnosticsConfigurationRevision } from "./configuration-revision
 import {
   DEFAULT_COLOR_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
+  configurationRequiresFeedRefresh,
   normalizeOptionNames,
+  normalizeProductTypes,
   normalizeSelectedCollections,
   normalizeCheckoutLinkMode,
   normalizeInventoryLocationIds,
@@ -79,6 +81,7 @@ interface StoredConfiguration {
   diagnosticsRevision: string;
   excludedCollections: Prisma.JsonValue;
   excludedTitleTerms: string[];
+  productTypes: string[];
   genderRules: Prisma.JsonValue | null;
   genderRulesAppliedVersion: number;
   genderRulesVersion: number;
@@ -173,6 +176,7 @@ function mapConfiguration(
       configuration.excludedCollections,
     ),
     excludedTitleTerms: configuration.excludedTitleTerms,
+    productTypes: normalizeProductTypes(configuration.productTypes),
     genderRules: gender.rules,
     genderRulesAppliedVersion: configuration.genderRulesAppliedVersion,
     genderRulesVersion: configuration.genderRulesVersion,
@@ -265,11 +269,11 @@ export async function ensureConfigurationForSession(
     where: { storeId: store.id },
   });
   if (existingConfiguration) {
-    const migratedConfiguration =
-      await ensureOptionMappings(existingConfiguration);
+    const migratedConfiguration = await ensureOptionMappings(
+      existingConfiguration,
+    );
     return {
-      configuration:
-        await ensureDiagnosticsRevision(migratedConfiguration),
+      configuration: await ensureDiagnosticsRevision(migratedConfiguration),
       store,
     };
   }
@@ -293,6 +297,7 @@ export async function ensureConfigurationForSession(
       }),
       excludedCollections: [] as Prisma.InputJsonValue,
       excludedTitleTerms: [],
+      productTypes: [],
       optionMappingsInitialized: true,
       showSalePriceInGoogleFeed: false,
       useProductImageAsMainImage: false,
@@ -341,6 +346,20 @@ export async function getConfigurationPageData(
   };
 }
 
+export async function getConfiguredProductTypes(shop: string) {
+  await ensureAttributeRuleConfigurationFields();
+  const store = await prisma.store.findUnique({
+    where: { shopDomain: normalizeShopDomain(shop) },
+    select: {
+      configuration: {
+        select: { productTypes: true },
+      },
+    },
+  });
+
+  return normalizeProductTypes(store?.configuration?.productTypes);
+}
+
 export async function saveConfigurationForShop(
   admin: AdminGraphQLClient,
   session: { accessToken?: string; shop: string },
@@ -351,22 +370,22 @@ export async function saveConfigurationForShop(
   const store = await upsertInstalledStore(session);
   const previousConfiguration = await prisma.configuration.findUnique({
     where: { storeId: store.id },
-    select: {
-      ageRulesAppliedVersion: true,
-      genderRulesAppliedVersion: true,
-      selectedInventoryLocationIds: true,
-    },
   });
-  const selectedInventoryLocationIds =
-    await verifySelectedInventoryLocations(
-      admin,
-      input.selectedInventoryLocationIds,
-      previousConfiguration?.selectedInventoryLocationIds ?? [],
-    );
+  const selectedInventoryLocationIds = await verifySelectedInventoryLocations(
+    admin,
+    input.selectedInventoryLocationIds,
+    previousConfiguration?.selectedInventoryLocationIds ?? [],
+  );
   const verifiedInput = {
     ...input,
     selectedInventoryLocationIds,
   };
+  const previousInput = previousConfiguration
+    ? validateConfigurationInput(mapConfiguration(previousConfiguration))
+    : null;
+  const shouldInvalidatePublishedFeeds =
+    previousInput === null ||
+    configurationRequiresFeedRefresh(previousInput, verifiedInput);
   const nextDiagnosticsRevision = createDiagnosticsConfigurationRevision({
     ...verifiedInput,
     ageRulesAppliedVersion: previousConfiguration?.ageRulesAppliedVersion ?? 0,
@@ -393,15 +412,18 @@ export async function saveConfigurationForShop(
       sizeOption: null,
     },
   });
-  // Feed generation reads the saved configuration as a whole, so any edit
-  // invalidates every already-published XML for this store.
-  await prisma.xmlLink.updateMany({
-    where: {
-      gcsObjectName: { not: null },
-      storeId: store.id,
-    },
-    data: { requiresRefresh: true },
-  });
+  // Configured Product Types are reusable Diagnostics suggestions and are not
+  // read by feed generation. Every other Configuration change remains
+  // feed-affecting and invalidates already-published XML for this store.
+  if (shouldInvalidatePublishedFeeds) {
+    await prisma.xmlLink.updateMany({
+      where: {
+        gcsObjectName: { not: null },
+        storeId: store.id,
+      },
+      data: { requiresRefresh: true },
+    });
+  }
   const staleFeedCount = await prisma.xmlLink.count({
     where: {
       gcsObjectName: { not: null },

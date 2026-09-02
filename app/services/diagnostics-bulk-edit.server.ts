@@ -1,6 +1,7 @@
 import type { BulkProductTypeJob } from "@prisma/client";
 
 import prisma from "../db.server";
+import { getShopCollectionProductIds } from "./collection-search.server";
 import {
   createDiagnosticsBulkSelectionScope,
   MAX_CUSTOM_LABEL_LENGTH,
@@ -16,6 +17,7 @@ import {
 } from "./diagnostics-filter";
 import { buildDiagnosticsSnapshotProductWhere } from "./diagnostics-snapshot.server";
 import type { DiagnosticsTab } from "./diagnostics.server";
+import type { AdminGraphQLClient } from "./shopify-admin.server";
 import { normalizeShopDomain } from "./store-lifecycle";
 
 const validTabs = new Set<DiagnosticsTab>([
@@ -165,6 +167,7 @@ export async function getLatestDiagnosticsBulkEditJob(shop: string) {
 }
 
 export async function createDiagnosticsBulkEditJob(
+  admin: AdminGraphQLClient,
   shop: string,
   request: DiagnosticsBulkEditRequest,
 ) {
@@ -233,7 +236,12 @@ export async function createDiagnosticsBulkEditJob(
     );
   }
 
+  const collectionProductIds =
+    scope.filter?.field === "collection"
+      ? await getShopCollectionProductIds(admin, shop, scope.filter.value)
+      : undefined;
   const scopeWhere = buildDiagnosticsSnapshotProductWhere({
+    collectionProductIds,
     filter: scope.filter,
     scanVersion: scope.snapshotVersion,
     search: scope.search,
@@ -282,14 +290,29 @@ export async function createDiagnosticsBulkEditJob(
         );
       }
     }
-    requestedCount = await prisma.diagnosticsSnapshotProduct.count({
-      where: {
-        ...scopeWhere,
-        ...(excludedProductIds.length > 0
-          ? { productId: { notIn: excludedProductIds } }
-          : {}),
-      },
-    });
+    const matchingWhere = {
+      ...scopeWhere,
+      ...(excludedProductIds.length > 0
+        ? { productId: { notIn: excludedProductIds } }
+        : {}),
+    };
+
+    if (scope.filter?.field === "collection") {
+      // Workers intentionally operate only on saved snapshot data. Preserve
+      // the live Shopify collection intersection as an explicit, immutable
+      // product list before the job is queued.
+      const rows = await prisma.diagnosticsSnapshotProduct.findMany({
+        where: matchingWhere,
+        select: { productId: true },
+      });
+      productIds = rows.map(({ productId }) => productId);
+      excludedProductIds = [];
+      requestedCount = productIds.length;
+    } else {
+      requestedCount = await prisma.diagnosticsSnapshotProduct.count({
+        where: matchingWhere,
+      });
+    }
     if (requestedCount === 0) {
       throw new DiagnosticsBulkEditRequestError(
         "No products remain in the selected Diagnostics result set.",
@@ -316,7 +339,10 @@ export async function createDiagnosticsBulkEditJob(
       productType: edit.kind === "productType" ? edit.value : "",
       requestedCount,
       selectionMode:
-        request.selection.mode === "explicit" ? "EXPLICIT" : "ALL_MATCHING",
+        request.selection.mode === "explicit" ||
+        scope.filter?.field === "collection"
+          ? "EXPLICIT"
+          : "ALL_MATCHING",
       snapshotVersion: scope.snapshotVersion,
       storeId: store.id,
     },

@@ -4,6 +4,7 @@ export const diagnosticsFilterFields = [
   "age",
   "google-product-category",
   "product-type",
+  "collection",
   "tag",
 ] as const;
 
@@ -19,15 +20,13 @@ export interface DiagnosticsFilterOption {
   value: string;
 }
 
-export const diagnosticsFilterLabels: Record<
-  DiagnosticsFilterField,
-  string
-> = {
+export const diagnosticsFilterLabels: Record<DiagnosticsFilterField, string> = {
   "merchant-error": "Error from merchant center",
   gender: "Gender",
   age: "Age",
   "google-product-category": "Google product categories",
   "product-type": "Product type",
+  collection: "Collection",
   tag: "Tag",
 };
 

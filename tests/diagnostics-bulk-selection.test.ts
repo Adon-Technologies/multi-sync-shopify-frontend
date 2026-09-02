@@ -142,6 +142,25 @@ test("blank and whitespace-only custom labels serialize as clearing", () => {
   });
 });
 
+test("blank and whitespace-only Product Types serialize as clearing", () => {
+  const selection = toggleDiagnosticsProduct(
+    emptyDiagnosticsBulkSelection(),
+    product(1),
+    true,
+  );
+  const request = serializeDiagnosticsBulkSelection(
+    selection,
+    scope,
+    { kind: "productType", value: "   " },
+    "request_12345678",
+  );
+
+  assert.deepEqual(request.edit, {
+    kind: "productType",
+    value: "",
+  });
+});
+
 test("Diagnostics page size accepts only 10, 25, or 50 products", () => {
   assert.deepEqual(DIAGNOSTICS_PAGE_SIZES, [10, 25, 50]);
   assert.equal(normalizeDiagnosticsPageSize("10"), 10);
@@ -162,6 +181,11 @@ test("Diagnostics UI keeps normal headers and provides the Polaris bulk workflow
   assert.match(source, /Product type/);
   assert.match(source, /product\.productType \|\| "—"/);
   assert.match(source, /Error from merchant center/);
+  assert.match(source, /CollectionFilterPicker/);
+  assert.match(source, /Search store collections/);
+  assert.match(source, /Loading more collections/);
+  assert.match(source, /onScroll=\{handleScroll\}/);
+  assert.match(source, /\[cursor, debouncedSearch, open, query\.data\]/);
   assert.match(source, /<s-checkbox/);
   assert.match(
     source,

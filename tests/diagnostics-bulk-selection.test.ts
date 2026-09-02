@@ -22,7 +22,10 @@ import {
 const product = (id: number) => `gid://shopify/Product/${id}`;
 const scope = createDiagnosticsBulkSelectionScope({
   diagnosticsTab: "warnings",
-  filter: { field: "product-type", value: " Shoes " },
+  filters: [
+    { field: "product-type", value: " Shoes " },
+    { field: "vendor", value: " Nike " },
+  ],
   search: "  Summer   Dress ",
   snapshotVersion: "diagnostics-v13:scan-test",
 });
@@ -105,10 +108,10 @@ test("all-matching mode stores scope and only deselected exclusions", () => {
   assert.equal("productIds" in request.selection, false);
   assert.equal(request.scope.diagnosticsTab, "warnings");
   assert.equal(request.scope.search, "summer   dress");
-  assert.deepEqual(request.scope.filter, {
-    field: "product-type",
-    value: "Shoes",
-  });
+  assert.deepEqual(request.scope.filters, [
+    { field: "vendor", value: "Nike" },
+    { field: "product-type", value: "Shoes" },
+  ]);
 });
 
 test("undo all matching returns to current-page explicit selection", () => {

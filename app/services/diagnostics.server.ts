@@ -1,15 +1,18 @@
 import { randomUUID } from "node:crypto";
 
+import prisma from "../db.server";
 import { ACTIVE_ONLINE_STORE_PRODUCT_QUERY } from "./catalog-query";
 import { getShopCollectionProductIds } from "./collection-search.server";
 import {
   getDiagnosticsConfigurationRules,
   type DiagnosticsConfigurationRules,
 } from "./configuration.server";
-import type {
-  DiagnosticsFilter,
-  DiagnosticsFilterField,
-  DiagnosticsFilterOption,
+import {
+  diagnosticsStaticFilterOptions,
+  normalizeDiagnosticsFilters,
+  type DiagnosticsFilter,
+  type DiagnosticsFilterField,
+  type DiagnosticsFilterOption,
 } from "./diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "./diagnostics-search";
 import {
@@ -53,6 +56,7 @@ const PAGE_CACHE_TTL_MS = 60 * 1000;
 const RAW_PRODUCT_PAGE_CACHE_TTL_MS = 2 * 60 * 1000;
 const METAFIELD_KEYS_CACHE_TTL_MS = 10 * 60 * 1000;
 const EXCLUSION_CONTEXT_CACHE_TTL_MS = 10 * 60 * 1000;
+const FILTER_OPTIONS_CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 500;
 // Raw Shopify batches are only a short coalescing window. Capping this cache
 // prevents a complete large catalog from being retained in server memory.
@@ -123,7 +127,7 @@ interface DiagnosticsPageOptions {
   after?: string | null;
   before?: string | null;
   collectionProductIds?: string[];
-  filter?: DiagnosticsFilter | null;
+  filters?: DiagnosticsFilter[];
   force?: boolean;
   pageSize?: DiagnosticsPageSize;
   refreshToken?: string | null;
@@ -199,6 +203,7 @@ interface ProductEdge {
       fullName: string;
     } | null;
     productType: string;
+    vendor: string;
     tags: string[];
     description: string | null;
     featuredMedia: {
@@ -278,6 +283,16 @@ interface MetafieldReferenceQuery {
   nodes: Array<MetafieldReferenceNode | null>;
 }
 
+interface ProductVendorsQuery {
+  productVendors: {
+    nodes: string[];
+    pageInfo: {
+      endCursor: string | null;
+      hasNextPage: boolean;
+    };
+  };
+}
+
 const countsCache = new Map<string, CacheEntry<DiagnosticsCounts>>();
 const pageCache = new Map<string, CacheEntry<DiagnosticsPage>>();
 const metafieldKeysCache = new Map<
@@ -288,6 +303,10 @@ const rawProductPageCache = new Map<string, CacheEntry<RawProductPage>>();
 const exclusionContextCache = new Map<
   string,
   CacheEntry<DiagnosticsExclusionContext>
+>();
+const filterOptionsCache = new Map<
+  string,
+  CacheEntry<DiagnosticsFilterOption[]>
 >();
 const rawGenerationByShop = new Map<string, string>();
 
@@ -340,6 +359,7 @@ const PRODUCT_PAGE_QUERY = `#graphql
             fullName
           }
           productType
+          vendor
           tags
           description(truncateAt: 1)
           featuredMedia {
@@ -409,6 +429,18 @@ const METAFIELD_REFERENCES_QUERY = `#graphql
       }
       ... on TaxonomyValue {
         name
+      }
+    }
+  }
+`;
+
+const PRODUCT_VENDORS_QUERY = `#graphql
+  query DiagnosticProductVendors($after: String) {
+    productVendors(first: 250, after: $after) {
+      nodes
+      pageInfo {
+        endCursor
+        hasNextPage
       }
     }
   }
@@ -964,6 +996,7 @@ function mapProduct(
     createdAt: node.createdAt,
     categoryName: node.category?.fullName.trim() || null,
     productType: node.productType.trim() || null,
+    vendor: node.vendor.trim() || null,
     tags: node.tags,
     description: node.description,
     price: node.priceRangeV2?.minVariantPrice?.amount ?? null,
@@ -975,16 +1008,89 @@ function mapProduct(
   };
 }
 
+type DiagnosticCustomLabelValues = Pick<
+  DiagnosticProduct,
+  | "customLabel0Values"
+  | "customLabel1Values"
+  | "customLabel2Values"
+  | "customLabel3Values"
+  | "customLabel4Values"
+>;
+
+function emptyCustomLabelValues(): DiagnosticCustomLabelValues {
+  return {
+    customLabel0Values: [],
+    customLabel1Values: [],
+    customLabel2Values: [],
+    customLabel3Values: [],
+    customLabel4Values: [],
+  };
+}
+
+/** One indexed Mongo query per Shopify product batch, never per variant. */
+async function loadCustomLabelValuesForProducts(
+  shop: string,
+  productIds: string[],
+) {
+  const valuesByProductId = new Map<string, DiagnosticCustomLabelValues>();
+  if (productIds.length === 0) return valuesByProductId;
+
+  const rows = await prisma.customLabel.findMany({
+    where: {
+      productId: { in: productIds },
+      store: { is: { shopDomain: normalizeShop(shop) } },
+    },
+    select: {
+      productId: true,
+      customLabel0: true,
+      customLabel1: true,
+      customLabel2: true,
+      customLabel3: true,
+      customLabel4: true,
+    },
+  });
+
+  for (const row of rows) {
+    const values =
+      valuesByProductId.get(row.productId) ?? emptyCustomLabelValues();
+
+    for (let index = 0; index <= 4; index += 1) {
+      const sourceField = `customLabel${index}` as keyof typeof row;
+      const targetField =
+        `customLabel${index}Values` as keyof DiagnosticCustomLabelValues;
+      const value = row[sourceField];
+      if (
+        typeof value === "string" &&
+        value.trim() &&
+        !values[targetField].includes(value.trim())
+      ) {
+        values[targetField].push(value.trim());
+      }
+    }
+
+    valuesByProductId.set(row.productId, values);
+  }
+
+  return valuesByProductId;
+}
+
 async function classifyProductEdges(
   admin: AdminGraphQLClient,
+  shop: string,
   edges: ProductEdge[],
   attributesByIdentifier: ReadonlyMap<string, DiagnosticAttribute>,
   exclusionContext: DiagnosticsExclusionContext,
 ) {
-  const referenceValuesById = await fetchMetafieldReferenceValues(admin, edges);
+  const [referenceValuesById, customLabelsByProductId] = await Promise.all([
+    fetchMetafieldReferenceValues(admin, edges),
+    loadCustomLabelValuesForProducts(
+      shop,
+      edges.map(({ node }) => node.id),
+    ),
+  ]);
 
-  return edges.map((edge) =>
-    validateDiagnosticProduct(
+  return edges.map((edge) => {
+    const diagnostic = validateDiagnosticProduct(
       mapProduct(
         edge.node,
         referenceValuesById,
@@ -992,8 +1098,14 @@ async function classifyProductEdges(
         exclusionContext,
       ),
       exclusionContext.rules,
-    ),
-  );
+    );
+
+    return {
+      ...diagnostic,
+      ...(customLabelsByProductId.get(edge.node.id) ??
+        emptyCustomLabelValues()),
+    };
+  });
 }
 
 async function fetchProductPageFromShopify(
@@ -1155,6 +1267,7 @@ async function fetchStoreWideDiagnosticsCounts(
       batchSize = result.nextBatchSize;
       const classifiedProducts = await classifyProductEdges(
         admin,
+        shop,
         result.page.edges,
         metafieldSelection.attributesByIdentifier,
         exclusionContext,
@@ -1253,6 +1366,7 @@ async function fetchUnfilteredPage(
     : result.page.edges.slice(0, pageSize);
   const classifiedProducts = await classifyProductEdges(
     admin,
+    shop,
     displayedEdges,
     metafieldSelection.attributesByIdentifier,
     exclusionContext,
@@ -1318,6 +1432,7 @@ async function fetchForwardFilteredPage(
     batchSize = result.nextBatchSize;
     const classifiedProducts = await classifyProductEdges(
       admin,
+      shop,
       result.page.edges,
       metafieldSelection.attributesByIdentifier,
       exclusionContext,
@@ -1416,6 +1531,7 @@ async function fetchBackwardFilteredPage(
     batchSize = result.nextBatchSize;
     const classifiedProducts = await classifyProductEdges(
       admin,
+      shop,
       result.page.edges,
       metafieldSelection.attributesByIdentifier,
       exclusionContext,
@@ -1494,7 +1610,7 @@ async function fetchDiagnosticsPage(
       search: options.search,
       scanVersion: options.snapshotVersion,
       sort: options.sort,
-      filter: options.filter,
+      filters: options.filters,
       collectionProductIds: options.collectionProductIds,
     });
 
@@ -1661,6 +1777,7 @@ export async function getDiagnosticsPage(
   shop: string,
   options: DiagnosticsPageOptions,
 ) {
+  const normalizedFilters = normalizeDiagnosticsFilters(options.filters);
   const force = options.force ?? false;
   const normalizedSearch = normalizeDiagnosticsSearch(options.search ?? "");
   const sort = normalizeDiagnosticsSort(options.sort);
@@ -1694,10 +1811,12 @@ export async function getDiagnosticsPage(
   }
 
   const rawGeneration = getRawGeneration(shop, false, options.refreshToken);
-  const collectionProductIds =
-    options.filter?.field === "collection"
-      ? await getShopCollectionProductIds(admin, shop, options.filter.value)
-      : undefined;
+  const collectionFilter = normalizedFilters.find(
+    ({ field }) => field === "collection",
+  );
+  const collectionProductIds = collectionFilter
+    ? await getShopCollectionProductIds(admin, shop, collectionFilter.value)
+    : undefined;
 
   const direction = options.before ? "before" : "after";
   const cursor = options.before ?? options.after ?? "start";
@@ -1710,14 +1829,14 @@ export async function getDiagnosticsPage(
     cursor,
     encodeURIComponent(normalizedSearch),
     sort,
-    options.filter?.field ?? "no-filter",
-    encodeURIComponent(options.filter?.value ?? ""),
+    encodeURIComponent(JSON.stringify(normalizedFilters)),
     pageSize,
   ].join("|");
 
   return getCachedValue(pageCache, key, PAGE_CACHE_TTL_MS, () =>
     fetchDiagnosticsPage(admin, shop, rawGeneration, {
       ...options,
+      filters: normalizedFilters,
       collectionProductIds,
       force: false,
       search: normalizedSearch,
@@ -1728,7 +1847,70 @@ export async function getDiagnosticsPage(
   );
 }
 
+function distinctFilterOptions(values: Iterable<string>) {
+  const options = new Map<string, DiagnosticsFilterOption>();
+
+  for (const input of values) {
+    const value = input.trim();
+    const key = value.toLocaleLowerCase();
+    if (value && !options.has(key)) options.set(key, { label: value, value });
+  }
+
+  return [...options.values()].sort((left, right) =>
+    left.label.localeCompare(right.label, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }),
+  );
+}
+
+async function fetchDistinctShopifyVendors(admin: AdminGraphQLClient) {
+  const vendors = new Set<string>();
+  let after: string | null = null;
+
+  do {
+    const payload: GraphQLPayload<ProductVendorsQuery> =
+      await queryShopify<ProductVendorsQuery>(admin, PRODUCT_VENDORS_QUERY, {
+        after,
+      });
+    const page: ProductVendorsQuery["productVendors"] | undefined =
+      payload.data?.productVendors;
+    if (!page) throw new DiagnosticsDataError();
+    page.nodes.forEach((vendor) => vendors.add(vendor));
+    if (!page.pageInfo.hasNextPage) break;
+    if (!page.pageInfo.endCursor) throw new DiagnosticsDataError();
+    after = page.pageInfo.endCursor;
+  } while (after);
+
+  return distinctFilterOptions(vendors);
+}
+
+async function fetchDistinctCustomLabels(
+  shop: string,
+  field: DiagnosticsFilterField,
+) {
+  const fieldName = field.replace("custom-label-", "customLabel") as
+    | "customLabel0"
+    | "customLabel1"
+    | "customLabel2"
+    | "customLabel3"
+    | "customLabel4";
+  const rows = (await prisma.customLabel.findMany({
+    where: { store: { is: { shopDomain: normalizeShop(shop) } } },
+    select: { [fieldName]: true },
+    distinct: [fieldName],
+  })) as unknown as Array<Partial<Record<typeof fieldName, string | null>>>;
+
+  return distinctFilterOptions(
+    rows.flatMap((row) => {
+      const value = row[fieldName];
+      return value ? [value] : [];
+    }),
+  );
+}
+
 export async function getDiagnosticsFilterOptions(
+  admin: AdminGraphQLClient,
   shop: string,
   options: {
     field: DiagnosticsFilterField;
@@ -1745,15 +1927,42 @@ export async function getDiagnosticsFilterOptions(
     return { options: [], scanVersion: "" };
   }
 
-  const filterOptions = await readDiagnosticsSnapshotFilterOptions(
-    shop,
+  const staticOptions = diagnosticsStaticFilterOptions[options.field];
+  if (staticOptions) {
+    return {
+      options: [...staticOptions],
+      scanVersion: readySnapshot.scanVersion,
+    };
+  }
+
+  const cacheKey = [
+    normalizeShop(shop),
+    readySnapshot.scanVersion,
     options.tab,
     options.field,
-    readySnapshot.scanVersion,
+  ].join("|");
+  const filterOptions = await getCachedValue(
+    filterOptionsCache,
+    cacheKey,
+    FILTER_OPTIONS_CACHE_TTL_MS,
+    () => {
+      if (options.field === "vendor") {
+        return fetchDistinctShopifyVendors(admin);
+      }
+      if (options.field.startsWith("custom-label-")) {
+        return fetchDistinctCustomLabels(shop, options.field);
+      }
+      return readDiagnosticsSnapshotFilterOptions(
+        shop,
+        options.tab,
+        options.field,
+        readySnapshot.scanVersion,
+      ).then((values) => values ?? []);
+    },
   );
 
   return {
-    options: filterOptions ?? [],
+    options: filterOptions,
     scanVersion: readySnapshot.scanVersion,
   };
 }

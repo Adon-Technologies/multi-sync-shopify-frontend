@@ -14,8 +14,8 @@ import {
   type DiagnosticsTab,
 } from "../services/diagnostics.server";
 import {
-  normalizeDiagnosticsFilter,
   normalizeDiagnosticsFilterField,
+  parseDiagnosticsFilters,
   type DiagnosticsFilterField,
 } from "../services/diagnostics-filter";
 import { normalizeDiagnosticsSort } from "../services/diagnostics-sort";
@@ -120,7 +120,7 @@ export const loader = async ({
         ok: true,
         intent,
         field,
-        result: await getDiagnosticsFilterOptions(session.shop, {
+        result: await getDiagnosticsFilterOptions(admin, session.shop, {
           field,
           tab,
           snapshotVersion: url.searchParams.get("snapshotVersion"),
@@ -136,7 +136,8 @@ export const loader = async ({
         tab,
         after: url.searchParams.get("after"),
         before: url.searchParams.get("before"),
-        filter: normalizeDiagnosticsFilter(
+        filters: parseDiagnosticsFilters(
+          url.searchParams.get("filters"),
           url.searchParams.get("filterField"),
           url.searchParams.get("filterValue"),
         ),

@@ -225,6 +225,52 @@
   gap: 8px;
 }
 
+.filterConditionValue {
+  display: grid;
+  gap: 8px;
+}
+
+.activeFiltersBar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e3e3e3;
+  background: #fafafa;
+}
+
+.filterSuggestionDialog {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.filterSuggestionOptions {
+  display: grid;
+  max-height: 224px;
+  gap: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.filterSuggestionOptions s-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.filterSuggestionState {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
 .polarisPicker {
   min-width: 0;
 }

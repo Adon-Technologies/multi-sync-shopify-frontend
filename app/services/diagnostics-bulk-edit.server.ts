@@ -1,4 +1,4 @@
-import type { BulkProductTypeJob } from "@prisma/client";
+import type { BulkProductTypeJob, Prisma } from "@prisma/client";
 
 import prisma from "../db.server";
 import { getShopCollectionProductIds } from "./collection-search.server";
@@ -12,7 +12,7 @@ import {
   type DiagnosticsBulkEditRequest,
 } from "./diagnostics-bulk-edit";
 import {
-  normalizeDiagnosticsFilter,
+  normalizeDiagnosticsFilters,
   type DiagnosticsFilter,
 } from "./diagnostics-filter";
 import { buildDiagnosticsSnapshotProductWhere } from "./diagnostics-snapshot.server";
@@ -120,15 +120,19 @@ function normalizeProductIds(value: unknown, fieldName: string) {
   return ids;
 }
 
-function normalizeFilter(value: DiagnosticsFilter | null) {
-  if (!value) return null;
-  const filter = normalizeDiagnosticsFilter(value.field, value.value);
-  if (!filter) {
+function normalizeFilters(value: DiagnosticsFilter[]) {
+  if (!Array.isArray(value)) {
     throw new DiagnosticsBulkEditRequestError(
-      "The Diagnostics filter is invalid.",
+      "The Diagnostics filters are invalid.",
     );
   }
-  return filter;
+  const filters = normalizeDiagnosticsFilters(value);
+  if (filters.length !== value.length) {
+    throw new DiagnosticsBulkEditRequestError(
+      "One or more Diagnostics filters are invalid or duplicated.",
+    );
+  }
+  return filters;
 }
 
 async function requireAvailableStore(shop: string) {
@@ -195,10 +199,10 @@ export async function createDiagnosticsBulkEditJob(
       "The Diagnostics selection scope is invalid.",
     );
   }
-  const filter = normalizeFilter(request.scope.filter);
+  const filters = normalizeFilters(request.scope.filters);
   const scope = createDiagnosticsBulkSelectionScope({
     ...request.scope,
-    filter,
+    filters,
   });
   if (!scope.snapshotVersion) {
     throw new DiagnosticsBulkEditRequestError(
@@ -236,13 +240,15 @@ export async function createDiagnosticsBulkEditJob(
     );
   }
 
-  const collectionProductIds =
-    scope.filter?.field === "collection"
-      ? await getShopCollectionProductIds(admin, shop, scope.filter.value)
-      : undefined;
+  const collectionFilter = scope.filters.find(
+    ({ field }) => field === "collection",
+  );
+  const collectionProductIds = collectionFilter
+    ? await getShopCollectionProductIds(admin, shop, collectionFilter.value)
+    : undefined;
   const scopeWhere = buildDiagnosticsSnapshotProductWhere({
     collectionProductIds,
-    filter: scope.filter,
+    filters: scope.filters,
     scanVersion: scope.snapshotVersion,
     search: scope.search,
     shop: store.shopDomain,
@@ -297,7 +303,7 @@ export async function createDiagnosticsBulkEditJob(
         : {}),
     };
 
-    if (scope.filter?.field === "collection") {
+    if (collectionFilter) {
       // Workers intentionally operate only on saved snapshot data. Preserve
       // the live Shopify collection intersection as an explicit, immutable
       // product list before the job is queued.
@@ -326,8 +332,9 @@ export async function createDiagnosticsBulkEditJob(
 
   const job = await prisma.bulkProductTypeJob.create({
     data: {
-      diagnosticsFilterField: scope.filter?.field ?? null,
-      diagnosticsFilterValue: scope.filter?.value ?? null,
+      diagnosticsFilterField: scope.filters[0]?.field ?? null,
+      diagnosticsFilterValue: scope.filters[0]?.value ?? null,
+      diagnosticsFilters: scope.filters as unknown as Prisma.InputJsonValue,
       diagnosticsSearch: scope.search,
       diagnosticsTab: scope.diagnosticsTab,
       excludedProductIds,
@@ -339,8 +346,7 @@ export async function createDiagnosticsBulkEditJob(
       productType: edit.kind === "productType" ? edit.value : "",
       requestedCount,
       selectionMode:
-        request.selection.mode === "explicit" ||
-        scope.filter?.field === "collection"
+        request.selection.mode === "explicit" || collectionFilter
           ? "EXPLICIT"
           : "ALL_MATCHING",
       snapshotVersion: scope.snapshotVersion,

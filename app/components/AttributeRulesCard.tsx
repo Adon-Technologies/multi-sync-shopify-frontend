@@ -103,7 +103,7 @@ function RuleValuePicker({
           <s-icon color="subdued" type="chevron-down" />
         </s-stack>
       </s-clickable>
-      <s-popover blockSize="260px" id={popoverId} inlineSize="360px">
+      <s-popover id={popoverId}>
         <s-box padding="small-200">
           <div className={styles.ruleValueOptions}>
             {choices.map((option) => (

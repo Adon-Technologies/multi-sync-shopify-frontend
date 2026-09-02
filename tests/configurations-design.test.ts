@@ -173,6 +173,18 @@ test("collection pickers restore cached results whenever they reopen", () => {
   );
 });
 
+test("Gender and Age rule value popovers size to their option text", () => {
+  assert.match(attributeRulesSource, /<s-popover id=\{popoverId\}>/);
+  assert.doesNotMatch(
+    attributeRulesSource,
+    /<s-popover blockSize="260px" id=\{popoverId\} inlineSize="360px">/,
+  );
+  assert.match(
+    panelStyles,
+    /\.ruleValueOptions\s*\{[\s\S]*width:\s*max-content;[\s\S]*max-height:\s*236px/,
+  );
+});
+
 test("a saved configuration that made XML stale shows its warning at the top", () => {
   const headerStart = panelSource.indexOf(`<div className={styles.header}>`);
   const warningStart = panelSource.indexOf(

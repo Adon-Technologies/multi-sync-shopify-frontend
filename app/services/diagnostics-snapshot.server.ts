@@ -2,11 +2,15 @@ import type { Prisma } from "@prisma/client";
 
 import prisma from "../db.server";
 import {
+  normalizeDiagnosticsFilterMatchValue,
   type DiagnosticsFilter,
   type DiagnosticsFilterField,
   type DiagnosticsFilterOption,
 } from "./diagnostics-filter";
-import { normalizeDiagnosticsSearch } from "./diagnostics-search";
+import {
+  buildDiagnosticsSnapshotProductWhere,
+  getDiagnosticsStatusForTab,
+} from "./diagnostics-filter-where";
 import {
   normalizeDiagnosticsSort,
   type DiagnosticsSort,
@@ -14,9 +18,10 @@ import {
 import {
   DIAGNOSTICS_CLASSIFICATION_VERSION,
   type DiagnosticProduct,
-  type DiagnosticStatus,
   type DiagnosticWarning,
 } from "./diagnostics-validation";
+
+export { buildDiagnosticsSnapshotProductWhere } from "./diagnostics-filter-where";
 
 const READY_STATUS = "ready";
 const BUILDING_STATUS = "building";
@@ -138,6 +143,14 @@ function mapStoredProduct(product: {
   categoryName: string | null;
   genderValues: string[];
   ageValues: string[];
+  colorValues: string[];
+  sizeValues: string[];
+  vendor: string | null;
+  customLabel0Values: string[];
+  customLabel1Values: string[];
+  customLabel2Values: string[];
+  customLabel3Values: string[];
+  customLabel4Values: string[];
   productType: string | null;
   tags: string[];
   imageUrl: string | null;
@@ -152,6 +165,14 @@ function mapStoredProduct(product: {
     categoryName: product.categoryName,
     genderValues: product.genderValues,
     ageValues: product.ageValues,
+    colorValues: product.colorValues,
+    sizeValues: product.sizeValues,
+    vendor: product.vendor,
+    customLabel0Values: product.customLabel0Values,
+    customLabel1Values: product.customLabel1Values,
+    customLabel2Values: product.customLabel2Values,
+    customLabel3Values: product.customLabel3Values,
+    customLabel4Values: product.customLabel4Values,
     productType: product.productType,
     tags: product.tags,
     imageUrl: product.imageUrl,
@@ -253,7 +274,42 @@ export async function appendDiagnosticsSnapshotProducts(
       productCreatedAt: new Date(product.createdAt),
       categoryName: product.categoryName,
       genderValues: product.genderValues,
+      genderMatchValues: product.genderValues.map((value) =>
+        normalizeDiagnosticsFilterMatchValue("gender", value),
+      ),
       ageValues: product.ageValues,
+      ageMatchValues: product.ageValues.map((value) =>
+        normalizeDiagnosticsFilterMatchValue("age", value),
+      ),
+      colorValues: product.colorValues,
+      colorMatchValues: product.colorValues.map((value) =>
+        normalizeDiagnosticsFilterMatchValue("color", value),
+      ),
+      sizeValues: product.sizeValues,
+      sizeMatchValues: product.sizeValues.map((value) =>
+        normalizeDiagnosticsFilterMatchValue("size", value),
+      ),
+      vendor: product.vendor,
+      customLabel0Values: product.customLabel0Values,
+      customLabel0MatchValues: product.customLabel0Values.map((value) =>
+        normalizeDiagnosticsFilterMatchValue("custom-label-0", value),
+      ),
+      customLabel1Values: product.customLabel1Values,
+      customLabel1MatchValues: product.customLabel1Values.map((value) =>
+        normalizeDiagnosticsFilterMatchValue("custom-label-1", value),
+      ),
+      customLabel2Values: product.customLabel2Values,
+      customLabel2MatchValues: product.customLabel2Values.map((value) =>
+        normalizeDiagnosticsFilterMatchValue("custom-label-2", value),
+      ),
+      customLabel3Values: product.customLabel3Values,
+      customLabel3MatchValues: product.customLabel3Values.map((value) =>
+        normalizeDiagnosticsFilterMatchValue("custom-label-3", value),
+      ),
+      customLabel4Values: product.customLabel4Values,
+      customLabel4MatchValues: product.customLabel4Values.map((value) =>
+        normalizeDiagnosticsFilterMatchValue("custom-label-4", value),
+      ),
       productType: product.productType,
       tags: product.tags,
       warningCodes: product.warnings.map(({ code }) => code),
@@ -385,7 +441,7 @@ export async function readDiagnosticsSnapshotPage(
     scanVersion?: string | null;
     search?: string | null;
     sort?: DiagnosticsSort | string | null;
-    filter?: DiagnosticsFilter | null;
+    filters?: DiagnosticsFilter[];
     collectionProductIds?: string[];
   },
 ): Promise<DiagnosticsSnapshotPage | null> {
@@ -437,7 +493,7 @@ export async function readDiagnosticsSnapshotPage(
         : [{ productType: sortDirection }, { position: "asc" as const }];
   const productWhere = buildDiagnosticsSnapshotProductWhere({
     collectionProductIds: options.collectionProductIds,
-    filter: options.filter,
+    filters: options.filters,
     scanVersion: snapshot.scanVersion,
     search: options.search,
     shop: normalizedShop,
@@ -484,78 +540,6 @@ export async function readDiagnosticsSnapshotPage(
   };
 }
 
-function getDiagnosticsFilterWhere(
-  filter?: DiagnosticsFilter | null,
-  collectionProductIds?: string[],
-): Prisma.DiagnosticsSnapshotProductWhereInput {
-  if (!filter) {
-    return {};
-  }
-
-  switch (filter.field) {
-    case "merchant-error":
-      return { warningCodes: { has: filter.value } };
-    case "gender":
-      return { genderValues: { has: filter.value } };
-    case "age":
-      return { ageValues: { has: filter.value } };
-    case "google-product-category":
-      return { categoryName: filter.value };
-    case "product-type":
-      return { productType: filter.value };
-    case "collection":
-      return { productId: { in: collectionProductIds ?? [] } };
-    case "tag":
-      return { tags: { has: filter.value } };
-  }
-}
-
-export function buildDiagnosticsSnapshotProductWhere({
-  collectionProductIds,
-  filter,
-  scanVersion,
-  search,
-  shop,
-  tab,
-}: {
-  collectionProductIds?: string[];
-  filter?: DiagnosticsFilter | null;
-  scanVersion: string;
-  search?: string | null;
-  shop: string;
-  tab: "all" | "submitted" | "warnings" | "excluded";
-}): Prisma.DiagnosticsSnapshotProductWhereInput {
-  const status = getStatusForTab(tab);
-  const normalizedSearch = normalizeDiagnosticsSearch(search ?? "");
-
-  return {
-    shop: normalizeShop(shop),
-    scanVersion,
-    ...(status ? { status } : {}),
-    ...(normalizedSearch
-      ? {
-          title: {
-            contains: normalizedSearch,
-            mode: "insensitive" as const,
-          },
-        }
-      : {}),
-    ...getDiagnosticsFilterWhere(filter, collectionProductIds),
-  };
-}
-
-function getStatusForTab(
-  tab: "all" | "submitted" | "warnings" | "excluded",
-): DiagnosticStatus | undefined {
-  return tab === "submitted"
-    ? "submitted"
-    : tab === "warnings"
-      ? "warning"
-      : tab === "excluded"
-        ? "error"
-        : undefined;
-}
-
 function sortFilterOptions(options: DiagnosticsFilterOption[]) {
   return options.sort((left, right) =>
     left.label.localeCompare(right.label, undefined, {
@@ -587,7 +571,7 @@ export async function readDiagnosticsSnapshotFilterOptions(
     return [];
   }
 
-  const status = getStatusForTab(tab);
+  const status = getDiagnosticsStatusForTab(tab);
   const rows = await prisma.diagnosticsSnapshotProduct.findMany({
     where: {
       shop: normalizedShop,
@@ -597,9 +581,17 @@ export async function readDiagnosticsSnapshotFilterOptions(
     select: {
       ageValues: true,
       categoryName: true,
+      colorValues: true,
+      customLabel0Values: true,
+      customLabel1Values: true,
+      customLabel2Values: true,
+      customLabel3Values: true,
+      customLabel4Values: true,
       genderValues: true,
       productType: true,
+      sizeValues: true,
       tags: true,
+      vendor: true,
       warningCodes: true,
       warningMessages: true,
     },
@@ -622,15 +614,33 @@ export async function readDiagnosticsSnapshotFilterOptions(
         ? row.genderValues
         : field === "age"
           ? row.ageValues
-          : field === "google-product-category"
-            ? row.categoryName
-              ? [row.categoryName]
-              : []
-            : field === "product-type"
-              ? row.productType
-                ? [row.productType]
-                : []
-              : row.tags;
+          : field === "color"
+            ? row.colorValues
+            : field === "size"
+              ? row.sizeValues
+              : field === "vendor"
+                ? row.vendor
+                  ? [row.vendor]
+                  : []
+                : field === "custom-label-0"
+                  ? row.customLabel0Values
+                  : field === "custom-label-1"
+                    ? row.customLabel1Values
+                    : field === "custom-label-2"
+                      ? row.customLabel2Values
+                      : field === "custom-label-3"
+                        ? row.customLabel3Values
+                        : field === "custom-label-4"
+                          ? row.customLabel4Values
+                          : field === "google-product-category"
+                            ? row.categoryName
+                              ? [row.categoryName]
+                              : []
+                            : field === "product-type"
+                              ? row.productType
+                                ? [row.productType]
+                                : []
+                              : row.tags;
 
     for (const value of values) {
       if (!options.has(value)) {

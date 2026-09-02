@@ -10,7 +10,7 @@ import {
 } from "@multi-sync/catalog-rules";
 
 export const DIAGNOSTICS_CLASSIFICATION_VERSION =
-  "diagnostics-v13-product-filters";
+  "diagnostics-v14-multi-filters";
 
 export type DiagnosticStatus = "submitted" | "warning" | "error";
 
@@ -27,6 +27,7 @@ export interface RawDiagnosticProduct {
   description: string | null;
   price: string | null;
   productType: string | null;
+  vendor?: string | null;
   tags: string[];
   imageUrl: string | null;
   imageAlt: string | null;
@@ -63,6 +64,14 @@ export interface DiagnosticProduct {
   categoryName: string | null;
   genderValues: string[];
   ageValues: string[];
+  colorValues: string[];
+  sizeValues: string[];
+  vendor: string | null;
+  customLabel0Values: string[];
+  customLabel1Values: string[];
+  customLabel2Values: string[];
+  customLabel3Values: string[];
+  customLabel4Values: string[];
   productType: string | null;
   tags: string[];
   imageUrl: string | null;
@@ -367,9 +376,22 @@ export function validateDiagnosticProduct(
   exclusionRules?: DiagnosticExclusionRules,
 ): DiagnosticProduct {
   const metafieldValues = collectAttributeValues(product, "metafields");
+  const optionValues = collectAttributeValues(
+    product,
+    "options",
+    exclusionRules,
+  );
   const filterMetadata = {
     genderValues: uniqueFilterValues(metafieldValues.get("gender") ?? []),
     ageValues: uniqueFilterValues(metafieldValues.get("age") ?? []),
+    colorValues: uniqueFilterValues(optionValues.get("color") ?? []),
+    sizeValues: uniqueFilterValues(optionValues.get("size") ?? []),
+    vendor: product.vendor?.trim() || null,
+    customLabel0Values: [],
+    customLabel1Values: [],
+    customLabel2Values: [],
+    customLabel3Values: [],
+    customLabel4Values: [],
     tags: uniqueFilterValues(product.tags),
   };
   const exclusionReasons = getDiagnosticExclusionReasons(
@@ -393,12 +415,6 @@ export function validateDiagnosticProduct(
   }
 
   const warnings: DiagnosticWarning[] = [];
-  const optionValues = collectAttributeValues(
-    product,
-    "options",
-    exclusionRules,
-  );
-
   for (const attribute of comparableAttributes) {
     const optionSet = normalizeValueSet(optionValues.get(attribute.key) ?? []);
     const metafieldSet = normalizeValueSet(

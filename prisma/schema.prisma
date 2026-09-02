@@ -252,24 +252,41 @@ model DiagnosticsSnapshot {
 }
 
 model DiagnosticsSnapshotProduct {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
-  shop             String
-  scanVersion      String
-  productId        String
-  position         Int
-  title            String
-  productCreatedAt DateTime
-  categoryName     String?
-  genderValues     String[] @default([])
-  ageValues        String[] @default([])
-  productType      String?
-  tags             String[] @default([])
-  warningCodes     String[] @default([])
-  warningMessages  String[] @default([])
-  imageUrl         String?
-  imageAlt         String?
-  status           String
-  warningData      Json
+  id                      String   @id @default(auto()) @map("_id") @db.ObjectId
+  shop                    String
+  scanVersion             String
+  productId               String
+  position                Int
+  title                   String
+  productCreatedAt        DateTime
+  categoryName            String?
+  genderValues            String[] @default([])
+  genderMatchValues       String[] @default([])
+  ageValues               String[] @default([])
+  ageMatchValues          String[] @default([])
+  colorValues             String[] @default([])
+  colorMatchValues        String[] @default([])
+  sizeValues              String[] @default([])
+  sizeMatchValues         String[] @default([])
+  vendor                  String?
+  customLabel0Values      String[] @default([])
+  customLabel0MatchValues String[] @default([])
+  customLabel1Values      String[] @default([])
+  customLabel1MatchValues String[] @default([])
+  customLabel2Values      String[] @default([])
+  customLabel2MatchValues String[] @default([])
+  customLabel3Values      String[] @default([])
+  customLabel3MatchValues String[] @default([])
+  customLabel4Values      String[] @default([])
+  customLabel4MatchValues String[] @default([])
+  productType             String?
+  tags                    String[] @default([])
+  warningCodes            String[] @default([])
+  warningMessages         String[] @default([])
+  imageUrl                String?
+  imageAlt                String?
+  status                  String
+  warningData             Json
 
   @@unique([shop, scanVersion, productId])
   @@index([shop, scanVersion, position])
@@ -312,6 +329,7 @@ model BulkProductTypeJob {
   diagnosticsSearch      String                       @default("")
   diagnosticsFilterField String?
   diagnosticsFilterValue String?
+  diagnosticsFilters     Json?
   snapshotVersion        String
   action                 BulkCatalogEditAction        @default(PRODUCT_TYPE)
   productType            String                       @default("")
@@ -355,6 +373,11 @@ model CustomLabel {
 
   @@unique([storeId, variantId])
   @@index([storeId, productId])
+  @@index([storeId, customLabel0])
+  @@index([storeId, customLabel1])
+  @@index([storeId, customLabel2])
+  @@index([storeId, customLabel3])
+  @@index([storeId, customLabel4])
 }
 
 enum XmlFeedStatus {

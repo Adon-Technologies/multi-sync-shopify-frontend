@@ -68,6 +68,30 @@ test("filter metadata uses metafield Gender and Age values plus product tags", (
   assert.deepEqual(diagnostic.tags, ["Summer", "Featured"]);
 });
 
+test("vendor, Color, and Size filter metadata uses configured option mappings", () => {
+  const diagnostic = validateDiagnosticProduct(
+    product({
+      vendor: "Nike",
+      options: [
+        { name: "Genre", values: ["Men"] },
+        { name: "Age", values: ["Adult"] },
+        { name: "Couleur", values: ["Orange Et Noir", "Black"] },
+        { name: "Taille", values: ["M", "XL"] },
+      ],
+    }),
+    {
+      ...noExclusions,
+      colorOptions: ["Color", "Colour", "Couleur"],
+      sizeOptions: ["Size", "Taille"],
+    },
+  );
+
+  assert.equal(diagnostic.vendor, "Nike");
+  assert.deepEqual(diagnostic.colorValues, ["Orange Et Noir", "Black"]);
+  assert.deepEqual(diagnostic.sizeValues, ["M", "XL"]);
+  assert.deepEqual(diagnostic.customLabel0Values, []);
+});
+
 test("a metafield supplies an attribute missing from product options", () => {
   const diagnostic = validateDiagnosticProduct(
     product({

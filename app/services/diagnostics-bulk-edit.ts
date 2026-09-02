@@ -1,4 +1,7 @@
-import type { DiagnosticsFilter } from "./diagnostics-filter";
+import {
+  normalizeDiagnosticsFilters,
+  type DiagnosticsFilter,
+} from "./diagnostics-filter.ts";
 import { normalizeDiagnosticsSearch } from "./diagnostics-search.ts";
 import type { DiagnosticsTab } from "./diagnostics.server";
 
@@ -16,7 +19,7 @@ export type DiagnosticsBulkEdit =
 
 export interface DiagnosticsBulkSelectionScope {
   diagnosticsTab: DiagnosticsTab;
-  filter: DiagnosticsFilter | null;
+  filters: DiagnosticsFilter[];
   search: string;
   snapshotVersion: string;
 }
@@ -65,13 +68,13 @@ export interface DiagnosticsBulkEditJob {
 
 export function createDiagnosticsBulkSelectionScope({
   diagnosticsTab,
-  filter,
+  filters,
   search,
   snapshotVersion,
 }: DiagnosticsBulkSelectionScope): DiagnosticsBulkSelectionScope {
   return {
     diagnosticsTab,
-    filter: filter ? { field: filter.field, value: filter.value.trim() } : null,
+    filters: normalizeDiagnosticsFilters(filters),
     search: normalizeDiagnosticsSearch(search),
     snapshotVersion,
   };

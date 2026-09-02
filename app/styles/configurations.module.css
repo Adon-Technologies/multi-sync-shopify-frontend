@@ -432,6 +432,8 @@
 
 .ruleValueOptions {
   display: grid;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 48px));
   gap: 4px;
   max-height: 236px;
   overflow-y: auto;
@@ -441,6 +443,7 @@
 .ruleValueOptions s-button {
   display: block;
   width: 100%;
+  white-space: nowrap;
 }
 
 .rulesSectionHeader,

@@ -9,9 +9,12 @@ import type {
   DiagnosticsPage,
   DiagnosticsTab,
 } from "./diagnostics.server";
-import type {
-  DiagnosticsFilter,
-  DiagnosticsFilterField,
+import {
+  diagnosticsFiltersQueryKey,
+  normalizeDiagnosticsFilters,
+  serializeDiagnosticsFilters,
+  type DiagnosticsFilter,
+  type DiagnosticsFilterField,
 } from "./diagnostics-filter";
 import { normalizeDiagnosticsSearch } from "./diagnostics-search";
 import {
@@ -56,7 +59,7 @@ interface QueryRequestOptions {
 
 interface ProductsQueryRequestOptions extends QueryRequestOptions {
   abortOnUnmount?: boolean;
-  filter?: DiagnosticsFilter | null;
+  filters?: DiagnosticsFilter[];
   pageSize?: DiagnosticsPageSize;
   search?: string;
   sort?: DiagnosticsSort | string;
@@ -88,7 +91,7 @@ export const diagnosticsKeys = {
     generation: number,
     tab: DiagnosticsTab,
     after: string | null,
-    filter: DiagnosticsFilter | null,
+    filters: DiagnosticsFilter[],
     search: string,
     sort: DiagnosticsSort,
     pageSize: DiagnosticsPageSize,
@@ -104,8 +107,7 @@ export const diagnosticsKeys = {
       "products",
       tab,
       after ?? "start",
-      filter?.field ?? "no-filter",
-      filter?.value ?? "",
+      diagnosticsFiltersQueryKey(filters),
       normalizeDiagnosticsSearch(search),
       sort,
       pageSize,
@@ -298,7 +300,7 @@ export function diagnosticsProductsQueryOptions(
   {
     abortOnUnmount = false,
     endpoint = defaultEndpoint,
-    filter = null,
+    filters = [],
     force = false,
     pageSize = DEFAULT_DIAGNOSTICS_PAGE_SIZE,
     search = "",
@@ -316,7 +318,7 @@ export function diagnosticsProductsQueryOptions(
       generation,
       tab,
       request.after,
-      filter,
+      filters,
       normalizedSearch,
       normalizedSort,
       normalizedPageSize,
@@ -327,8 +329,10 @@ export function diagnosticsProductsQueryOptions(
       const payload = await requestDiagnostics(
         buildRequestUrl(endpoint, {
           after: request.after,
-          filterField: filter?.field,
-          filterValue: filter?.value,
+          filters:
+            normalizeDiagnosticsFilters(filters).length > 0
+              ? serializeDiagnosticsFilters(filters)
+              : null,
           intent: "page",
           pageSize: String(normalizedPageSize),
           refresh: force ? "1" : null,

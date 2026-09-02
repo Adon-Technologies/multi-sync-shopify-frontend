@@ -40,8 +40,11 @@ import {
   productTypeSuggestionsQueryOptions,
 } from "../services/configuration-query";
 import {
+  diagnosticsFreeTextFilterFields,
   diagnosticsFilterFields,
   diagnosticsFilterLabels,
+  diagnosticsStaticFilterOptions,
+  normalizeDiagnosticsFilters,
   type DiagnosticsFilter,
   type DiagnosticsFilterField,
 } from "../services/diagnostics-filter";
@@ -110,8 +113,7 @@ const badgeToneClass: Record<DiagnosticsTab, string> = {
 };
 
 const FILTER_POPOVER_ID = "diagnostics-product-filter-popover";
-const FILTER_FIELD_POPOVER_ID = "diagnostics-filter-field-popover";
-const FILTER_VALUE_POPOVER_ID = "diagnostics-filter-value-popover";
+const FILTER_ADD_POPOVER_ID = "diagnostics-filter-add-popover";
 const FILTER_COLLECTION_POPOVER_ID = "diagnostics-filter-collection-popover";
 const SORT_POPOVER_ID = "diagnostics-sort-popover";
 const BULK_EDIT_POPOVER_ID = "diagnostics-bulk-edit-popover";
@@ -260,6 +262,243 @@ function PolarisOptionPicker({
           </div>
         </s-box>
       </s-popover>
+    </div>
+  );
+}
+
+function SearchableFilterValuePicker({
+  disabled,
+  error,
+  id,
+  label,
+  loading,
+  onChange,
+  options,
+  value,
+}: {
+  disabled: boolean;
+  error: boolean;
+  id: string;
+  label: string;
+  loading: boolean;
+  onChange: (value: string) => void;
+  options: ReadonlyArray<{ label: string; value: string }>;
+  value: string;
+}) {
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const normalizedSearch = normalizeConfigurationText(search);
+  const visibleOptions = options.filter(({ label: optionLabel, value }) =>
+    `${optionLabel} ${value}`
+      .toLocaleLowerCase()
+      .includes(normalizedSearch.toLocaleLowerCase()),
+  );
+  const exactMatch = options.some(
+    (option) =>
+      option.value.toLocaleLowerCase() === normalizedSearch.toLocaleLowerCase(),
+  );
+
+  return (
+    <div className={styles.polarisPicker}>
+      <s-clickable
+        accessibilityLabel={`Choose or enter ${label}`}
+        background="base"
+        blockSize="32px"
+        border="small-100"
+        borderColor="base"
+        borderRadius="base"
+        borderStyle="solid"
+        command="--show"
+        commandFor={id}
+        disabled={disabled}
+        inlineSize="100%"
+        padding="none"
+      >
+        <span className={styles.pickerTriggerContent}>
+          <s-text color={value ? "base" : "subdued"}>
+            {value || `Type or select ${label}`}
+          </s-text>
+          <s-icon color="subdued" type="chevron-down" />
+        </span>
+      </s-clickable>
+      <s-popover
+        id={id}
+        inlineSize="320px"
+        onHide={(event) => {
+          event.stopPropagation();
+          setSearch("");
+        }}
+        onShow={() => {
+          setSearch(value);
+          window.requestAnimationFrame(() => searchRef.current?.focus());
+        }}
+      >
+        <s-box padding="small-200">
+          <div className={styles.filterSuggestionDialog}>
+            <s-search-field
+              autocomplete="off"
+              label={`Search ${label}`}
+              labelAccessibilityVisibility="exclusive"
+              onInput={(event) => {
+                const nextValue = event.currentTarget.value;
+                setSearch(nextValue);
+                onChange(normalizeConfigurationText(nextValue));
+              }}
+              placeholder={`Search or enter ${label}`}
+              ref={searchRef}
+              value={search}
+            />
+            <div className={styles.filterSuggestionOptions} role="listbox">
+              {normalizedSearch && !exactMatch ? (
+                <s-button
+                  command="--hide"
+                  commandFor={id}
+                  onClick={() => onChange(normalizedSearch)}
+                  variant="tertiary"
+                >
+                  <span className={styles.polarisPickerOption}>
+                    <span>Use &quot;{normalizedSearch}&quot;</span>
+                    <s-icon type="plus" />
+                  </span>
+                </s-button>
+              ) : null}
+              {loading ? (
+                <div className={styles.filterSuggestionState}>
+                  <s-spinner
+                    accessibilityLabel={`Loading ${label}`}
+                    size="base"
+                  />
+                  <s-text color="subdued">Loading suggestions...</s-text>
+                </div>
+              ) : error ? (
+                <div className={styles.filterSuggestionState}>
+                  <s-text color="subdued">
+                    Suggestions could not be loaded. You can still type a value.
+                  </s-text>
+                </div>
+              ) : visibleOptions.length > 0 ? (
+                visibleOptions.map((option) => (
+                  <s-button
+                    command="--hide"
+                    commandFor={id}
+                    key={`${option.value}-${option.label}`}
+                    onClick={() => onChange(option.value)}
+                    variant="tertiary"
+                  >
+                    <span className={styles.polarisPickerOption}>
+                      <span>{option.label}</span>
+                      {option.value === value ? <s-icon type="check" /> : null}
+                    </span>
+                  </s-button>
+                ))
+              ) : normalizedSearch ? null : (
+                <div className={styles.filterSuggestionState}>
+                  <s-text color="subdued">No suggestions found.</s-text>
+                </div>
+              )}
+            </div>
+          </div>
+        </s-box>
+      </s-popover>
+    </div>
+  );
+}
+
+function DiagnosticsFilterValuePicker({
+  collection,
+  disabled,
+  endpoint,
+  field,
+  generation,
+  onChange,
+  onCollectionChange,
+  scope,
+  snapshotVersion,
+  tab,
+  value,
+}: {
+  collection: SelectedCollection | null;
+  disabled: boolean;
+  endpoint: string;
+  field: DiagnosticsFilterField;
+  generation: number;
+  onChange: (value: string) => void;
+  onCollectionChange: (collection: SelectedCollection) => void;
+  scope: DiagnosticsQueryScope;
+  snapshotVersion: string | null;
+  tab: DiagnosticsTab;
+  value: string;
+}) {
+  const staticOptions = diagnosticsStaticFilterOptions[field];
+  const optionsQuery = useQuery({
+    ...diagnosticsFilterOptionsQueryOptions(
+      scope,
+      generation,
+      tab,
+      field,
+      snapshotVersion,
+      { endpoint },
+    ),
+    enabled:
+      !disabled &&
+      field !== "collection" &&
+      !staticOptions &&
+      Boolean(snapshotVersion),
+  });
+  const options = staticOptions ?? optionsQuery.data?.options ?? [];
+  const pickerId = `diagnostics-filter-value-${field}`;
+
+  if (field === "collection") {
+    return (
+      <CollectionFilterPicker
+        disabled={disabled}
+        endpoint={endpoint}
+        onChange={onCollectionChange}
+        scope={scope}
+        value={collection}
+      />
+    );
+  }
+
+  if (diagnosticsFreeTextFilterFields.has(field)) {
+    return (
+      <SearchableFilterValuePicker
+        disabled={disabled}
+        error={optionsQuery.isError}
+        id={pickerId}
+        label={diagnosticsFilterLabels[field]}
+        loading={optionsQuery.isPending}
+        onChange={onChange}
+        options={options}
+        value={value}
+      />
+    );
+  }
+
+  return (
+    <div className={styles.filterConditionValue}>
+      <PolarisOptionPicker
+        accessibilityLabel={`Select ${diagnosticsFilterLabels[field]}`}
+        disabled={
+          disabled ||
+          (!staticOptions &&
+            (optionsQuery.isPending ||
+              optionsQuery.isError ||
+              options.length === 0))
+        }
+        id={pickerId}
+        onChange={onChange}
+        options={options}
+        placeholder={
+          optionsQuery.isPending && !staticOptions
+            ? "Loading values..."
+            : `Select ${diagnosticsFilterLabels[field]}...`
+        }
+        value={value}
+      />
+      {optionsQuery.isError ? (
+        <s-text tone="critical">Filter values couldn&apos;t be loaded.</s-text>
+      ) : null}
     </div>
   );
 }
@@ -1124,9 +1363,7 @@ export function DiagnosticsPanel({
   const [bulkEditModalOpen, setBulkEditModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<DiagnosticsFilter | null>(
-    null,
-  );
+  const [activeFilters, setActiveFilters] = useState<DiagnosticsFilter[]>([]);
   const [draftFilterField, setDraftFilterField] =
     useState<DiagnosticsFilterField | null>(null);
   const [draftFilterValue, setDraftFilterValue] = useState("");
@@ -1184,7 +1421,7 @@ export function DiagnosticsPanel({
     pageRequest,
     {
       endpoint: dataEndpoint,
-      filter: activeFilter,
+      filters: activeFilters,
       force: isRefreshing,
       pageSize,
       search: normalizedSearch,
@@ -1250,30 +1487,14 @@ export function DiagnosticsPanel({
     () =>
       createDiagnosticsBulkSelectionScope({
         diagnosticsTab: selectedTab,
-        filter: activeFilter,
+        filters: activeFilters,
         search: normalizedSearch,
         snapshotVersion: page?.scanVersion ?? "",
       }),
-    [activeFilter, normalizedSearch, page?.scanVersion, selectedTab],
+    [activeFilters, normalizedSearch, page?.scanVersion, selectedTab],
   );
   const filterSnapshotVersion =
     page?.scanVersion ?? storeWideCounts?.scanVersion ?? null;
-  const filterOptionsQuery = useQuery({
-    ...diagnosticsFilterOptionsQueryOptions(
-      queryScope,
-      clientState.generation,
-      selectedTab,
-      draftFilterField ?? "gender",
-      filterSnapshotVersion,
-      { endpoint: dataEndpoint },
-    ),
-    enabled:
-      queriesEnabled &&
-      Boolean(draftFilterField) &&
-      draftFilterField !== "collection" &&
-      Boolean(filterSnapshotVersion),
-  });
-  const filterOptions = filterOptionsQuery.data?.options ?? [];
 
   useEffect(() => {
     setBulkSelection(emptyDiagnosticsBulkSelection());
@@ -1402,7 +1623,7 @@ export function DiagnosticsPanel({
       {
         abortOnUnmount: true,
         endpoint: dataEndpoint,
-        filter: activeFilter,
+        filters: activeFilters,
         pageSize,
         search: normalizedSearch,
         sort: activeSort,
@@ -1433,7 +1654,7 @@ export function DiagnosticsPanel({
     };
   }, [
     active,
-    activeFilter,
+    activeFilters,
     activeSort,
     clientState.generation,
     dataEndpoint,
@@ -1636,7 +1857,7 @@ export function DiagnosticsPanel({
           refreshedPageRequest,
           {
             endpoint: dataEndpoint,
-            filter: activeFilter,
+            filters: activeFilters,
             pageSize,
             sort: activeSort,
           },
@@ -1764,15 +1985,14 @@ export function DiagnosticsPanel({
   };
 
   const resetDraftFilter = () => {
-    setDraftFilterField(activeFilter?.field ?? null);
-    setDraftFilterValue(activeFilter?.value ?? "");
-    setDraftCollection(
-      activeFilter?.field === "collection" ? activeCollection : null,
-    );
+    setDraftFilterField(null);
+    setDraftFilterValue("");
+    setDraftCollection(null);
   };
 
   const changeDraftFilterField = (value: string) => {
-    setDraftFilterField(value as DiagnosticsFilterField);
+    const field = value as DiagnosticsFilterField;
+    setDraftFilterField(field);
     setDraftFilterValue("");
     setDraftCollection(null);
   };
@@ -1782,37 +2002,44 @@ export function DiagnosticsPanel({
     setDraftFilterValue(collection.id);
   };
 
-  const applyFilter = () => {
-    if (!draftFilterField || !draftFilterValue) {
+  const addFilter = () => {
+    if (!draftFilterField || !draftFilterValue.trim()) {
       return;
     }
+    const nextFilters = normalizeDiagnosticsFilters([
+      ...activeFilters,
+      { field: draftFilterField, value: draftFilterValue },
+    ]);
 
-    const nextFilter = {
-      field: draftFilterField,
-      value: draftFilterValue,
-    };
-    if (
-      activeFilter?.field !== nextFilter.field ||
-      activeFilter.value !== nextFilter.value
-    ) {
-      clearSelectionForScopeChange();
-    }
-    setActiveFilter(nextFilter);
+    clearSelectionForScopeChange();
+    setActiveFilters(nextFilters);
     setActiveCollection(
-      nextFilter.field === "collection" ? draftCollection : null,
+      draftFilterField === "collection" ? draftCollection : activeCollection,
     );
+    resetDraftFilter();
     storeClientState(createDiagnosticsClientState(clientState.generation));
   };
 
-  const clearFilter = () => {
-    if (activeFilter) clearSelectionForScopeChange();
-    setActiveFilter(null);
-    setDraftFilterField(null);
-    setDraftFilterValue("");
-    setActiveCollection(null);
-    setDraftCollection(null);
+  const removeFilter = (field: DiagnosticsFilterField) => {
+    clearSelectionForScopeChange();
+    setActiveFilters((current) =>
+      current.filter((filter) => filter.field !== field),
+    );
+    if (field === "collection") setActiveCollection(null);
     storeClientState(createDiagnosticsClientState(clientState.generation));
   };
+
+  const clearFilters = () => {
+    if (activeFilters.length > 0) clearSelectionForScopeChange();
+    setActiveFilters([]);
+    resetDraftFilter();
+    setActiveCollection(null);
+    storeClientState(createDiagnosticsClientState(clientState.generation));
+  };
+
+  const availableFilterOptions = diagnosticsFilterFieldOptions.filter(
+    ({ value }) => !activeFilters.some(({ field }) => field === value),
+  );
 
   const tabAlerts: TabAlert[] = [];
   if (countsError) {
@@ -1943,12 +2170,17 @@ export function DiagnosticsPanel({
               >
                 <span className={styles.pickerTriggerContent}>
                   <span className={styles.pickerTriggerLabel}>
-                    <s-text>Filter Products{activeFilter ? " (1)" : ""}</s-text>
+                    <s-text>
+                      Filter Products
+                      {activeFilters.length > 0
+                        ? ` (${activeFilters.length})`
+                        : ""}
+                    </s-text>
                   </span>
                   <s-icon color="subdued" type="chevron-down" />
                 </span>
               </s-clickable>
-              <s-popover id={FILTER_POPOVER_ID} inlineSize="360px">
+              <s-popover id={FILTER_POPOVER_ID} inlineSize="400px">
                 <s-box padding="base">
                   <div className={styles.filterPopoverContent}>
                     <div className={styles.filterPopoverHeader}>
@@ -1965,68 +2197,47 @@ export function DiagnosticsPanel({
 
                     <PolarisOptionPicker
                       accessibilityLabel="Select a product filter"
-                      id={FILTER_FIELD_POPOVER_ID}
+                      disabled={availableFilterOptions.length === 0}
+                      id={FILTER_ADD_POPOVER_ID}
                       onChange={changeDraftFilterField}
-                      options={diagnosticsFilterFieldOptions}
-                      placeholder="Select Filter..."
+                      options={availableFilterOptions}
+                      placeholder={
+                        availableFilterOptions.length > 0
+                          ? "Select Filter..."
+                          : "All filters are active"
+                      }
                       value={draftFilterField ?? ""}
                     />
 
                     {draftFilterField ? (
                       <div className={styles.filterCondition}>
                         <s-text>is</s-text>
-                        {draftFilterField === "collection" ? (
-                          <CollectionFilterPicker
-                            disabled={!queriesEnabled}
-                            endpoint={dataEndpoint}
-                            onChange={changeDraftCollection}
-                            scope={queryScope}
-                            value={draftCollection}
-                          />
-                        ) : (
-                          <PolarisOptionPicker
-                            accessibilityLabel={`Select ${diagnosticsFilterLabels[draftFilterField]}`}
-                            disabled={
-                              filterOptionsQuery.isPending ||
-                              filterOptionsQuery.isError ||
-                              filterOptions.length === 0
-                            }
-                            id={FILTER_VALUE_POPOVER_ID}
-                            onChange={setDraftFilterValue}
-                            options={filterOptions}
-                            placeholder={
-                              filterOptionsQuery.isPending
-                                ? "Loading values..."
-                                : `Select ${diagnosticsFilterLabels[draftFilterField]}...`
-                            }
-                            value={draftFilterValue}
-                          />
-                        )}
-                        {draftFilterField !== "collection" &&
-                        filterOptionsQuery.isError ? (
-                          <s-text tone="critical">
-                            Filter values couldn&apos;t be loaded.
-                          </s-text>
-                        ) : draftFilterField !== "collection" &&
-                          !filterOptionsQuery.isPending &&
-                          filterOptions.length === 0 ? (
-                          <s-text color="subdued">
-                            No values are available for this filter.
-                          </s-text>
-                        ) : null}
+                        <DiagnosticsFilterValuePicker
+                          collection={draftCollection}
+                          disabled={!queriesEnabled}
+                          endpoint={dataEndpoint}
+                          field={draftFilterField}
+                          generation={clientState.generation}
+                          onChange={setDraftFilterValue}
+                          onCollectionChange={changeDraftCollection}
+                          scope={queryScope}
+                          snapshotVersion={filterSnapshotVersion}
+                          tab={selectedTab}
+                          value={draftFilterValue}
+                        />
                       </div>
                     ) : null}
 
                     <div className={styles.filterPopoverActions}>
                       <div>
-                        {activeFilter ? (
+                        {activeFilters.length > 0 ? (
                           <s-button
                             command="--hide"
                             commandFor={FILTER_POPOVER_ID}
-                            onClick={clearFilter}
+                            onClick={clearFilters}
                             variant="tertiary"
                           >
-                            Clear filter
+                            Clear filters
                           </s-button>
                         ) : null}
                       </div>
@@ -2042,8 +2253,10 @@ export function DiagnosticsPanel({
                         <s-button
                           command="--hide"
                           commandFor={FILTER_POPOVER_ID}
-                          disabled={!draftFilterField || !draftFilterValue}
-                          onClick={applyFilter}
+                          disabled={
+                            !draftFilterField || !draftFilterValue.trim()
+                          }
+                          onClick={addFilter}
                           variant="primary"
                         >
                           Add Filter
@@ -2088,6 +2301,31 @@ export function DiagnosticsPanel({
               />
             </div>
           </div>
+
+          {activeFilters.length > 0 ? (
+            <div
+              aria-label="Active product filters"
+              className={styles.activeFiltersBar}
+            >
+              {activeFilters.map((filter) => (
+                <s-button
+                  accessibilityLabel={`Remove ${diagnosticsFilterLabels[filter.field]} filter`}
+                  icon="x"
+                  key={filter.field}
+                  onClick={() => removeFilter(filter.field)}
+                  variant="secondary"
+                >
+                  {diagnosticsFilterLabels[filter.field]}:{" "}
+                  {filter.field === "collection"
+                    ? (activeCollection?.title ?? filter.value)
+                    : filter.value}
+                </s-button>
+              ))}
+              <s-button onClick={clearFilters} variant="tertiary">
+                Clear filters
+              </s-button>
+            </div>
+          ) : null}
 
           <DiagnosticsTable
             activeJob={activeBulkJob}

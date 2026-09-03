@@ -454,12 +454,8 @@
   width: 7%;
 }
 
-.slvdColumn {
-  width: 7%;
-}
-
 .errorColumn {
-  width: 24%;
+  width: 31%;
 }
 
 .diagnosticsTable td {
@@ -484,29 +480,11 @@
 }
 
 .googleHeader,
-.statusCell,
-.slvdHeader,
-.slvdCell {
+.statusCell {
   text-align: center !important;
 }
 
 .googleHeader img {
-  display: block;
-  width: 20px;
-  height: 20px;
-  margin: 0 auto;
-  object-fit: contain;
-}
-
-.slvdHeader img {
-  display: block;
-  width: 46px;
-  height: auto;
-  margin: 0 auto;
-  object-fit: contain;
-}
-
-.slvdTimeImage {
   display: block;
   width: 20px;
   height: 20px;

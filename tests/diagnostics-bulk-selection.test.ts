@@ -183,7 +183,7 @@ test("Diagnostics UI keeps normal headers and provides the Polaris bulk workflow
   assert.match(source, /Google product category/);
   assert.match(source, /Product type/);
   assert.match(source, /product\.productType \|\| "—"/);
-  assert.match(source, /Error from merchant center/);
+  assert.match(source, /Error from multi-sync/);
   assert.match(
     source,
     /accessibilityLabel="Refresh product errors"[\s\S]*tone="critical"[\s\S]*variant="primary"/,
@@ -197,13 +197,11 @@ test("Diagnostics UI keeps normal headers and provides the Polaris bulk workflow
   assert.match(source, /src: "\/warning\.png"/);
   assert.match(source, /src: "\/cross\.png"/);
   assert.match(styles, /\.statusImage[\s\S]*width: 20px;[\s\S]*height: 20px;/);
-  assert.match(source, /src="\/SLVD_Navy\.png"[\s\S]*title="Coming soon"/);
-  assert.match(source, /src="\/time\.png"[\s\S]*title="Coming soon"/);
-  assert.match(source, /<th colSpan=\{5\} scope="col">/);
-  assert.match(source, /className=\{styles\.emptyCell\} colSpan=\{6\}/);
-  assert.match(styles, /\.slvdColumn \{[\s\S]*width: 7%;/);
-  assert.match(styles, /\.slvdHeader img[\s\S]*width: 46px;/);
-  assert.match(styles, /\.slvdTimeImage[\s\S]*width: 20px;[\s\S]*height: 20px;/);
+  assert.match(source, /<img alt="Google" src="\/google-icon\.png" \/>/);
+  assert.doesNotMatch(source, /SLVD_Navy\.png|time\.png|styles\.slvd/);
+  assert.match(source, /<th colSpan=\{4\} scope="col">/);
+  assert.match(source, /className=\{styles\.emptyCell\} colSpan=\{5\}/);
+  assert.doesNotMatch(styles, /\.slvdColumn|\.slvdHeader|\.slvdCell|\.slvdTimeImage/);
   assert.match(source, /CollectionFilterPicker/);
   assert.match(source, /Search store collections/);
   assert.match(source, /Loading more collections/);

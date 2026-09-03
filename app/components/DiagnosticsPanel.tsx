@@ -989,9 +989,6 @@ function SkeletonRows() {
           <td className={styles.statusCell}>
             <span className={styles.skeletonStatus} />
           </td>
-          <td className={styles.slvdCell}>
-            <span className={styles.skeletonStatus} />
-          </td>
           <td>
             <span className={styles.skeletonWarning} />
             <span className={styles.skeletonWarningShort} />
@@ -1063,7 +1060,6 @@ function DiagnosticsTable({
             <col className={styles.categoryColumn} />
             <col className={styles.productTypeColumn} />
             <col className={styles.statusColumn} />
-            <col className={styles.slvdColumn} />
             <col className={styles.errorColumn} />
           </colgroup>
           <thead>
@@ -1106,7 +1102,7 @@ function DiagnosticsTable({
                 </div>
               </th>
               {bulkMode ? (
-                <th colSpan={5} scope="col">
+                <th colSpan={4} scope="col">
                   <div className={styles.bulkHeaderActions}>
                     <s-button
                       accessibilityLabel="Bulk edit selected products"
@@ -1158,18 +1154,11 @@ function DiagnosticsTable({
                   </th>
                   <th scope="col">Product type</th>
                   <th className={styles.googleHeader} scope="col">
-                    <img alt="Google" src="/google-icon-1.png" />
-                  </th>
-                  <th className={styles.slvdHeader} scope="col">
-                    <img
-                      alt="SLVD — Coming soon"
-                      src="/SLVD_Navy.png"
-                      title="Coming soon"
-                    />
+                    <img alt="Google" src="/google-icon.png" />
                   </th>
                   <th scope="col">
                     <div className={styles.errorHeader}>
-                      <span>Error from merchant center</span>
+                      <span>Error from Multi-Sync</span>
                       <s-button
                         accessibilityLabel="Refresh product errors"
                         disabled={isRefreshing}
@@ -1192,13 +1181,13 @@ function DiagnosticsTable({
               <SkeletonRows />
             ) : error && products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={6}>
+                <td className={styles.emptyCell} colSpan={5}>
                   {error}
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={6}>
+                <td className={styles.emptyCell} colSpan={5}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -1259,14 +1248,6 @@ function DiagnosticsTable({
                   </td>
                   <td className={styles.statusCell}>
                     <StatusIcon status={product.status} />
-                  </td>
-                  <td className={styles.slvdCell}>
-                    <img
-                      alt="SLVD status — Coming soon"
-                      className={styles.slvdTimeImage}
-                      src="/time.png"
-                      title="Coming soon"
-                    />
                   </td>
                   <td>
                     {product.warnings.length === 0 ? (
@@ -2429,7 +2410,7 @@ export function DiagnosticsPanel({
                   setBulkEditValue(event.currentTarget.value);
                   setBulkEditError(null);
                 }}
-                placeholder="Enter a custom label"
+                placeholder="Enter a value"
                 value={bulkEditValue}
               />
             )}

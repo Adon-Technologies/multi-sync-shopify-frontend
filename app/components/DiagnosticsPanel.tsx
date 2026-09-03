@@ -9,9 +9,7 @@ import {
 import { flushSync } from "react-dom";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CiWarning } from "react-icons/ci";
-import { IoCheckmarkDoneOutline } from "react-icons/io5";
-import { VscCircleSlash, VscError } from "react-icons/vsc";
+import { VscCircleSlash } from "react-icons/vsc";
 
 import type {
   DiagnosticsCounts,
@@ -942,34 +940,31 @@ function ProductImage({ product }: { product: DiagnosticProduct }) {
 }
 
 function StatusIcon({ status }: { status: DiagnosticProduct["status"] }) {
-  if (status === "submitted") {
-    return (
-      <IoCheckmarkDoneOutline
-        aria-label="Submitted with no warnings"
-        className={styles.statusSubmitted}
-        role="img"
-        title="Submitted with no warnings or errors"
-      />
-    );
-  }
-
-  if (status === "warning") {
-    return (
-      <CiWarning
-        aria-label="Submitted with warnings"
-        className={styles.statusWarning}
-        role="img"
-        title="Submitted with warnings"
-      />
-    );
-  }
+  const statusImage =
+    status === "submitted"
+      ? {
+          alt: "Submitted with no warnings",
+          src: "/correct.png",
+          title: "Submitted with no warnings or errors",
+        }
+      : status === "warning"
+        ? {
+            alt: "Submitted with warnings",
+            src: "/warning.png",
+            title: "Submitted with warnings",
+          }
+        : {
+            alt: "Excluded because of errors",
+            src: "/cross.png",
+            title: "Excluded because of errors",
+          };
 
   return (
-    <VscError
-      aria-label="Excluded because of errors"
-      className={styles.statusError}
-      role="img"
-      title="Excluded because of errors"
+    <img
+      alt={statusImage.alt}
+      className={styles.statusImage}
+      src={statusImage.src}
+      title={statusImage.title}
     />
   );
 }
@@ -992,6 +987,9 @@ function SkeletonRows() {
             <span className={styles.skeletonCategory} />
           </td>
           <td className={styles.statusCell}>
+            <span className={styles.skeletonStatus} />
+          </td>
+          <td className={styles.slvdCell}>
             <span className={styles.skeletonStatus} />
           </td>
           <td>
@@ -1065,6 +1063,7 @@ function DiagnosticsTable({
             <col className={styles.categoryColumn} />
             <col className={styles.productTypeColumn} />
             <col className={styles.statusColumn} />
+            <col className={styles.slvdColumn} />
             <col className={styles.errorColumn} />
           </colgroup>
           <thead>
@@ -1107,7 +1106,7 @@ function DiagnosticsTable({
                 </div>
               </th>
               {bulkMode ? (
-                <th colSpan={4} scope="col">
+                <th colSpan={5} scope="col">
                   <div className={styles.bulkHeaderActions}>
                     <s-button
                       accessibilityLabel="Bulk edit selected products"
@@ -1161,6 +1160,13 @@ function DiagnosticsTable({
                   <th className={styles.googleHeader} scope="col">
                     <img alt="Google" src="/google-icon-1.png" />
                   </th>
+                  <th className={styles.slvdHeader} scope="col">
+                    <img
+                      alt="SLVD — Coming soon"
+                      src="/SLVD_Navy.png"
+                      title="Coming soon"
+                    />
+                  </th>
                   <th scope="col">
                     <div className={styles.errorHeader}>
                       <span>Error from merchant center</span>
@@ -1171,9 +1177,9 @@ function DiagnosticsTable({
                         loading={isRefreshing ? true : undefined}
                         onClick={onRefresh}
                         tone="critical"
-                        variant="tertiary"
+                        variant="primary"
                       >
-                        Refresh product Errors
+                        Refresh Product Errors
                       </s-button>
                     </div>
                   </th>
@@ -1186,13 +1192,13 @@ function DiagnosticsTable({
               <SkeletonRows />
             ) : error && products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={5}>
+                <td className={styles.emptyCell} colSpan={6}>
                   {error}
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={5}>
+                <td className={styles.emptyCell} colSpan={6}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -1253,6 +1259,14 @@ function DiagnosticsTable({
                   </td>
                   <td className={styles.statusCell}>
                     <StatusIcon status={product.status} />
+                  </td>
+                  <td className={styles.slvdCell}>
+                    <img
+                      alt="SLVD status — Coming soon"
+                      className={styles.slvdTimeImage}
+                      src="/time.png"
+                      title="Coming soon"
+                    />
                   </td>
                   <td>
                     {product.warnings.length === 0 ? (

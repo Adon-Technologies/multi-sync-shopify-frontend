@@ -439,19 +439,23 @@
 }
 
 .productColumn {
-  width: 29%;
+  width: 27%;
 }
 
 .categoryColumn {
-  width: 23%;
+  width: 21%;
 }
 
 .productTypeColumn {
-  width: 16%;
+  width: 14%;
 }
 
 .statusColumn {
-  width: 8%;
+  width: 7%;
+}
+
+.slvdColumn {
+  width: 7%;
 }
 
 .errorColumn {
@@ -480,11 +484,37 @@
 }
 
 .googleHeader,
-.statusCell {
+.statusCell,
+.slvdHeader,
+.slvdCell {
   text-align: center !important;
 }
 
 .googleHeader img {
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.slvdHeader img {
+  display: block;
+  width: 46px;
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.slvdTimeImage {
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.statusImage {
   display: block;
   width: 20px;
   height: 20px;
@@ -703,8 +733,9 @@
 
 .errorHeader {
   display: flex;
+  width: 100%;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 4px;
 }
 
@@ -721,27 +752,6 @@
   border-radius: 3px;
   outline: 2px solid #005bd3;
   outline-offset: 2px;
-}
-
-.statusSubmitted,
-.statusWarning,
-.statusError {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  vertical-align: middle;
-}
-
-.statusSubmitted {
-  color: #29845a;
-}
-
-.statusWarning {
-  color: #d97706;
-}
-
-.statusError {
-  color: #b42318;
 }
 
 .warningList {

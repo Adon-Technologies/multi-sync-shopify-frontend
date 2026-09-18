@@ -1,0 +1,46 @@
+- main [ref=e3]:
+  - heading "Plan" [level=1] [ref=e4]
+  - status [ref=e6]:
+    - generic [ref=e8]:
+      - heading "How is your experience with Multi Sync?" [level=2] [ref=e18]
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - paragraph [ref=e25]: Rate your experience on the Shopify App Store
+          - group "Rate your experience" [ref=e26]:
+            - button "Rate 1 out of 5" [pressed] [ref=e27] [cursor=pointer]
+            - button "Rate 2 out of 5" [ref=e31] [cursor=pointer]
+            - button "Rate 3 out of 5" [ref=e35] [cursor=pointer]
+            - button "Rate 4 out of 5" [ref=e39] [cursor=pointer]
+            - button "Rate 5 out of 5" [ref=e43] [cursor=pointer]
+        - button "Send private feedback" [ref=e48] [cursor=pointer]
+        - status "Shopify review request" [ref=e58]:
+          - paragraph [ref=e59]: Shopify’s review form isn’t available right now. You can still send private feedback.
+  - generic:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - dialog "Thank you for your feedback" [active]:
+              - generic [ref=e66]:
+                - generic [ref=e68]:
+                  - heading "Thank you for your feedback" [level=2] [ref=e70]
+                  - button "Close" [ref=e71] [cursor=pointer]
+                - generic [ref=e79]:
+                  - paragraph [ref=e80]: Sent directly to Multi Sync. This is not a Shopify App Store review.
+                  - generic [ref=e81]:
+                    - paragraph [ref=e82]: Rate your experience
+                    - group "Private feedback rating" [ref=e83]:
+                      - button "Private rating 1 out of 5" [ref=e84] [cursor=pointer]
+                      - button "Private rating 2 out of 5" [ref=e88] [cursor=pointer]
+                      - button "Private rating 3 out of 5" [ref=e92] [cursor=pointer]
+                      - button "Private rating 4 out of 5" [ref=e96] [cursor=pointer]
+                      - button "Private rating 5 out of 5" [ref=e100] [cursor=pointer]
+                  - generic [ref=e104]:
+                    - generic [ref=e105]: How can we improve the app?
+                    - generic [ref=e110]:
+                      - textbox "How can we improve the app?" [ref=e111]:
+                        - /placeholder: Optional
+                      - generic "0 of 5000 characters used": 0/5000
+                - generic [ref=e115]:
+                  - button "Cancel" [ref=e116] [cursor=pointer]
+                  - button "Send" [ref=e118] [cursor=pointer]

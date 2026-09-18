@@ -1,0 +1,16 @@
+- main [ref=e3]:
+  - heading "Plan" [level=1] [ref=e4]
+  - status [ref=e6]:
+    - generic [ref=e8]:
+      - heading "How is your experience with Multi Sync?" [level=2] [ref=e18]
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - paragraph [ref=e25]: Rate your experience on the Shopify App Store
+          - group "Rate your experience" [ref=e26]:
+            - button "Rate 1 out of 5" [ref=e27] [cursor=pointer]
+            - button "Rate 2 out of 5" [ref=e31] [cursor=pointer]
+            - button "Rate 3 out of 5" [ref=e35] [cursor=pointer]
+            - button "Rate 4 out of 5" [active] [pressed] [ref=e39] [cursor=pointer]
+            - button "Rate 5 out of 5" [ref=e43] [cursor=pointer]
+        - status "Shopify review request" [ref=e55]:
+          - paragraph [ref=e56]: Shopify’s review form isn’t available right now. You can continue using Multi Sync.

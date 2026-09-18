@@ -1,0 +1,66 @@
+- main [ref=f5e3]:
+  - generic [ref=f5e4]:
+    - generic [ref=f5e6]:
+      - generic [ref=f5e7]: Merchant experience
+      - heading "Feedback" [level=1] [ref=f5e8]
+      - paragraph [ref=f5e9]: View ratings and feedback submitted by Multi Sync merchants.
+    - generic [ref=f5e11]:
+      - heading "Merchant feedback" [level=2] [ref=f5e13]
+      - generic:
+        - generic [ref=f5e14]:
+          - generic [ref=f5e15]:
+            - text: Search email, store or shop domain
+            - searchbox "Search email, store or shop domain" [ref=f5e16]
+          - generic [ref=f5e17]:
+            - text: Rating
+            - combobox "Rating" [ref=f5e18] [cursor=pointer]:
+              - option "All ratings" [selected]
+              - option "5 out of 5"
+              - option "4 out of 5"
+              - option "3 out of 5"
+              - option "2 out of 5"
+              - option "1 out of 5"
+        - grid [ref=f5e24]:
+          - generic [ref=f5e25]:
+            - generic:
+              - generic [ref=f5e26]: User
+              - generic [ref=f5e27]: Date
+              - generic [ref=f5e28]: Store
+              - generic [ref=f5e29]: Rating
+              - generic [ref=f5e30]: Message
+          - generic [ref=f5e31]:
+            - generic:
+              - generic [ref=f5e32]:
+                - generic:
+                  - generic [ref=f5e35]:
+                    - strong [ref=f5e36]: Jane Smith
+                    - generic [ref=f5e37]: jane@example.com
+                  - time [ref=f5e40]: Sep 18, 2026, 11:20 AM
+                  - generic [ref=f5e43]:
+                    - strong [ref=f5e44]: Maximum Lifestyle
+                    - generic [ref=f5e45]: maximumlifestyle.myshopify.com
+                  - img "4 out of 5" [ref=f5e48]:
+                    - generic [aria-hidden] [ref=f5e49]: ★★★★☆
+                    - generic [aria-hidden] [ref=f5e50]: 4/5
+                  - button "View message" [ref=f5e53] [cursor=pointer]
+              - generic [ref=f5e56]:
+                - generic:
+                  - generic [ref=f5e59]:
+                    - strong [ref=f5e60]: Sam Merchant
+                    - generic [ref=f5e61]: sam@example.com
+                  - time [ref=f5e64]: Sep 18, 2026, 11:20 AM
+                  - generic [ref=f5e67]:
+                    - strong [ref=f5e68]: Maximum Lifestyle
+                    - generic [ref=f5e69]: maximumlifestyle.myshopify.com
+                  - img "5 out of 5" [ref=f5e72]:
+                    - generic [aria-hidden] [ref=f5e73]: ★★★★★
+                    - generic [aria-hidden] [ref=f5e74]: 5/5
+                  - generic [ref=f5e75]: No message
+        - generic [ref=f5e78]:
+          - generic [ref=f5e79]: 2 feedback submissions · Page 1 of 1
+          - generic [ref=f5e80]:
+            - button "Previous feedback page" [disabled] [ref=f5e81]:
+              - generic [ref=f5e82]: Previous
+            - button "Next feedback page" [disabled] [ref=f5e84]:
+              - generic [ref=f5e85]: Next
+    - generic: Close

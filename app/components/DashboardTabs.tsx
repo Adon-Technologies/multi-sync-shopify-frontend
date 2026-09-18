@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { Await } from "react-router";
+import { Await, useLocation, useNavigate } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useQuery } from "@tanstack/react-query";
 import { HiHome } from "react-icons/hi2";
@@ -31,6 +31,7 @@ import { FeedsPanel } from "./FeedsPanel";
 import { FeedStatusBadge } from "./FeedStatusBadge";
 import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 import { SupportPanel } from "./SupportPanel";
+import { PlanReviewBanner } from "./ReviewBanner";
 import type {
   ProductStatistics,
   StoreInformation,
@@ -45,18 +46,27 @@ import {
   type FeedQueryScope,
 } from "../services/feed-query";
 import type { SubscriptionView } from "../billing/types";
+import {
+  appSections,
+  dashboardTabFromLocation,
+  dashboardTabHref,
+  parseDashboardTab,
+  type DashboardTabId,
+} from "../services/app-navigation";
 import styles from "../styles/dashboard.module.css";
 
-const tabs = [
-  { icon: HiHome, id: "dashboard", label: "Dashboard" },
-  { icon: TbFileTypeXml, id: "feeds", label: "Feeds" },
-  { icon: SiGoogleanalytics, id: "diagnostics", label: "Diagnostics" },
-  { icon: IoMdSettings, id: "configurations", label: "Configurations" },
-  { icon: MdOutlineSupportAgent, id: "support", label: "Support" },
-  { icon: MdOutlineCreditCard, id: "plan", label: "Plan" },
-] as const;
-
-export type DashboardTabId = (typeof tabs)[number]["id"];
+const tabIcons = {
+  dashboard: HiHome,
+  feeds: TbFileTypeXml,
+  diagnostics: SiGoogleanalytics,
+  configurations: IoMdSettings,
+  support: MdOutlineSupportAgent,
+  plan: MdOutlineCreditCard,
+};
+const tabs = appSections.map((section) => ({
+  ...section,
+  icon: tabIcons[section.id],
+}));
 type SectionState = "loading" | "ready" | "error";
 type StatisticKey = Exclude<keyof ProductStatistics, "generatedAt">;
 
@@ -101,12 +111,6 @@ interface DashboardSectionResultProps {
   onStateChange: (failed: boolean) => void;
 }
 
-export function parseDashboardTab(value: string | null): DashboardTabId {
-  return tabs.some(({ id }) => id === value)
-    ? (value as DashboardTabId)
-    : "dashboard";
-}
-
 function activeTabStorageKey(shop: string) {
   return `multi-sync:${shop}:active-tab`;
 }
@@ -122,17 +126,6 @@ function storedActiveTab(shop: string) {
 function persistActiveTab(tabId: DashboardTabId, shop?: string) {
   if (typeof window === "undefined") return;
 
-  const url = new URL(window.location.href);
-  if (tabId === "dashboard") {
-    url.searchParams.delete("tab");
-  } else {
-    url.searchParams.set("tab", tabId);
-  }
-  window.history.replaceState(
-    window.history.state,
-    "",
-    `${url.pathname}${url.search}${url.hash}`,
-  );
   if (shop) {
     try {
       window.localStorage.setItem(activeTabStorageKey(shop), tabId);
@@ -430,16 +423,12 @@ function DashboardPanelContent({
   const primaryFeedQuery = useQuery({
     ...primaryFeedQueryOptions(safeFeedScope),
     enabled:
-      active &&
-      Boolean(initialSubscription?.canUseApp) &&
-      Boolean(feedScope),
+      active && Boolean(initialSubscription?.canUseApp) && Boolean(feedScope),
   });
   const additionalFeedsQuery = useQuery({
     ...additionalFeedsQueryOptions(safeFeedScope),
     enabled:
-      active &&
-      Boolean(initialSubscription?.canUseApp) &&
-      Boolean(feedScope),
+      active && Boolean(initialSubscription?.canUseApp) && Boolean(feedScope),
   });
   const alertsEmailState: SectionState =
     !diagnosticsScope ||
@@ -667,15 +656,16 @@ function DashboardPanelContent({
 
 export function DashboardTabs(props: DashboardTabsProps) {
   const shopify = useAppBridge();
+  const location = useLocation();
+  const navigate = useNavigate();
   const subscriptionQuery = useSubscription(
     props.diagnosticsScope?.shop ?? null,
     props.initialSubscription,
   );
   const subscription = subscriptionQuery.data ?? props.initialSubscription;
   const canUseApp = subscription?.canUseApp ?? true;
-  const [activeTab, setActiveTab] = useState<DashboardTabId>(
-    props.initialTab ?? "dashboard",
-  );
+  const activeTab =
+    dashboardTabFromLocation(location) ?? props.initialTab ?? "dashboard";
   const [hasUnsavedConfigurationChanges, setHasUnsavedConfigurationChanges] =
     useState(false);
   const [tabIndicatorStyle, setTabIndicatorStyle] = useState<CSSProperties>({
@@ -725,13 +715,26 @@ export function DashboardTabs(props: DashboardTabsProps) {
 
   useEffect(() => {
     const shop = props.diagnosticsScope?.shop;
-    if (!shop || new URL(window.location.href).searchParams.has("tab")) {
+    const requestedTab = dashboardTabFromLocation(location);
+    if (requestedTab === null && !shop) {
       return;
     }
-
-    const storedTab = parseDashboardTab(storedActiveTab(shop));
-    setActiveTab(storedTab);
-  }, [props.diagnosticsScope?.shop]);
+    const nextTab =
+      requestedTab ?? parseDashboardTab(shop ? storedActiveTab(shop) : null);
+    const destination = dashboardTabHref(
+      nextTab,
+      location.search,
+      location.hash,
+    );
+    // Canonicalize old query links and restore the last tab using real routes.
+    if (
+      `${location.pathname}${location.search}${location.hash}` !== destination
+    ) {
+      void navigate(destination, { replace: true, preventScrollReset: true });
+      return;
+    }
+    persistActiveTab(nextTab, shop);
+  }, [location, navigate, props.diagnosticsScope?.shop]);
 
   const selectTab = async (tabId: DashboardTabId, tabIndex?: number) => {
     if (
@@ -746,8 +749,9 @@ export function DashboardTabs(props: DashboardTabsProps) {
       }
     }
 
-    setActiveTab(tabId);
-    persistActiveTab(tabId, props.diagnosticsScope?.shop);
+    await navigate(dashboardTabHref(tabId, location.search, location.hash), {
+      preventScrollReset: true,
+    });
     if (tabIndex !== undefined) {
       tabRefs.current[tabIndex]?.focus();
     }
@@ -920,11 +924,14 @@ export function DashboardTabs(props: DashboardTabsProps) {
           tabIndex={0}
         >
           {activeTab === "plan" ? (
-            <SubscriptionPanel
-              initialSubscription={subscription}
-              planSelectionUrl={props.planSelectionUrl}
-              shop={props.diagnosticsScope?.shop ?? null}
-            />
+            <>
+              <PlanReviewBanner />
+              <SubscriptionPanel
+                initialSubscription={subscription}
+                planSelectionUrl={props.planSelectionUrl}
+                shop={props.diagnosticsScope?.shop ?? null}
+              />
+            </>
           ) : null}
         </div>
       </div>

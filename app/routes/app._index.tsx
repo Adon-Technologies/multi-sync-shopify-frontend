@@ -11,7 +11,11 @@ import {
 } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
-import { DashboardTabs, parseDashboardTab } from "../components/DashboardTabs";
+import { DashboardTabs } from "../components/DashboardTabs";
+import {
+  dashboardTabFromLocation,
+  isDashboardTab,
+} from "../services/app-navigation";
 import {
   getProductStatistics,
   getStoreInformation,
@@ -31,6 +35,8 @@ import {
 } from "../shopify.server";
 import { cleanPlanSelectionReturnPath } from "../billing/types";
 
+export { shouldRevalidateDashboard as shouldRevalidate } from "../services/app-navigation";
+
 const pendingStatistics = new Promise<ProductStatistics>(() => undefined);
 const pendingStoreInformation = new Promise<StoreInformation>(() => undefined);
 
@@ -40,8 +46,11 @@ function billingErrorMessage(error: unknown) {
     : "Your Shopify subscription could not be verified. Try again.";
 }
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
+export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticateActiveAdmin(request);
+  if (params.section && !isDashboardTab(params.section)) {
+    throw new Response("Not found", { status: 404 });
+  }
   const requestUrl = new URL(request.url);
   const returnedFromPlanSelection = requestUrl.searchParams.has("plan_handle");
   let subscription: Awaited<
@@ -69,7 +78,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
     }
   }
-  const initialTab = parseDashboardTab(requestUrl.searchParams.get("tab"));
+  const initialTab = dashboardTabFromLocation(requestUrl) ?? "dashboard";
   const planSelection = await getPlanSelectionForSession(session).catch(
     () => null,
   );

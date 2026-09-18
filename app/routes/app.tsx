@@ -4,6 +4,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticateActiveAdmin } from "../shopify.server";
+import { appSections, dashboardTabHref } from "../services/app-navigation";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticateActiveAdmin(request);
@@ -18,7 +19,15 @@ export default function App() {
   return (
     <AppProvider embedded apiKey={apiKey}>
       <s-app-nav>
-        <s-link href="/app">Home</s-link>
+        {/* App Bridge supports rel="home"; Polaris's s-link types omit it. */}
+        <s-link href="/app" {...{ rel: "home" }}>
+          Home
+        </s-link>
+        {appSections.map(({ id, label }) => (
+          <s-link key={id} href={dashboardTabHref(id)}>
+            {label}
+          </s-link>
+        ))}
       </s-app-nav>
       <Outlet />
     </AppProvider>

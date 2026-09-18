@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { appSections } from "../app/services/app-navigation.ts";
 
 const tabsSource = readFileSync(
   new URL("../app/components/DashboardTabs.tsx", import.meta.url),
@@ -20,7 +21,11 @@ const querySource = readFileSync(
 );
 
 test("merchant navigation exposes a Shopify Polaris Support tab", () => {
-  assert.match(tabsSource, /id: "support", label: "Support"/);
+  assert.ok(
+    appSections.some(
+      ({ id, label }) => id === "support" && label === "Support",
+    ),
+  );
   assert.match(tabsSource, /MdOutlineSupportAgent/);
   assert.match(panelSource, /PolarisAppProvider/);
   assert.match(panelSource, /EmptyState/);

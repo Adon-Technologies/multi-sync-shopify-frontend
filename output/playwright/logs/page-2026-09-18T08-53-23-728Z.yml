@@ -1,0 +1,12 @@
+- main [ref=f1e3]:
+  - heading "Plan" [level=1] [ref=f1e4]
+  - generic [ref=f1e7]:
+    - heading "How is your experience with Multi Sync?" [level=2] [ref=f1e14]
+    - generic [ref=f1e15]:
+      - paragraph [ref=f1e16]: Rate us by clicking on the stars
+      - group "Rate your experience" [ref=f1e17]:
+        - button "Rate 1 out of 5" [ref=f1e18] [cursor=pointer]
+        - button "Rate 2 out of 5" [ref=f1e21] [cursor=pointer]
+        - button "Rate 3 out of 5" [ref=f1e24] [cursor=pointer]
+        - button "Rate 4 out of 5" [ref=f1e27] [cursor=pointer]
+        - button "Rate 5 out of 5" [ref=f1e30] [cursor=pointer]

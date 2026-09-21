@@ -1,3 +1,4 @@
+import { normalizeCountryCode } from "@multi-sync/catalog-rules";
 import type {
   AdditionalFeedEntry,
   AdditionalLanguageOption,
@@ -5,6 +6,7 @@ import type {
 } from "../routes/app.additional-feeds";
 
 export interface AdditionalMarketFormState {
+  idCountryCode: string;
   error: string | null;
   id: string;
   market: AdditionalMarketOption | null;
@@ -14,9 +16,11 @@ export interface AdditionalMarketFormState {
 
 export function createAdditionalMarketForm(
   id: string,
+  configurationCountryCode = "",
 ): AdditionalMarketFormState {
   return {
     error: null,
+    idCountryCode: normalizeCountryCode(configurationCountryCode) ?? "",
     id,
     language: null,
     market: null,

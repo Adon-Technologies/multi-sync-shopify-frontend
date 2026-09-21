@@ -15,6 +15,11 @@ export function ensureAttributeRuleConfigurationFields() {
         updates: [
           {
             multi: true,
+            q: { excludedProductTags: { $exists: false } },
+            u: { $set: { excludedProductTags: [] } },
+          },
+          {
+            multi: true,
             q: { genderRulesVersion: { $exists: false } },
             u: { $set: { genderRulesVersion: 0 } },
           },

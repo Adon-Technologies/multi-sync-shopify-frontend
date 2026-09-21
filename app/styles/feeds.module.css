@@ -112,7 +112,7 @@
 
 .selectorGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -267,6 +267,7 @@
 
 .selectorField {
   display: grid;
+  align-content: start;
   gap: 5px;
   min-width: 0;
 }
@@ -285,8 +286,31 @@
   justify-self: start;
 }
 
-.selectorField s-clickable {
-  min-height: 34px;
+.selectorField > s-clickable {
+  min-height: 32px;
+}
+
+.selectorTriggerContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.selectorTriggerContent s-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectorTriggerContent s-icon {
+  flex-shrink: 0;
 }
 
 .selectorPopoverContent {

@@ -15,12 +15,13 @@ const attributeRulesSource = readFileSync(
   "utf8",
 );
 
-test("the compact Attributes and Exclusions editor exposes five accessible View actions", () => {
+test("the compact Attributes and Exclusions editor exposes six accessible View actions", () => {
   const labels = [
     "View and edit Color options",
     "View and edit Size options",
     "View and edit excluded collections",
     "View and edit excluded product titles",
+    "View and edit excluded product tags",
     "View and edit configured product types",
   ];
 
@@ -31,7 +32,7 @@ test("the compact Attributes and Exclusions editor exposes five accessible View 
   assert.match(panelSource, /command="--show"[\s\S]*commandFor=\{viewTarget\}/);
 });
 
-test("all five editors use Polaris modals and removable Polaris chips", () => {
+test("all six editors use Polaris modals and removable Polaris chips", () => {
   assert.match(panelSource, /<s-modal[\s\S]*?heading="Excluded collections"/);
   assert.match(panelSource, /heading=\{`\$\{attribute\} options`\}/);
   assert.match(panelSource, /<s-modal[\s\S]*?heading=\{heading\}/);

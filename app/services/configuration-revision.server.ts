@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
+import { normalizeCatalogText } from "@multi-sync/catalog-rules";
 
 import {
   DEFAULT_COLOR_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
   normalizeConfigurationText,
   normalizeExcludedTitleTerms,
+  normalizeExcludedProductTags,
   normalizeOptionNames,
   normalizeSelectedCollections,
   type SelectedCollection,
@@ -15,6 +17,7 @@ export interface DiagnosticsRevisionInput {
   colorOptions?: string[] | unknown;
   excludedCollections?: SelectedCollection[] | unknown;
   excludedTitleTerms?: string[] | unknown;
+  excludedProductTags?: string[] | unknown;
   genderRulesAppliedVersion?: number | unknown;
   sizeOptions?: string[] | unknown;
 }
@@ -38,6 +41,9 @@ export function createDiagnosticsConfigurationRevision(
   const titleTerms = normalizeExcludedTitleTerms(input.excludedTitleTerms)
     .map((term) => term.toLocaleLowerCase())
     .sort();
+  const productTags = normalizeExcludedProductTags(input.excludedProductTags)
+    .map(normalizeCatalogText)
+    .sort();
   const normalizedInput = {
     ageRulesAppliedVersion:
       typeof input.ageRulesAppliedVersion === "number" &&
@@ -48,6 +54,8 @@ export function createDiagnosticsConfigurationRevision(
     sizeOptions: normalizeOptions(input.sizeOptions, DEFAULT_SIZE_OPTIONS),
     excludedCollectionIds: collectionIds,
     excludedTitleTerms: titleTerms,
+    // Keep existing snapshot revisions stable when no tag exclusions are set.
+    ...(productTags.length > 0 ? { excludedProductTags: productTags } : {}),
     genderRulesAppliedVersion:
       typeof input.genderRulesAppliedVersion === "number" &&
       Number.isSafeInteger(input.genderRulesAppliedVersion)

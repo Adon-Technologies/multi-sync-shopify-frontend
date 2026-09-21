@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { getShopProductTags } from "../services/product-tag-discovery.server";
 import { searchShopCollections } from "../services/collection-search.server";
 import {
   AttributeRuleScopeError,
@@ -40,6 +41,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       return Response.json({ ok: true, intent: "collections", page });
     }
 
+    if (intent === "product-tags") {
+      const productTags = await getShopProductTags(admin, session.shop);
+      return Response.json({ ok: true, intent, productTags });
+    }
+
     if (intent === "option-names") {
       const optionNames = await getShopVariantOptionNames(admin, session.shop);
       return Response.json({ ok: true, intent, optionNames });
@@ -78,15 +84,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       {
         ok: false,
         error:
-          intent === "collections"
-            ? "Collections couldn't be loaded. Try again."
-            : intent === "option-names"
-              ? "Product option names couldn't be loaded. Try again."
-              : intent === "product-types"
-                ? "Product types couldn't be loaded. Try again."
-                : intent === "locations"
-                  ? "Shopify locations couldn't be loaded. Try again."
-                  : "Configuration couldn't be loaded. Try again.",
+          intent === "product-tags"
+            ? "Shopify tags could not be loaded. You can still enter tags manually."
+            : intent === "collections"
+              ? "Collections couldn't be loaded. Try again."
+              : intent === "option-names"
+                ? "Product option names couldn't be loaded. Try again."
+                : intent === "product-types"
+                  ? "Product types couldn't be loaded. Try again."
+                  : intent === "locations"
+                    ? "Shopify locations couldn't be loaded. Try again."
+                    : "Configuration couldn't be loaded. Try again.",
       },
       { status: 500 },
     );

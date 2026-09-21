@@ -43,6 +43,12 @@ interface OptionNamesResponse {
   optionNames: string[];
 }
 
+interface ProductTagsResponse {
+  ok: true;
+  intent: "product-tags";
+  productTags: string[];
+}
+
 interface ProductTypesResponse {
   ok: true;
   intent: "product-types";
@@ -113,6 +119,10 @@ export const configurationKeys = {
     { shop, sessionId }: ConfigurationQueryScope,
     endpoint = defaultEndpoint,
   ) => ["configuration-option-names", shop, sessionId, endpoint] as const,
+  productTags: (
+    { shop, sessionId }: ConfigurationQueryScope,
+    endpoint = defaultEndpoint,
+  ) => ["configuration-product-tags", shop, sessionId, endpoint] as const,
   productTypes: (
     { shop, sessionId }: ConfigurationQueryScope,
     endpoint = defaultEndpoint,
@@ -289,6 +299,32 @@ export function productTypeSuggestionsQueryOptions(
       });
       const payload = await readJson<ProductTypesResponse>(response);
       return payload.productTypes;
+    },
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    staleTime: 10 * 60 * 1_000,
+  });
+}
+
+export function productTagSuggestionsQueryOptions(
+  scope: ConfigurationQueryScope,
+  { endpoint = defaultEndpoint }: { endpoint?: string } = {},
+) {
+  const params = new URLSearchParams({ intent: "product-tags" });
+
+  return queryOptions({
+    gcTime: 30 * 60 * 1_000,
+    queryKey: configurationKeys.productTags(scope, endpoint),
+    queryFn: async ({ signal }): Promise<string[]> => {
+      const response = await fetch(`${endpoint}?${params}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      const payload = await readJson<ProductTagsResponse>(response);
+      return payload.productTags;
     },
     refetchOnMount: false,
     refetchOnReconnect: false,

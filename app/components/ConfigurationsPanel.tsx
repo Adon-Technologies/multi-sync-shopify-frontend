@@ -8,6 +8,7 @@ import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 import { useHydrated } from "../hooks/useHydrated";
 import type { PublicConfiguration } from "../services/configuration.server";
 import {
+  productTagSuggestionsQueryOptions,
   collectionsQueryOptions,
   configurationKeys,
   configurationQueryOptions,
@@ -22,6 +23,7 @@ import {
   ConfigurationValidationError,
   normalizeConfigurationText,
   normalizeExcludedTitleTerms,
+  normalizeExcludedProductTags,
   normalizeOptionNames,
   normalizeProductTypes,
   type ConfigurationFieldErrors,
@@ -57,6 +59,7 @@ function configurationForm(
     sizeOptions: configuration.sizeOptions,
     excludedCollections: configuration.excludedCollections,
     excludedTitleTerms: configuration.excludedTitleTerms,
+    excludedProductTags: configuration.excludedProductTags ?? [],
     productTypes: configuration.productTypes,
     showSalePriceInGoogleFeed: configuration.showSalePriceInGoogleFeed,
     useProductImageAsMainImage: configuration.useProductImageAsMainImage,
@@ -351,6 +354,7 @@ function OptionNameSelector({
 }
 
 const COLLECTIONS_MODAL_ID = "configuration-excluded-collections";
+const PRODUCT_TAGS_MODAL_ID = "configuration-excluded-product-tags";
 const TITLE_TERMS_MODAL_ID = "configuration-excluded-product-titles";
 const PRODUCT_TYPES_MODAL_ID = "configuration-product-types";
 
@@ -615,6 +619,7 @@ function TextListSelector({
   onChange,
   placeholder,
   summary,
+  suggestionsScope,
   value,
 }: {
   accessibilityLabel: string;
@@ -631,21 +636,56 @@ function TextListSelector({
   onChange: (value: string[]) => void;
   placeholder: string;
   summary: (count: number) => string;
+  suggestionsScope?: ConfigurationQueryScope;
   value: string[];
 }) {
-  const hydrated = useHydrated();
   const [draftValue, setDraftValue] = useState<string[]>(value);
   const [draftText, setDraftText] = useState("");
   const [draftError, setDraftError] = useState<string | undefined>();
+  const [isOpen, setIsOpen] = useState(false);
+  const modalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
+  // React 18 needs native listeners for Polaris custom-element events.
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!modal) return;
+    const show = () => {
+      setDraftValue(value);
+      setDraftText("");
+      setDraftError(undefined);
+      setIsOpen(true);
+    };
+    const hide = () => setIsOpen(false);
+    modal.addEventListener("show", show);
+    modal.addEventListener("hide", hide);
+    return () => {
+      modal.removeEventListener("show", show);
+      modal.removeEventListener("hide", hide);
+    };
+  }, [value]);
+  useEffect(() => {
+    const chips = modalRef.current?.querySelectorAll("s-clickable-chip") ?? [];
+    const removers = [...chips].map((chip, index) => {
+      const remove = () =>
+        setDraftValue((current) =>
+          current.filter((item) => item !== draftValue[index]),
+        );
+      chip.addEventListener("remove", remove);
+      return () => chip.removeEventListener("remove", remove);
+    });
+    return () => removers.forEach((remove) => remove());
+  }, [draftValue]);
 
   const addValue = () => {
-    const normalizedText = normalizeConfigurationText(draftText);
+    const normalizedText = suggestionsScope
+      ? (normalize([draftText])[0] ?? "")
+      : normalizeConfigurationText(draftText);
     if (!normalizedText) {
       setDraftError("Enter a value before adding it.");
       return;
     }
 
-    const comparable = normalizedText.toLocaleLowerCase();
+    const comparable =
+      normalizeConfigurationText(normalizedText).toLocaleLowerCase();
     if (
       draftValue.some(
         (candidate) =>
@@ -700,15 +740,7 @@ function TextListSelector({
         accessibilityLabel={accessibilityLabel}
         heading={heading}
         id={modalId}
-        onShow={
-          hydrated
-            ? () => {
-                setDraftValue(value);
-                setDraftText("");
-                setDraftError(undefined);
-              }
-            : undefined
-        }
+        ref={modalRef}
         padding="none"
         size="base"
       >
@@ -720,14 +752,6 @@ function TextListSelector({
                   <s-clickable-chip
                     accessibilityLabel={chipAccessibilityLabel(item)}
                     key={item.toLocaleLowerCase()}
-                    onRemove={
-                      hydrated
-                        ? () =>
-                            setDraftValue((current) =>
-                              current.filter((candidate) => candidate !== item),
-                            )
-                        : undefined
-                    }
                     removable
                   >
                     {item}
@@ -762,6 +786,18 @@ function TextListSelector({
                 Add
               </s-button>
             </form>
+            {suggestionsScope && isOpen ? (
+              <ProductTagSuggestions
+                scope={suggestionsScope}
+                search={draftText}
+                selected={draftValue}
+                onSelect={(tag) => {
+                  setDraftValue((current) => normalize([...current, tag]));
+                  setDraftText("");
+                  setDraftError(undefined);
+                }}
+              />
+            ) : null}
           </div>
         </s-box>
         <s-button
@@ -783,6 +819,103 @@ function TextListSelector({
         </s-button>
       </s-modal>
     </div>
+  );
+}
+
+function ProductTagSuggestions({
+  scope,
+  search,
+  selected,
+  onSelect,
+}: {
+  scope: ConfigurationQueryScope;
+  search: string;
+  selected: string[];
+  onSelect: (tag: string) => void;
+}) {
+  const query = useQuery({
+    ...productTagSuggestionsQueryOptions(scope),
+    retry: false,
+  });
+  const [visibleCount, setVisibleCount] = useState(50);
+  useEffect(() => setVisibleCount(50), [search]);
+  const selectedKeys = new Set(
+    selected.map((tag) => normalizeConfigurationText(tag).toLocaleLowerCase()),
+  );
+  const needle = normalizeConfigurationText(search).toLocaleLowerCase();
+  const matches = (query.data ?? []).filter((tag) => {
+    const key = normalizeConfigurationText(tag).toLocaleLowerCase();
+    return key.includes(needle) && !selectedKeys.has(key);
+  });
+  return (
+    <div
+      className={styles.optionList}
+      aria-label="Shopify product tag suggestions"
+    >
+      {query.isPending ? (
+        <div className={styles.collectionState}>
+          <s-spinner accessibilityLabel="Loading Shopify tags" size="base" />
+        </div>
+      ) : query.isError ? (
+        <div className={styles.collectionState}>
+          <s-text color="subdued">
+            Shopify tags could not be loaded. You can still enter a tag above.
+          </s-text>
+          <s-button onClick={() => query.refetch()} variant="secondary">
+            Retry
+          </s-button>
+        </div>
+      ) : matches.length === 0 ? (
+        <div className={styles.collectionState}>
+          <s-text color="subdued">
+            {needle
+              ? "No matching Shopify tags. Add your typed tag above."
+              : "No Shopify tags available. You can enter a tag above."}
+          </s-text>
+        </div>
+      ) : (
+        matches.slice(0, visibleCount).map((tag) => (
+          <div className={styles.optionListItem} key={tag}>
+            <s-button onClick={() => onSelect(tag)} variant="secondary">
+              {tag}
+            </s-button>
+          </div>
+        ))
+      )}
+      {matches.length > visibleCount ? (
+        <s-button onClick={() => setVisibleCount((count) => count + 50)}>
+          Show more tags
+        </s-button>
+      ) : null}
+    </div>
+  );
+}
+
+export function ProductTagsSelector(props: {
+  error?: string;
+  onChange: (value: string[]) => void;
+  scope: ConfigurationQueryScope;
+  value: string[];
+}) {
+  return (
+    <TextListSelector
+      accessibilityLabel="Edit excluded product tags"
+      chipAccessibilityLabel={(value) => `${value}, excluded product tag`}
+      duplicateError="This product tag has already been added."
+      emptyLabel="No product tags selected"
+      fieldLabel="Search or enter a product tag"
+      heading="Excluded product tags"
+      inputName="excludedProductTagDraft"
+      maxLength={255}
+      modalId={PRODUCT_TAGS_MODAL_ID}
+      normalize={normalizeExcludedProductTags}
+      placeholder="Search or type a tag and press Enter"
+      summary={(count) =>
+        `${count} product tag${count === 1 ? "" : "s"} selected`
+      }
+      suggestionsScope={props.scope}
+      {...props}
+    />
   );
 }
 
@@ -1204,6 +1337,26 @@ export function ConfigurationsPanel({
                   error={fieldErrors.excludedTitleTerms}
                   onChange={(value) => updateForm("excludedTitleTerms", value)}
                   value={form?.excludedTitleTerms ?? []}
+                />
+              )}
+            </div>
+
+            <div className={styles.feature}>
+              <FeatureHeading
+                subtitle="Product tags"
+                title="Exclude product by tag"
+                viewAccessibilityLabel="View and edit excluded product tags"
+                viewDisabled={isLoading}
+                viewTarget={PRODUCT_TAGS_MODAL_ID}
+              />
+              {isLoading ? (
+                <ConfigurationSkeleton />
+              ) : (
+                <ProductTagsSelector
+                  error={fieldErrors.excludedProductTags}
+                  onChange={(value) => updateForm("excludedProductTags", value)}
+                  scope={queryScope}
+                  value={form?.excludedProductTags ?? []}
                 />
               )}
             </div>

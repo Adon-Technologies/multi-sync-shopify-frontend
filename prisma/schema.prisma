@@ -159,6 +159,7 @@ model Configuration {
   sizeOptions                        String[]            @default([])
   optionMappingsInitialized          Boolean             @default(false)
   excludedCollections                Json
+  excludedProductTags                String[]            @default([])
   excludedTitleTerms                 String[]
   productTypes                       String[]            @default([])
   diagnosticsRevision                String              @default("")
@@ -514,7 +515,10 @@ model XmlLink {
   marketSlug            String?
   countryName           String?
   countrySlug           String?
+  // Shopify market country: pricing, localization, and combination identity.
   countryCode           String?
+  // Independent XML item ID country; null/missing legacy values use Configuration.
+  idCountryCode         String?
   currencyName          String?
   currencyCode          String?
   locale                String

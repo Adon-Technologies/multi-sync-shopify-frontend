@@ -54,6 +54,7 @@ export interface DiagnosticExclusionRules {
     title: string;
   }>;
   excludedTitleTerms: string[];
+  excludedProductTags?: string[];
   sizeOptions?: string[];
 }
 

@@ -42,7 +42,31 @@ export function inferCatalogAttribute(value) {
   return null;
 }
 
-export function resolveProductExclusions(product, rules) {
+// Preserve tag spelling for display; use the existing catalog normalization for keys.
+export function normalizeExcludedProductTags(values) {
+  if (!Array.isArray(values)) return [];
+  const seen = new Set();
+  return values
+    .filter((value) => {
+      if (typeof value !== "string") return false;
+      const key = normalizeCatalogText(value);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((value) => value.trim());
+}
+
+export function createProductExclusionResolver(rules) {
+  const tags = new Set(
+    normalizeExcludedProductTags(rules?.excludedProductTags).map(
+      normalizeCatalogText,
+    ),
+  );
+  return (product) => resolveProductExclusions(product, rules, tags);
+}
+
+export function resolveProductExclusions(product, rules, excludedTags) {
   if (!rules) {
     return [];
   }
@@ -78,5 +102,31 @@ export function resolveProductExclusions(product, rules) {
     }
   }
 
+  const tagKeys =
+    excludedTags ??
+    new Set(
+      normalizeExcludedProductTags(rules.excludedProductTags).map(
+        normalizeCatalogText,
+      ),
+    );
+  const matchedTags = new Set();
+  for (const tag of product.tags ?? []) {
+    const key = normalizeCatalogText(tag);
+    if (tagKeys.has(key) && !matchedTags.has(key)) {
+      matchedTags.add(key);
+      reasons.push({
+        code: `excluded-tag-${matchedTags.size}`,
+        message: `Excluded by tag: ${tag}`,
+      });
+    }
+  }
+
   return reasons;
+}
+
+/** Shared Configuration and feed identity validation; no separate country list. */
+export function normalizeCountryCode(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.normalize("NFKC").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
 }

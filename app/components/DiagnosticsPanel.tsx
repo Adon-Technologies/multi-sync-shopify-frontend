@@ -84,6 +84,7 @@ import {
 } from "../services/diagnostics-bulk-edit-query";
 import styles from "../styles/diagnostics.module.css";
 import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
+import { useOverlayEvents } from "../hooks/useOverlayEvents";
 
 const diagnosticTabs: Array<{
   id: DiagnosticsTab;
@@ -285,6 +286,17 @@ function SearchableFilterValuePicker({
 }) {
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const popoverRef = useRef<HTMLElementTagNameMap["s-popover"]>(null);
+  useOverlayEvents(popoverRef, {
+    onHide: (event) => {
+      event.stopPropagation();
+      setSearch("");
+    },
+    onShow: () => {
+      setSearch(value);
+      window.requestAnimationFrame(() => searchRef.current?.focus());
+    },
+  });
   const normalizedSearch = normalizeConfigurationText(search);
   const visibleOptions = options.filter(({ label: optionLabel, value }) =>
     `${optionLabel} ${value}`
@@ -322,14 +334,7 @@ function SearchableFilterValuePicker({
       <s-popover
         id={id}
         inlineSize="320px"
-        onHide={(event) => {
-          event.stopPropagation();
-          setSearch("");
-        }}
-        onShow={() => {
-          setSearch(value);
-          window.requestAnimationFrame(() => searchRef.current?.focus());
-        }}
+        ref={popoverRef}
       >
         <s-box padding="small-200">
           <div className={styles.filterSuggestionDialog}>
@@ -520,6 +525,18 @@ function CollectionFilterPicker({
   const [cursor, setCursor] = useState<string | null>(null);
   const [results, setResults] = useState<SelectedCollection[]>([]);
   const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const popoverRef = useRef<HTMLElementTagNameMap["s-popover"]>(null);
+  useOverlayEvents(popoverRef, {
+    onHide: () => setOpen(false),
+    onShow: () => {
+      setOpen(true);
+      setSearch("");
+      setDebouncedSearch("");
+      setCursor(null);
+      setResults([]);
+      window.requestAnimationFrame(() => searchRef.current?.focus());
+    },
+  });
   const query = useQuery({
     ...diagnosticsCollectionsQueryOptions(scope, debouncedSearch, cursor, {
       endpoint,
@@ -615,15 +632,7 @@ function CollectionFilterPicker({
       <s-popover
         id={FILTER_COLLECTION_POPOVER_ID}
         inlineSize="336px"
-        onHide={() => setOpen(false)}
-        onShow={() => {
-          setOpen(true);
-          setSearch("");
-          setDebouncedSearch("");
-          setCursor(null);
-          setResults([]);
-          window.requestAnimationFrame(() => searchRef.current?.focus());
-        }}
+        ref={popoverRef}
       >
         <s-box padding="small-200">
           <div className={styles.collectionPickerContent}>
@@ -724,6 +733,7 @@ function ProductTypeSelector({
     useState<`${number}px`>("520px");
   const selectorRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const popoverRef = useRef<HTMLElementTagNameMap["s-popover"]>(null);
   const normalizedSearch = normalizeConfigurationText(suggestionSearch).slice(
     0,
     MAX_PRODUCT_TYPE_LENGTH,
@@ -744,6 +754,18 @@ function ProductTypeSelector({
     const width = selectorRef.current?.getBoundingClientRect().width;
     if (width) setPopoverInlineSize(`${Math.round(width)}px`);
   };
+
+  useOverlayEvents(popoverRef, {
+    onHide: (event) => {
+      event.stopPropagation();
+      setSuggestionSearch("");
+    },
+    onShow: () => {
+      syncPopoverWidth();
+      setSuggestionSearch(value);
+      window.requestAnimationFrame(() => searchRef.current?.focus());
+    },
+  });
 
   return (
     <div className={styles.productTypeSelector} ref={selectorRef}>
@@ -777,15 +799,7 @@ function ProductTypeSelector({
       <s-popover
         id={PRODUCT_TYPE_SUGGESTIONS_POPOVER_ID}
         inlineSize={popoverInlineSize}
-        onHide={(event) => {
-          event.stopPropagation();
-          setSuggestionSearch("");
-        }}
-        onShow={() => {
-          syncPopoverWidth();
-          setSuggestionSearch(value);
-          window.requestAnimationFrame(() => searchRef.current?.focus());
-        }}
+        ref={popoverRef}
       >
         <s-box padding="small-200">
           <div className={styles.productTypeSuggestionDialog}>
@@ -1356,6 +1370,13 @@ export function DiagnosticsPanel({
   const [bulkEditValue, setBulkEditValue] = useState("");
   const [bulkEditError, setBulkEditError] = useState<string | null>(null);
   const [bulkEditModalOpen, setBulkEditModalOpen] = useState(false);
+  useOverlayEvents(bulkEditModalRef, {
+    onHide: (event) => {
+      if (event.target === event.currentTarget) {
+        setBulkEditModalOpen(false);
+      }
+    },
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeFilters, setActiveFilters] = useState<DiagnosticsFilter[]>([]);
@@ -2352,11 +2373,6 @@ export function DiagnosticsPanel({
         accessibilityLabel={`Assign ${bulkEditField} to selected products`}
         heading={`Assign ${bulkEditField}`}
         id={BULK_EDIT_MODAL_ID}
-        onHide={(event) => {
-          if (event.target === event.currentTarget) {
-            setBulkEditModalOpen(false);
-          }
-        }}
         padding="none"
         ref={bulkEditModalRef}
         size="base"

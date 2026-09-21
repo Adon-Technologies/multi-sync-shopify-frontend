@@ -1,3 +1,4 @@
+import { normalizeCountryCode } from "@multi-sync/catalog-rules";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,6 +35,7 @@ import {
   additionalLanguagesQueryOptions,
   additionalMarketOptionsQueryOptions,
   deleteAdditionalFeed,
+  updateAdditionalFeedCountryCode,
   feedKeys,
   generateAdditionalFeed,
   generatePrimaryFeed,
@@ -48,10 +50,7 @@ import { shouldPollPrimaryFeed } from "../services/feed-generation-state";
 import styles from "../styles/feeds.module.css";
 import { AutomaticRefreshCard } from "./AutomaticRefreshCard";
 import { FeedStatusBadge } from "./FeedStatusBadge";
-import {
-  TabAlertNavigator,
-  type TabAlert,
-} from "./TabAlertNavigator";
+import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 
 interface FeedsPanelProps {
   active: boolean;
@@ -311,6 +310,7 @@ function AdditionalMarketForm({
           <s-clickable
             accessibilityLabel="Choose a Shopify Market and country"
             background="base"
+            blockSize="32px"
             border="small-100"
             borderColor="base"
             borderRadius="base"
@@ -318,14 +318,9 @@ function AdditionalMarketForm({
             commandFor={marketPopoverId}
             disabled={marketDisabled ? true : undefined}
             inlineSize="100%"
-            padding="small-200 base"
+            padding="none"
           >
-            <s-stack
-              alignItems="center"
-              direction="inline"
-              gap="small"
-              justifyContent="space-between"
-            >
+            <span className={styles.selectorTriggerContent}>
               <s-text color={form.market ? "base" : "subdued"}>
                 {form.market
                   ? `${form.market.marketName}: ${form.market.countryName} / ${form.market.currencyCode}`
@@ -334,7 +329,7 @@ function AdditionalMarketForm({
                     : "Choose market and country"}
               </s-text>
               <s-icon color="subdued" type="chevron-down" />
-            </s-stack>
+            </span>
           </s-clickable>
           {form.error === "Choose a market and country." ? (
             <span className={styles.formError} role="alert">
@@ -410,6 +405,7 @@ function AdditionalMarketForm({
           <s-clickable
             accessibilityLabel="Choose a feed language"
             background="base"
+            blockSize="32px"
             border="small-100"
             borderColor="base"
             borderRadius="base"
@@ -417,14 +413,9 @@ function AdditionalMarketForm({
             commandFor={languagePopoverId}
             disabled={languageDisabled ? true : undefined}
             inlineSize="100%"
-            padding="small-200 base"
+            padding="none"
           >
-            <s-stack
-              alignItems="center"
-              direction="inline"
-              gap="small"
-              justifyContent="space-between"
-            >
+            <span className={styles.selectorTriggerContent}>
               <s-text color={form.language ? "base" : "subdued"}>
                 {form.language
                   ? `${form.language.name} / ${form.language.locale.toUpperCase()}`
@@ -433,7 +424,7 @@ function AdditionalMarketForm({
                     : "Choose language"}
               </s-text>
               <s-icon color="subdued" type="chevron-down" />
-            </s-stack>
+            </span>
           </s-clickable>
           {form.error === "Choose a language." ? (
             <span className={styles.formError} role="alert">
@@ -496,6 +487,23 @@ function AdditionalMarketForm({
               </div>
             </s-box>
           </s-popover>
+        </div>
+        <div className={styles.selectorField}>
+          <span className={styles.selectorLabel}>Country Code</span>
+          <s-text-field
+            label="Country Code"
+            labelAccessibilityVisibility="exclusive"
+            maxLength={2}
+            value={form.idCountryCode}
+            disabled={Boolean(form.pendingFeedId) || isGenerating}
+            onInput={(event) =>
+              onUpdate(form.id, {
+                idCountryCode: event.currentTarget.value.toUpperCase(),
+                error: null,
+              })
+            }
+            details="Used in Google item IDs, independently of the selected Market."
+          />
         </div>
       </div>
 
@@ -574,6 +582,23 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     AdditionalMarketFormState[]
   >([]);
   const nextFormId = useRef(0);
+  const [openingMarket, setOpeningMarket] = useState(false);
+  const [editTarget, setEditTarget] = useState<AdditionalFeedEntry | null>(
+    null,
+  );
+  const [editCountryCode, setEditCountryCode] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const editModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
+  useEffect(() => {
+    const modal = editModalRef.current;
+    const onHide = () => {
+      setEditTarget(null);
+      setEditError(null);
+    };
+    modal?.addEventListener("hide", onHide);
+    return () => modal?.removeEventListener("hide", onHide);
+  }, []);
+
   const [deleteTarget, setDeleteTarget] = useState<AdditionalFeedEntry | null>(
     null,
   );
@@ -639,10 +664,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     refetchIntervalInBackground: false,
   });
   const refreshAllStatusQuery = useQuery({
-    ...refreshAllStatusQueryOptions(
-      queryScope,
-      refreshAllRunId ?? "pending",
-    ),
+    ...refreshAllStatusQueryOptions(queryScope, refreshAllRunId ?? "pending"),
     enabled: active && Boolean(scope) && Boolean(refreshAllRunId),
     refetchInterval: (currentQuery) => {
       const status = currentQuery.state.data?.status;
@@ -713,6 +735,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   const additionalGenerateMutation = useMutation({
     mutationFn: (request: {
       countryCode: string;
+      idCountryCode: string;
       formId: string;
       locale: string;
       marketId: string;
@@ -723,6 +746,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
         : generateAdditionalFeed(
             {
               countryCode: request.countryCode,
+              idCountryCode: request.idCountryCode,
               locale: request.locale,
               marketId: request.marketId,
             },
@@ -759,6 +783,35 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       );
       void invalidateFeedQueries();
     },
+  });
+  const editMutation = useMutation({
+    mutationFn: ({
+      feedId,
+      idCountryCode,
+    }: {
+      feedId: string;
+      idCountryCode: string;
+    }) =>
+      updateAdditionalFeedCountryCode(
+        feedId,
+        idCountryCode,
+        additionalEndpoint,
+      ),
+    onSuccess: (result) => {
+      applyAdditionalActionResult(result);
+      editModalRef.current?.hideOverlay();
+      setEditTarget(null);
+      setEditError(null);
+      void invalidateFeedQueries();
+      void synchronizeConfigurationRefreshState();
+      shopify.toast.show("Country Code saved.");
+    },
+    onError: (error) =>
+      setEditError(
+        error instanceof Error
+          ? error.message
+          : "Country Code could not be saved.",
+      ),
   });
   const additionalRefreshMutation = useMutation({
     mutationFn: (feedId: string) =>
@@ -1069,14 +1122,72 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       return;
     }
 
+    const idCountryCode = normalizeCountryCode(form.idCountryCode);
+    if (!idCountryCode) {
+      updateAdditionalForm(form.id, {
+        error: "Enter a two-letter country code.",
+      });
+      return;
+    }
     updateAdditionalForm(form.id, { error: null });
     additionalGenerateMutation.mutate({
       countryCode: form.market.countryCode,
+      idCountryCode,
       formId: form.id,
       locale: form.language.locale,
       marketId: form.market.marketId,
       retryFeedId: form.pendingFeedId,
     });
+  };
+
+  const currentConfigurationCountryCode = async () => {
+    if (!scope) throw new Error("Configuration is not ready. Try again.");
+    const result = await queryClient.fetchQuery({
+      ...configurationQueryOptions(scope),
+      staleTime: 0,
+    });
+    return result.configuration.countryCode;
+  };
+  const addMarket = async () => {
+    setOpeningMarket(true);
+    try {
+      const countryCode = await currentConfigurationCountryCode();
+      nextFormId.current += 1;
+      const form = createAdditionalMarketForm(
+        `additional-market-${nextFormId.current}`,
+        countryCode,
+      );
+      setAdditionalForms((forms) => [...forms, form]);
+    } catch (error) {
+      setFeedback({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Configuration could not be loaded.",
+        tone: "critical",
+      });
+    } finally {
+      setOpeningMarket(false);
+    }
+  };
+  const editAdditional = async (entry: AdditionalFeedEntry) => {
+    try {
+      const countryCode =
+        normalizeCountryCode(entry.feed.idCountryCode) ??
+        (await currentConfigurationCountryCode());
+      setEditCountryCode(countryCode);
+      setEditError(null);
+      setEditTarget(entry);
+      editModalRef.current?.showOverlay();
+    } catch (error) {
+      setFeedback({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Country Code could not be loaded.",
+        tone: "critical",
+      });
+    }
   };
 
   const tabAlerts: TabAlert[] = [];
@@ -1382,19 +1493,14 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           </div>
           <s-button
             disabled={
-              additionalData?.backendUnavailable || generationLocked
+              additionalData?.backendUnavailable ||
+              generationLocked ||
+              openingMarket
                 ? true
                 : undefined
             }
-            onClick={() => {
-              nextFormId.current += 1;
-              setAdditionalForms((forms) => [
-                ...forms,
-                createAdditionalMarketForm(
-                  `additional-market-${nextFormId.current}`,
-                ),
-              ]);
-            }}
+            loading={openingMarket ? true : undefined}
+            onClick={() => void addMarket()}
             variant="primary"
           >
             + Add Market
@@ -1547,6 +1653,25 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                       </s-table-cell>
                       <s-table-cell>
                         <div className={styles.actions}>
+                          <s-button
+                            accessibilityLabel={`Edit ${entry.market.name} ${entry.market.locale} Country Code`}
+                            icon="edit"
+                            interestFor={`additional-feed-${candidate.id}-edit-tooltip`}
+                            disabled={
+                              candidatePending ||
+                              editMutation.isPending ||
+                              additionalData?.backendUnavailable
+                                ? true
+                                : undefined
+                            }
+                            onClick={() => void editAdditional(entry)}
+                            variant="secondary"
+                          />
+                          <s-tooltip
+                            id={`additional-feed-${candidate.id}-edit-tooltip`}
+                          >
+                            Edit Country Code
+                          </s-tooltip>
                           {candidateReady ? (
                             <>
                               <s-button
@@ -1742,6 +1867,75 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
         onAlertsChange={setAutomaticRefreshAlerts}
         scope={scope}
       />
+
+      <s-modal
+        accessibilityLabel="Edit additional Market Country Code"
+        heading="Edit additional Market"
+        id="edit-additional-feed-modal"
+        ref={editModalRef}
+      >
+        <s-stack direction="block" gap="base">
+          <s-text-field
+            label="Market and country"
+            readOnly
+            value={
+              editTarget
+                ? `${editTarget.market.name} / ${editTarget.market.countryName ?? editTarget.market.countryCode}`
+                : ""
+            }
+          />
+          <s-text-field
+            label="Language"
+            readOnly
+            value={
+              editTarget?.market.languageName ?? editTarget?.market.locale ?? ""
+            }
+          />
+          <s-text-field
+            label="Country Code"
+            maxLength={2}
+            value={editCountryCode}
+            error={editError ?? undefined}
+            disabled={editMutation.isPending}
+            onInput={(event) => {
+              setEditCountryCode(event.currentTarget.value.toUpperCase());
+              setEditError(null);
+            }}
+          />
+          <s-paragraph color="subdued">
+            Changing Country Code changes Google item IDs after the next feed
+            refresh.
+          </s-paragraph>
+        </s-stack>
+        <s-button
+          slot="primary-action"
+          variant="primary"
+          loading={editMutation.isPending ? true : undefined}
+          disabled={!editTarget || editMutation.isPending ? true : undefined}
+          onClick={() => {
+            const idCountryCode = normalizeCountryCode(editCountryCode);
+            if (!idCountryCode) {
+              setEditError("Enter a two-letter country code.");
+              return;
+            }
+            if (editTarget)
+              editMutation.mutate({
+                feedId: editTarget.feed.id,
+                idCountryCode,
+              });
+          }}
+        >
+          Save
+        </s-button>
+        <s-button
+          slot="secondary-actions"
+          command="--hide"
+          commandFor="edit-additional-feed-modal"
+          disabled={editMutation.isPending ? true : undefined}
+        >
+          Cancel
+        </s-button>
+      </s-modal>
 
       <s-modal
         accessibilityLabel="Delete additional Market feed confirmation"

@@ -1,10 +1,8 @@
+import { normalizeCountryCode } from "@multi-sync/catalog-rules";
 import type { XmlLink } from "@prisma/client";
 
 import prisma from "../db.server";
-import type {
-  FeedMarket,
-  FeedMetadata,
-} from "../routes/app.feed-data";
+import type { FeedMarket, FeedMetadata } from "../routes/app.feed-data";
 import { upsertInstalledStore } from "./store.server";
 
 interface FeedSession {
@@ -35,8 +33,14 @@ async function ensureLegacyPrimaryFeed(storeId: string) {
   }
 }
 
-function mapStoredFeed(feed: XmlLink): FeedMetadata {
+function mapStoredFeed(
+  feed: XmlLink,
+  configurationCountryCode?: string,
+): FeedMetadata {
   return {
+    idCountryCode:
+      normalizeCountryCode(feed.idCountryCode) ??
+      normalizeCountryCode(configurationCountryCode),
     createdAt: feed.createdAt.toISOString(),
     feedType: feed.feedType,
     fileSizeBytes: feed.fileSizeBytes?.toString() ?? null,
@@ -103,10 +107,15 @@ export async function getStoredAdditionalFeedMetadata(session: FeedSession) {
     orderBy: [{ marketName: "asc" }, { countryName: "asc" }, { locale: "asc" }],
   });
 
+  const configuration = await prisma.configuration.findUnique({
+    where: { storeId: store.id },
+    select: { countryCode: true },
+  });
+
   return {
     activeGeneration: null,
     feeds: feeds.map((feed) => ({
-      feed: mapStoredFeed(feed),
+      feed: mapStoredFeed(feed, configuration?.countryCode),
       market: mapStoredMarket(feed),
     })),
   };

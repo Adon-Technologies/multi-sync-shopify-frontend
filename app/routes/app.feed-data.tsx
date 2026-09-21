@@ -16,6 +16,7 @@ export type FeedStatus =
   | "FAILED";
 
 export interface FeedMetadata {
+  idCountryCode?: string | null;
   createdAt: string;
   feedType: "PRIMARY" | "ADDITIONAL";
   fileSizeBytes: string | null;

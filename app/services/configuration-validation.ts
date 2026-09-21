@@ -1,3 +1,6 @@
+import { normalizeCountryCode, normalizeExcludedProductTags } from "@multi-sync/catalog-rules";
+export { normalizeExcludedProductTags } from "@multi-sync/catalog-rules";
+
 export interface SelectedCollection {
   id: string;
   title: string;
@@ -21,6 +24,7 @@ export interface ConfigurationInput {
   sizeOptions: string[];
   excludedCollections: SelectedCollection[];
   excludedTitleTerms: string[];
+  excludedProductTags: string[];
   productTypes: string[];
   showSalePriceInGoogleFeed: boolean;
   useProductImageAsMainImage: boolean;
@@ -41,6 +45,7 @@ export interface ConfigurationFieldErrors {
   sizeOptions?: string;
   excludedCollections?: string;
   excludedTitleTerms?: string;
+  excludedProductTags?: string;
   productTypes?: string;
   showSalePriceInGoogleFeed?: string;
   useProductImageAsMainImage?: string;
@@ -300,10 +305,7 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     typeof input.alertsEmail === "string"
       ? normalizeConfigurationText(input.alertsEmail).toLocaleLowerCase()
       : "";
-  const countryCode =
-    typeof input.countryCode === "string"
-      ? normalizeConfigurationText(input.countryCode).toUpperCase()
-      : "";
+  const countryCode = normalizeCountryCode(input.countryCode) ?? "";
   const colorOptions = normalizeOptionNames(input.colorOptions);
   const sizeOptions = normalizeOptionNames(input.sizeOptions);
   const excludedCollections = normalizeSelectedCollections(
@@ -311,6 +313,9 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
   );
   const excludedTitleTerms = normalizeExcludedTitleTerms(
     input.excludedTitleTerms,
+  );
+  const excludedProductTags = normalizeExcludedProductTags(
+    input.excludedProductTags,
   );
   const productTypes = normalizeProductTypes(input.productTypes);
   const showSalePriceInGoogleFeed = input.showSalePriceInGoogleFeed === true;
@@ -335,7 +340,7 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     fields.alertsEmail = "Enter a valid email address.";
   }
 
-  if (!/^[A-Z]{2}$/.test(countryCode)) {
+  if (!normalizeCountryCode(countryCode)) {
     fields.countryCode = "Enter a two-letter country code.";
   }
 
@@ -394,6 +399,25 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     )
   ) {
     fields.excludedTitleTerms = "Remove empty product-title terms.";
+  }
+
+  if (
+    input.excludedProductTags !== undefined &&
+    !Array.isArray(input.excludedProductTags)
+  ) {
+    fields.excludedProductTags = "Add valid product tags.";
+  } else if (Array.isArray(input.excludedProductTags)) {
+    if (input.excludedProductTags.length > 100) {
+      fields.excludedProductTags = "Add no more than 100 product tags.";
+    } else if (
+      input.excludedProductTags.some(
+        (tag) =>
+          typeof tag !== "string" || !tag.trim() || tag.trim().length > 255,
+      )
+    ) {
+      fields.excludedProductTags =
+        "Product tags must contain between 1 and 255 characters.";
+    }
   }
 
   if (input.productTypes !== undefined && !Array.isArray(input.productTypes)) {
@@ -521,6 +545,7 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     sizeOptions,
     excludedCollections,
     excludedTitleTerms,
+    excludedProductTags,
     productTypes,
     showSalePriceInGoogleFeed,
     useProductImageAsMainImage,

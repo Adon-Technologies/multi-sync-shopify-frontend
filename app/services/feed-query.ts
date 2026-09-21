@@ -39,16 +39,8 @@ export const feedKeys = {
   markets: (scope: FeedQueryScope, endpoint: string) =>
     [...feedKeys.all(scope), "markets", endpoint] as const,
   primary: (scope: FeedQueryScope, endpoint: string) =>
-    [
-      ...feedKeys.all(scope),
-      "primary",
-      endpoint,
-    ] as const,
-  refreshAll: (
-    scope: FeedQueryScope,
-    endpoint: string,
-    runId: string,
-  ) =>
+    [...feedKeys.all(scope), "primary", endpoint] as const,
+  refreshAll: (scope: FeedQueryScope, endpoint: string, runId: string) =>
     [...feedKeys.all(scope), "refresh-all", endpoint, runId] as const,
 };
 
@@ -88,9 +80,7 @@ export function primaryFeedQueryOptions(
   });
 }
 
-export async function generatePrimaryFeed(
-  endpoint = "/app/feed-data",
-) {
+export async function generatePrimaryFeed(endpoint = "/app/feed-data") {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { Accept: "application/json" },
@@ -99,9 +89,7 @@ export async function generatePrimaryFeed(
   return readResponse<FeedDataResponse>(response);
 }
 
-export async function refreshAllFeeds(
-  endpoint = "/app/feed-refresh-all",
-) {
+export async function refreshAllFeeds(endpoint = "/app/feed-refresh-all") {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { Accept: "application/json" },
@@ -193,12 +181,7 @@ export function additionalLanguagesQueryOptions(
   endpoint = "/app/additional-feeds",
 ) {
   return queryOptions({
-    queryKey: feedKeys.languages(
-      scope,
-      endpoint,
-      marketId,
-      countryCode,
-    ),
+    queryKey: feedKeys.languages(scope, endpoint, marketId, countryCode),
     queryFn: async ({ signal }) => {
       const response = await fetch(
         resourceUrl(endpoint, "languages", { countryCode, marketId }),
@@ -220,10 +203,12 @@ async function mutateAdditionalFeed(
     | {
         countryCode: string;
         intent: "generate";
+        idCountryCode: string;
         locale: string;
         marketId: string;
       }
-    | { feedId: string; intent: "delete" | "refresh" },
+    | { feedId: string; intent: "delete" | "refresh" }
+    | { feedId: string; intent: "edit"; idCountryCode: string },
   endpoint = "/app/additional-feeds",
 ) {
   const response = await fetch(endpoint, {
@@ -240,28 +225,31 @@ async function mutateAdditionalFeed(
 
 export function generateAdditionalFeed(
   input: {
+    idCountryCode: string;
     countryCode: string;
     locale: string;
     marketId: string;
   },
   endpoint?: string,
 ) {
-  return mutateAdditionalFeed(
-    { ...input, intent: "generate" },
-    endpoint,
-  );
+  return mutateAdditionalFeed({ ...input, intent: "generate" }, endpoint);
 }
 
-export function refreshAdditionalFeed(
-  feedId: string,
-  endpoint?: string,
-) {
+export function refreshAdditionalFeed(feedId: string, endpoint?: string) {
   return mutateAdditionalFeed({ feedId, intent: "refresh" }, endpoint);
 }
 
-export function deleteAdditionalFeed(
+export function deleteAdditionalFeed(feedId: string, endpoint?: string) {
+  return mutateAdditionalFeed({ feedId, intent: "delete" }, endpoint);
+}
+
+export function updateAdditionalFeedCountryCode(
   feedId: string,
+  idCountryCode: string,
   endpoint?: string,
 ) {
-  return mutateAdditionalFeed({ feedId, intent: "delete" }, endpoint);
+  return mutateAdditionalFeed(
+    { feedId, idCountryCode, intent: "edit" },
+    endpoint,
+  );
 }

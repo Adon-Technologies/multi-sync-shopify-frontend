@@ -47,7 +47,7 @@ function feedEntry(
 }
 
 test("three Add Market clicks create three stable independent forms", () => {
-  const forms = ["one", "two", "three"].map(createAdditionalMarketForm);
+  const forms = ["one", "two", "three"].map((id) => createAdditionalMarketForm(id));
   const selected = forms.map((form, index) =>
     index === 1
       ? { ...form, language: french, market: canada }
@@ -212,4 +212,14 @@ test("the selected additional feed delete icon shows loading", () => {
     panelSource,
     /icon="delete"\s*loading=\{candidateDeleting \? true : undefined\}/,
   );
+});
+
+
+test("country defaults are captured per form and survive market changes", () => {
+  const first = createAdditionalMarketForm("one", " gb ");
+  const custom = { ...first, idCountryCode: "LB", market: canada, language: french };
+  const next = createAdditionalMarketForm("two", "US");
+  assert.equal(first.idCountryCode, "GB");
+  assert.equal(next.idCountryCode, "US");
+  assert.equal(reconcileAdditionalMarketForms([custom], [])[0]?.idCountryCode, "LB");
 });

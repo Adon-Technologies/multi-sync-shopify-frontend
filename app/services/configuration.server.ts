@@ -1,3 +1,4 @@
+import { normalizeCountryCode } from "@multi-sync/catalog-rules";
 import type {
   AttributeRuleJob,
   AttributeRuleKind,
@@ -26,6 +27,7 @@ import {
   DEFAULT_COLOR_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
   configurationRequiresFeedRefresh,
+  normalizeExcludedProductTags,
   normalizeOptionNames,
   normalizeProductTypes,
   normalizeSelectedCollections,
@@ -81,6 +83,7 @@ interface StoredConfiguration {
   diagnosticsRevision: string;
   excludedCollections: Prisma.JsonValue;
   excludedTitleTerms: string[];
+  excludedProductTags: string[];
   productTypes: string[];
   genderRules: Prisma.JsonValue | null;
   genderRulesAppliedVersion: number;
@@ -145,6 +148,7 @@ export interface DiagnosticsConfigurationRules {
   colorOptions: string[];
   excludedCollections: SelectedCollection[];
   excludedTitleTerms: string[];
+  excludedProductTags: string[];
   revision: string;
   sizeOptions: string[];
 }
@@ -176,6 +180,9 @@ function mapConfiguration(
       configuration.excludedCollections,
     ),
     excludedTitleTerms: configuration.excludedTitleTerms,
+    excludedProductTags: normalizeExcludedProductTags(
+      configuration.excludedProductTags,
+    ),
     productTypes: normalizeProductTypes(configuration.productTypes),
     genderRules: gender.rules,
     genderRulesAppliedVersion: configuration.genderRulesAppliedVersion,
@@ -207,6 +214,9 @@ function getStoredDiagnosticsRevision(configuration: StoredConfiguration) {
     colorOptions: configuration.colorOptions,
     excludedCollections: configuration.excludedCollections,
     excludedTitleTerms: configuration.excludedTitleTerms,
+    excludedProductTags: normalizeExcludedProductTags(
+      configuration.excludedProductTags,
+    ),
     genderRulesAppliedVersion: configuration.genderRulesAppliedVersion,
     sizeOptions: configuration.sizeOptions,
   });
@@ -297,6 +307,7 @@ export async function ensureConfigurationForSession(
       }),
       excludedCollections: [] as Prisma.InputJsonValue,
       excludedTitleTerms: [],
+      excludedProductTags: [],
       productTypes: [],
       optionMappingsInitialized: true,
       showSalePriceInGoogleFeed: false,
@@ -392,6 +403,25 @@ export async function saveConfigurationForShop(
     genderRulesAppliedVersion:
       previousConfiguration?.genderRulesAppliedVersion ?? 0,
   });
+  // Freeze legacy feed IDs at their previous effective country before changing
+  // Configuration. Explicit feed choices are never matched by this update.
+  const previousCountryCode = normalizeCountryCode(
+    previousConfiguration?.countryCode,
+  );
+  if (previousCountryCode && previousCountryCode !== verifiedInput.countryCode) {
+    await prisma.xmlLink.updateMany({
+      where: {
+        storeId: store.id,
+        feedType: "ADDITIONAL",
+        OR: [
+          { idCountryCode: null },
+          { idCountryCode: { isSet: false } },
+          { idCountryCode: "" },
+        ],
+      },
+      data: { idCountryCode: previousCountryCode },
+    });
+  }
   const configuration = await prisma.configuration.upsert({
     where: { storeId: store.id },
     create: {
@@ -456,6 +486,9 @@ export async function getDiagnosticsConfigurationRules(
       colorOptions: configuration.colorOptions,
       excludedCollections: configuration.excludedCollections,
       excludedTitleTerms: configuration.excludedTitleTerms,
+      excludedProductTags: normalizeExcludedProductTags(
+        configuration.excludedProductTags,
+      ),
       genderRulesAppliedVersion: configuration.genderRulesAppliedVersion,
       sizeOptions: configuration.sizeOptions,
     });
@@ -476,6 +509,9 @@ export async function getDiagnosticsConfigurationRules(
       configuration?.excludedCollections,
     ),
     excludedTitleTerms: configuration?.excludedTitleTerms ?? [],
+    excludedProductTags: normalizeExcludedProductTags(
+      configuration?.excludedProductTags,
+    ),
     revision:
       configuration?.diagnosticsRevision ??
       createDiagnosticsConfigurationRevision({}),

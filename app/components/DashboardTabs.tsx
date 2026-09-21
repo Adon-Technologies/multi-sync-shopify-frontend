@@ -1,6 +1,8 @@
 import {
   Suspense,
+  startTransition,
   useCallback,
+  useDeferredValue,
   useEffect,
   useRef,
   useState,
@@ -390,6 +392,19 @@ function DashboardSectionResult({
   return children;
 }
 
+function DashboardAsyncSection({
+  children,
+  fallback,
+}: {
+  children: ReactNode;
+  fallback: ReactNode;
+}) {
+  // Query-cache notifications are synchronous external-store updates. Defer
+  // the whole boundary element so they cannot replace its server markup while
+  // the streamed loader promise is still hydrating on the client.
+  return useDeferredValue(<Suspense fallback={fallback}>{children}</Suspense>);
+}
+
 function DashboardPanelContent({
   active,
   initialSubscription,
@@ -566,7 +581,9 @@ function DashboardPanelContent({
                 <s-paragraph color="subdued">
                   Variants usually become individual Google feed items.
                 </s-paragraph>
-                <Suspense fallback={<StatisticsTable state="loading" />}>
+                <DashboardAsyncSection
+                  fallback={<StatisticsTable state="loading" />}
+                >
                   <Await
                     errorElement={
                       <DashboardSectionResult
@@ -590,12 +607,12 @@ function DashboardPanelContent({
                       </DashboardSectionResult>
                     )}
                   </Await>
-                </Suspense>
+                </DashboardAsyncSection>
               </s-stack>
             </s-section>
 
             <s-section heading="Store">
-              <Suspense
+              <DashboardAsyncSection
                 fallback={
                   <StoreInformationCard
                     alertsEmail={
@@ -639,7 +656,7 @@ function DashboardPanelContent({
                     </DashboardSectionResult>
                   )}
                 </Await>
-              </Suspense>
+              </DashboardAsyncSection>
             </s-section>
 
             <FeedOverviewCard
@@ -684,10 +701,18 @@ export function DashboardTabs(props: DashboardTabsProps) {
       return;
     }
 
-    setTabIndicatorStyle({
-      opacity: 1,
-      transform: `translateX(${activeElement.offsetLeft + 10}px)`,
-      width: Math.max(activeElement.offsetWidth - 20, 0),
+    const transform = `translateX(${activeElement.offsetLeft + 10}px)`;
+    const width = Math.max(activeElement.offsetWidth - 20, 0);
+    // Layout measurements can arrive before streamed dashboard data hydrates.
+    // Let hydration finish before this cosmetic update re-renders its parent.
+    startTransition(() => {
+      setTabIndicatorStyle((current) =>
+        current.opacity === 1 &&
+        current.transform === transform &&
+        current.width === width
+          ? current
+          : { opacity: 1, transform, width },
+      );
     });
   }, [activeTab]);
 

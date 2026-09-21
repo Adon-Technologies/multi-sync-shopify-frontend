@@ -1,3 +1,4 @@
+import { normalizeCountryCode } from "@multi-sync/catalog-rules";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import {
@@ -130,24 +131,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticateSubscribedAdmin(request);
-  const input = (await request.json().catch(() => null)) as
-    | {
-        countryCode?: unknown;
-        feedId?: unknown;
-        intent?: unknown;
-        locale?: unknown;
-        marketId?: unknown;
-      }
-    | null;
+  const input = (await request.json().catch(() => null)) as {
+    countryCode?: unknown;
+    idCountryCode?: unknown;
+    feedId?: unknown;
+    intent?: unknown;
+    locale?: unknown;
+    marketId?: unknown;
+  } | null;
   const intent = typeof input?.intent === "string" ? input.intent : "";
 
   try {
+    if (
+      (intent === "generate" || intent === "edit") &&
+      !normalizeCountryCode(input?.idCountryCode)
+    ) {
+      return Response.json(
+        { ok: false, error: "Enter a two-letter country code." },
+        { status: 400 },
+      );
+    }
     if (intent === "generate") {
       const result = await requestFeedBackend<AdditionalFeedActionResponse>(
         session,
         "POST",
         "/api/feeds/additional/generate",
         {
+          idCountryCode: normalizeCountryCode(input?.idCountryCode),
           countryCode:
             typeof input?.countryCode === "string"
               ? input.countryCode
@@ -168,6 +178,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { ok: false, error: "The feed could not be identified." },
         { status: 400 },
       );
+    }
+
+    if (intent === "edit") {
+      const result = await requestFeedBackend<AdditionalFeedActionResponse>(
+        session,
+        "POST",
+        `/api/feeds/additional/${encodeURIComponent(feedId)}/country-code`,
+        { idCountryCode: normalizeCountryCode(input?.idCountryCode) },
+      );
+      return Response.json(result);
     }
 
     if (intent === "refresh") {

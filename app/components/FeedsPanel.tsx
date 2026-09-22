@@ -31,6 +31,8 @@ import {
   type ConfigurationResponse,
 } from "../services/configuration-query";
 import {
+  checkAdditionalFeedBilling,
+  renewAdditionalFeedSubscription,
   additionalFeedsQueryOptions,
   additionalLanguagesQueryOptions,
   additionalMarketOptionsQueryOptions,
@@ -169,6 +171,7 @@ function generationProgress(feed: FeedMetadata) {
 }
 
 interface AdditionalMarketFormProps {
+  paidFeed: boolean;
   active: boolean;
   endpoint: string;
   form: AdditionalMarketFormState;
@@ -190,6 +193,7 @@ interface AdditionalMarketFormProps {
 }
 
 function AdditionalMarketForm({
+  paidFeed,
   active,
   endpoint,
   form,
@@ -298,9 +302,7 @@ function AdditionalMarketForm({
           <span className={styles.selectorLabelWithLoading}>
             <span className={styles.selectorLabel}>Market and country</span>
             {marketLoading ||
-            (form.market &&
-              languagesQuery.isPending &&
-              !form.pendingFeedId) ? (
+            (form.market && languagesQuery.isPending && !form.pendingFeedId) ? (
               <s-spinner
                 accessibilityLabel="Loading Shopify Market options"
                 size="base"
@@ -557,6 +559,7 @@ function AdditionalMarketForm({
           {form.pendingFeedId && form.error
             ? "Retry generation"
             : "Generate feed URL"}
+          {paidFeed ? " (+$1.49/month)" : ""}
         </s-button>
         <s-button
           disabled={isGenerating ? true : undefined}
@@ -582,6 +585,26 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     AdditionalMarketFormState[]
   >([]);
   const nextFormId = useRef(0);
+  const [paidFeedTarget, setPaidFeedTarget] =
+    useState<AdditionalMarketFormState | null>(null);
+  const paidFeedModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
+  const renewalModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
+  const [renewalTarget, setRenewalTarget] = useState<{
+    subscriptionId: string;
+    url: string;
+  } | null>(null);
+  const [renewalError, setRenewalError] = useState<string | null>(null);
+  const [renewalComplete, setRenewalComplete] = useState(false);
+  const [renewalPending, setRenewalPending] = useState(false);
+  const renewalInFlight = useRef(false);
+  const eligibilityInFlight = useRef(false);
+  const [checkingBilling, setCheckingBilling] = useState(false);
+  useEffect(() => {
+    const modal = paidFeedModalRef.current;
+    const onHide = () => setPaidFeedTarget(null);
+    modal?.addEventListener("hide", onHide);
+    return () => modal?.removeEventListener("hide", onHide);
+  }, []);
   const [openingMarket, setOpeningMarket] = useState(false);
   const [editTarget, setEditTarget] = useState<AdditionalFeedEntry | null>(
     null,
@@ -660,7 +683,11 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     refetchInterval: (currentQuery) =>
       active && hasPendingAdditionalFeeds(currentQuery.state.data)
         ? 2_000
-        : false,
+        : active &&
+            currentQuery.state.data?.ok &&
+            currentQuery.state.data.usage?.status === "PENDING"
+          ? 10_000
+          : false,
     refetchIntervalInBackground: false,
   });
   const refreshAllStatusQuery = useQuery({
@@ -734,6 +761,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   });
   const additionalGenerateMutation = useMutation({
     mutationFn: (request: {
+      paidFeedConfirmed: boolean;
       countryCode: string;
       idCountryCode: string;
       formId: string;
@@ -741,17 +769,16 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       marketId: string;
       retryFeedId: string | null;
     }) =>
-      request.retryFeedId
-        ? refreshAdditionalFeed(request.retryFeedId, additionalEndpoint)
-        : generateAdditionalFeed(
-            {
-              countryCode: request.countryCode,
-              idCountryCode: request.idCountryCode,
-              locale: request.locale,
-              marketId: request.marketId,
-            },
-            additionalEndpoint,
-          ),
+      generateAdditionalFeed(
+        {
+          paidFeedConfirmed: request.paidFeedConfirmed,
+          countryCode: request.countryCode,
+          idCountryCode: request.idCountryCode,
+          locale: request.locale,
+          marketId: request.marketId,
+        },
+        additionalEndpoint,
+      ),
     onSuccess: (result, request) => {
       applyAdditionalActionResult(result);
       const pendingFeedId =
@@ -924,9 +951,17 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     () => additionalData?.feeds ?? [],
     [additionalData],
   );
+  const additionalUsage = additionalData?.usage;
+  const additionalCount =
+    additionalUsage?.additionalFeedCount ??
+    additionalFeeds.filter(
+      ({ feed: candidate }) =>
+        candidate.lastRefreshedAt && candidate.gcsObjectName,
+    ).length;
+  const nextAdditionalIsPaid = additionalCount >= 5;
   const feedRefreshRequired = Boolean(
     feed?.requiresRefresh ||
-      additionalFeeds.some(({ feed: candidate }) => candidate.requiresRefresh),
+    additionalFeeds.some(({ feed: candidate }) => candidate.requiresRefresh),
   );
   useEffect(() => {
     const previous = previousFeedRefreshRequired.current;
@@ -964,9 +999,8 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   const successfulFeed = Boolean(feed?.gcsObjectName && feed.lastRefreshedAt);
   const hasRefreshableFeeds =
     successfulFeed ||
-    additionalFeeds.some(
-      ({ feed: candidate }) =>
-        Boolean(candidate.gcsObjectName && candidate.lastRefreshedAt),
+    additionalFeeds.some(({ feed: candidate }) =>
+      Boolean(candidate.gcsObjectName && candidate.lastRefreshedAt),
     );
   const progress = feed ? generationProgress(feed) : null;
 
@@ -1091,7 +1125,10 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     );
   };
 
-  const generateAdditional = (form: AdditionalMarketFormState) => {
+  const generateAdditional = async (
+    form: AdditionalMarketFormState,
+    paidFeedConfirmed = false,
+  ) => {
     if (!form.market) {
       updateAdditionalForm(form.id, {
         error: "Choose a market and country.",
@@ -1130,7 +1167,36 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       return;
     }
     updateAdditionalForm(form.id, { error: null });
+    if (nextAdditionalIsPaid && !paidFeedConfirmed) {
+      if (eligibilityInFlight.current) return;
+      eligibilityInFlight.current = true;
+      setCheckingBilling(true);
+      try {
+        const eligibility = await checkAdditionalFeedBilling();
+        if (eligibility.requiresRenewal) {
+          setRenewalTarget(eligibility);
+          setRenewalError(null);
+          setRenewalComplete(false);
+          renewalModalRef.current?.showOverlay();
+        } else {
+          setPaidFeedTarget(form);
+          paidFeedModalRef.current?.showOverlay();
+        }
+      } catch (error) {
+        updateAdditionalForm(form.id, {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Your subscription could not be verified. Try again.",
+        });
+      } finally {
+        eligibilityInFlight.current = false;
+        setCheckingBilling(false);
+      }
+      return;
+    }
     additionalGenerateMutation.mutate({
+      paidFeedConfirmed,
       countryCode: form.market.countryCode,
       idCountryCode,
       formId: form.id,
@@ -1138,6 +1204,30 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       marketId: form.market.marketId,
       retryFeedId: form.pendingFeedId,
     });
+  };
+
+  const cancelAndResubscribe = async () => {
+    if (!renewalTarget || renewalInFlight.current || renewalComplete) return;
+    renewalInFlight.current = true;
+    setRenewalPending(true);
+    setRenewalError(null);
+    try {
+      const result = await renewAdditionalFeedSubscription(
+        renewalTarget.subscriptionId,
+      );
+      setRenewalComplete(true);
+      setRenewalTarget({ ...renewalTarget, url: result.url });
+      window.open(result.url, "_top");
+    } catch (error) {
+      setRenewalError(
+        error instanceof Error
+          ? error.message
+          : "Your subscription update could not be completed.",
+      );
+    } finally {
+      renewalInFlight.current = false;
+      setRenewalPending(false);
+    }
   };
 
   const currentConfigurationCountryCode = async () => {
@@ -1490,6 +1580,21 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
               Create localized Google feeds for specific Shopify Markets,
               countries, currencies, and languages.
             </s-paragraph>
+            <s-paragraph color="subdued">
+              5 Additional Market feeds included with Pro. Additional feeds are
+              $1.49/month each.
+            </s-paragraph>
+            {additionalUsage && additionalUsage.billableQuantity > 0 ? (
+              <s-paragraph color="subdued">
+                {additionalUsage.additionalFeedCount} used · 5 included ·{" "}
+                {additionalUsage.billableQuantity} billable. Estimated
+                additional usage: $
+                {(additionalUsage.estimatedUsageCents / 100).toFixed(2)}/month;
+                estimated total: $
+                {(additionalUsage.estimatedTotalCents / 100).toFixed(2)}/month.
+                Shopify determines your final bill.
+              </s-paragraph>
+            ) : null}
           </div>
           <s-button
             disabled={
@@ -1506,6 +1611,14 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
             + Add Market
           </s-button>
         </div>
+
+        {additionalUsage?.message ? (
+          <s-banner
+            tone={additionalUsage.status === "TRIAL" ? "info" : "warning"}
+          >
+            {additionalUsage.message}
+          </s-banner>
+        ) : null}
 
         {additionalQuery.isPending && !additionalData ? (
           <div className={styles.feedTable}>
@@ -1761,8 +1874,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                             disabled={
                               generationLocked ||
                               candidatePending ||
-                              (deleteMutation.isPending &&
-                                !candidateDeleting)
+                              (deleteMutation.isPending && !candidateDeleting)
                                 ? true
                                 : undefined
                             }
@@ -1822,11 +1934,14 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
 
             return (
               <AdditionalMarketForm
+                paidFeed={nextAdditionalIsPaid}
                 active={active}
                 endpoint={additionalEndpoint}
                 form={form}
                 forms={additionalForms}
-                generationLocked={generationLocked}
+                generationLocked={
+                  generationLocked || checkingBilling || renewalPending
+                }
                 isGenerating={isGenerating}
                 key={form.id}
                 marketError={marketOptionsQuery.isError}
@@ -1837,11 +1952,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                     : []
                 }
                 progress={
-                  pendingEntry
-                    ? generationProgress(pendingEntry.feed)
-                    : null
+                  pendingEntry ? generationProgress(pendingEntry.feed) : null
                 }
-                onGenerate={generateAdditional}
+                onGenerate={(form) => generateAdditional(form)}
                 onRemove={(formId) =>
                   setAdditionalForms((forms) =>
                     forms.filter(({ id }) => id !== formId),
@@ -1867,6 +1980,101 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
         onAlertsChange={setAutomaticRefreshAlerts}
         scope={scope}
       />
+
+      <s-modal
+        id="paid-additional-feed-modal"
+        heading="Add paid feed?"
+        accessibilityLabel="Confirm additional feed usage charge"
+        ref={paidFeedModalRef}
+      >
+        <s-paragraph>
+          Your Pro plan includes 5 Additional Market feeds. This feed will add
+          $1.49/month in usage charges to your Shopify app bill.
+        </s-paragraph>
+        <s-button
+          slot="primary-action"
+          variant="primary"
+          disabled={
+            !paidFeedTarget ||
+            generationLocked ||
+            additionalGenerateMutation.isPending
+              ? true
+              : undefined
+          }
+          onClick={() => {
+            if (paidFeedTarget) generateAdditional(paidFeedTarget, true);
+            paidFeedModalRef.current?.hideOverlay();
+          }}
+        >
+          Add feed for $1.49/month
+        </s-button>
+        <s-button
+          slot="secondary-actions"
+          command="--hide"
+          commandFor="paid-additional-feed-modal"
+        >
+          Cancel
+        </s-button>
+      </s-modal>
+
+      <s-modal
+        id="additional-feed-renewal-modal"
+        heading="Update your subscription to add more feeds"
+        accessibilityLabel="Update subscription for paid Additional feeds"
+        ref={renewalModalRef}
+      >
+        <s-stack direction="block" gap="base">
+          <s-paragraph>
+            Your current subscription does not include paid Additional Market
+            feeds. To add more than the 5 included Additional feeds, cancel your
+            current subscription and resubscribe to the updated Pro plan on
+            Shopify.
+          </s-paragraph>
+          <s-paragraph>
+            The updated plan is $10/month plus $1.49/month for each Additional
+            feed beyond the included 5. Cancellation takes effect immediately.
+            Access to subscription features pauses until you approve the
+            replacement plan. Shopify determines any charges and credits; review
+            the billing terms before approving. A new free trial is not
+            guaranteed.
+          </s-paragraph>
+          {renewalError ? (
+            <s-banner tone="critical">{renewalError}</s-banner>
+          ) : null}
+          {renewalComplete ? (
+            <s-paragraph>
+              Your previous subscription has ended. Continue on Shopify to
+              select and approve the updated Pro plan, then return to Feeds.
+            </s-paragraph>
+          ) : null}
+          {renewalTarget && (renewalError || renewalComplete) ? (
+            <s-link href={renewalTarget.url} target="_top">
+              Open Shopify plan selection
+            </s-link>
+          ) : null}
+        </s-stack>
+        <s-button
+          slot="primary-action"
+          variant="primary"
+          disabled={
+            !renewalTarget || renewalPending || renewalComplete
+              ? true
+              : undefined
+          }
+          loading={renewalPending ? true : undefined}
+          onClick={() => void cancelAndResubscribe()}
+        >
+          Cancel and resubscribe
+        </s-button>
+        <s-button
+          slot="secondary-actions"
+          command="--hide"
+          commandFor="additional-feed-renewal-modal"
+          disabled={renewalPending ? true : undefined}
+        >
+          Not now
+        </s-button>
+      </s-modal>
 
       <s-modal
         accessibilityLabel="Edit additional Market Country Code"

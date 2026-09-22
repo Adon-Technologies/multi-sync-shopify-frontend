@@ -283,6 +283,12 @@ export function SubscriptionPanel({
         <InactivePlanBanner planSelectionUrl={planSelectionUrl} />
       ) : null}
       <s-section heading="Subscription">
+        <s-paragraph>Pro: $10/month with a 7 day free trial.</s-paragraph>
+        <s-paragraph color="subdued">
+          Includes 1 Primary Feed and 5 Additional Market feeds (6 total).
+          Additional Market feeds beyond the included 5 are $1.49/month each,
+          billed through Shopify.
+        </s-paragraph>
         <dl className={styles.descriptionList}>
           <div className={styles.descriptionRow}>
             <dt>Status</dt>

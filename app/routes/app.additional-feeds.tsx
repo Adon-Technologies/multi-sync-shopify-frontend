@@ -35,6 +35,14 @@ export interface AdditionalLanguageOption {
 
 export type AdditionalFeedsResponse =
   | {
+      usage?: {
+        additionalFeedCount: number;
+        billableQuantity: number;
+        estimatedUsageCents: number;
+        estimatedTotalCents: number;
+        status: string;
+        message: string | null;
+      };
       activeGeneration: ActiveFeedGeneration | null;
       backendUnavailable: boolean;
       feeds: AdditionalFeedEntry[];
@@ -132,6 +140,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticateSubscribedAdmin(request);
   const input = (await request.json().catch(() => null)) as {
+    paidFeedConfirmed?: unknown;
     countryCode?: unknown;
     idCountryCode?: unknown;
     feedId?: unknown;
@@ -157,6 +166,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         "POST",
         "/api/feeds/additional/generate",
         {
+          paidFeedConfirmed: input?.paidFeedConfirmed === true,
           idCountryCode: normalizeCountryCode(input?.idCountryCode),
           countryCode:
             typeof input?.countryCode === "string"

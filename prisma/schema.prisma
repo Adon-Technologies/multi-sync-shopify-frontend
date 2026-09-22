@@ -146,6 +146,18 @@ model StoreSubscription {
   @@index([trialEndsAt])
 }
 
+// Owned by the backend billing reconciler; retained across uninstall.
+model AdditionalFeedUsage {
+  id         String   @id @map("_id")
+  storeId    String   @db.ObjectId
+  cycleStart DateTime
+  revision   Int      @default(0)
+  state      Json
+  updatedAt  DateTime @updatedAt
+
+  @@index([storeId, cycleStart])
+}
+
 model Configuration {
   id                                 String              @id @default(auto()) @map("_id") @db.ObjectId
   storeId                            String              @unique @db.ObjectId
@@ -527,6 +539,8 @@ model XmlLink {
   token                 String            @unique
   publicUrl             String
   gcsObjectName         String?
+  // Merchant consent only; never identifies a feed as paid/free.
+  additionalFeedChargeConsentAt DateTime?
   status                XmlFeedStatus     @default(NOT_GENERATED)
   generationSource      FeedRefreshSource @default(MANUAL)
   refreshRunId          String?           @db.ObjectId

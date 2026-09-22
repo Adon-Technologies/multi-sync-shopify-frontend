@@ -1,4 +1,27 @@
 import { queryOptions } from "@tanstack/react-query";
+import type { AdditionalFeedBillingEligibility } from "../routes/app.additional-feed-billing";
+
+export async function checkAdditionalFeedBilling() {
+  return readResponse<AdditionalFeedBillingEligibility>(
+    await fetch("/app/additional-feed-billing", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    }),
+  );
+}
+
+export async function renewAdditionalFeedSubscription(subscriptionId: string) {
+  return readResponse<{ ok: true; url: string }>(
+    await fetch("/app/additional-feed-billing", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ confirmed: true, subscriptionId }),
+    }),
+  );
+}
 
 import type {
   AdditionalFeedActionResponse,
@@ -115,8 +138,7 @@ export function refreshAllStatusQueryOptions(
         headers: { Accept: "application/json" },
         signal,
       });
-      const result =
-        await readResponse<FeedRefreshAllStatusResponse>(response);
+      const result = await readResponse<FeedRefreshAllStatusResponse>(response);
       if (!result.ok) {
         throw new Error(result.error);
       }
@@ -203,6 +225,7 @@ async function mutateAdditionalFeed(
     | {
         countryCode: string;
         intent: "generate";
+        paidFeedConfirmed?: boolean;
         idCountryCode: string;
         locale: string;
         marketId: string;
@@ -225,6 +248,7 @@ async function mutateAdditionalFeed(
 
 export function generateAdditionalFeed(
   input: {
+    paidFeedConfirmed?: boolean;
     idCountryCode: string;
     countryCode: string;
     locale: string;

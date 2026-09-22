@@ -87,8 +87,37 @@ it("keeps market country and XML Country Code separate in Generate feed URL", as
     "POST",
     "/api/feeds/additional/generate",
     {
+      paidFeedConfirmed: false,
       countryCode: "DE",
       idCountryCode: "LB",
+      marketId: "market",
+      locale: "de",
+    },
+  );
+});
+
+it("forwards only explicit consent and feed inputs, discarding client billing numbers", async () => {
+  await invoke({
+    intent: "generate",
+    countryCode: "DE",
+    idCountryCode: "GB",
+    marketId: "market",
+    locale: "de",
+    paidFeedConfirmed: true,
+    delta: -999,
+    price: 0,
+    reportedUsage: 999,
+    additionalFeedCount: 0,
+    subscriptionId: "foreign",
+  });
+  expect(mocks.backend).toHaveBeenCalledExactlyOnceWith(
+    session,
+    "POST",
+    "/api/feeds/additional/generate",
+    {
+      paidFeedConfirmed: true,
+      countryCode: "DE",
+      idCountryCode: "GB",
       marketId: "market",
       locale: "de",
     },

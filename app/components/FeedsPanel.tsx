@@ -60,6 +60,7 @@ interface FeedsPanelProps {
 }
 
 const pendingStatuses = new Set<FeedStatus>(["QUEUED", "PROCESSING"]);
+const COUNTRY_CODE_LABEL = "Country Code (Primary Feed Product ID)";
 
 function isSuccessfulFeedData(
   data: FeedDataResponse | undefined,
@@ -108,7 +109,8 @@ function FeedFileDetails({ feed }: { feed: FeedMetadata }) {
     <span className={styles.feedFileDetails}>
       <span className={styles.feedFileDetail}>
         <GoPackage aria-hidden="true" />
-        {new Intl.NumberFormat().format(feed.generatedItems)} variants
+        {new Intl.NumberFormat().format(feed.generatedItems)} out of{" "}
+        {new Intl.NumberFormat().format(feed.processedVariants)} variants
       </span>
       <span className={styles.feedFileDetail}>
         <TbFileTypeXml aria-hidden="true" />
@@ -492,9 +494,9 @@ function AdditionalMarketForm({
           </s-popover>
         </div>
         <div className={styles.selectorField}>
-          <span className={styles.selectorLabel}>Country Code</span>
+          <span className={styles.selectorLabel}>{COUNTRY_CODE_LABEL}</span>
           <s-text-field
-            label="Country Code"
+            label={COUNTRY_CODE_LABEL}
             labelAccessibilityVisibility="exclusive"
             maxLength={2}
             value={form.idCountryCode}
@@ -2086,7 +2088,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
             }
           />
           <s-text-field
-            label="Country Code"
+            label={COUNTRY_CODE_LABEL}
             maxLength={2}
             value={editCountryCode}
             error={editError ?? undefined}

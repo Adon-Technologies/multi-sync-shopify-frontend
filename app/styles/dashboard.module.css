@@ -205,13 +205,64 @@
 
 .cardGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
   gap: 16px;
-  align-items: start;
+}
+
+.summaryCards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 16px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.summaryCards > s-section {
+  min-width: 0;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cardAction {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 1px solid #c9cccf;
+  border-radius: 8px;
+  background: #fff;
+  color: #303030;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cardAction:hover {
+  background: #f6f6f7;
+}
+
+.cardAction:focus-visible,
+.domainLink:focus-visible {
+  outline: 2px solid #005bd3;
+  outline-offset: 2px;
+}
+
+.cardAction svg {
+  width: 14px;
+  height: 14px;
 }
 
 .feedOverview {
-  grid-column: 1 / -1;
   min-width: 0;
 }
 
@@ -229,7 +280,44 @@
 }
 
 .feedOverviewTable s-table {
-  min-inline-size: 760px;
+  min-inline-size: 1080px;
+}
+
+.countryValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.countryFlag {
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 12%);
+}
+
+.variantValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.variantValue svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+
+.openFeedLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.openFeedLabel svg {
+  width: 16px;
+  height: 16px;
 }
 
 .feedOverviewLoading {
@@ -297,6 +385,25 @@
   text-align: end;
 }
 
+.domainLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.domainLink:hover {
+  text-decoration: underline;
+}
+
+.domainLink svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: #005bd3;
+}
+
 .badgeValue {
   display: inline-flex;
   width: 100%;
@@ -355,7 +462,7 @@
 }
 
 @media (max-width: 900px) {
-  .cardGrid {
+  .summaryCards {
     grid-template-columns: minmax(0, 1fr);
   }
 }

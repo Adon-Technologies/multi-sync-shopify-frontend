@@ -189,10 +189,15 @@ it("offers edit only on Additional feeds, saves only Country Code, and shows Ref
   expect(editButtons).toHaveLength(1);
   fireEvent.click(editButtons[0]);
   const modal = container.querySelector("#edit-additional-feed-modal")!;
+  expect(
+    modal
+      .querySelector('s-text-field[label^="Country Code"]')
+      ?.getAttribute("label"),
+  ).toBe("Country Code (Primary Feed Product ID)");
   await waitFor(() =>
     expect(
       modal
-        .querySelector('s-text-field[label="Country Code"]')
+        .querySelector('s-text-field[label^="Country Code"]')
         ?.getAttribute("value"),
     ).toBe("GB"),
   );
@@ -202,7 +207,7 @@ it("offers edit only on Additional feeds, saves only Country Code, and shows Ref
         .querySelector(`s-text-field[label="${label}"]`)
         ?.hasAttribute("readonly"),
     ).toBe(true);
-  await input(modal.querySelector('s-text-field[label="Country Code"]')!, "lb");
+  await input(modal.querySelector('s-text-field[label^="Country Code"]')!, "lb");
   fireEvent.click(screen.getByText("Save", { selector: "s-button" }));
   await waitFor(() =>
     expect(writes).toEqual([
@@ -221,7 +226,7 @@ it("validates edits before sending and keeps the dialog open", async () => {
   const container = await setup();
   fireEvent.click(container.querySelector('s-button[icon="edit"]')!);
   const field = container.querySelector(
-    '#edit-additional-feed-modal s-text-field[label="Country Code"]',
+    '#edit-additional-feed-modal s-text-field[label^="Country Code"]',
   )!;
   await waitFor(() => expect(field.getAttribute("value")).toBe("GB"));
   await input(field, "  ");
@@ -236,9 +241,12 @@ it("each Add Market form snapshots current Configuration and keeps its override"
   fireEvent.click(screen.getByText("+ Add Market"));
   const fields = () =>
     [
-      ...container.querySelectorAll('s-text-field[label="Country Code"]'),
+      ...container.querySelectorAll('s-text-field[label^="Country Code"]'),
     ].filter((field) => !field.closest("s-modal"));
   await waitFor(() => expect(fields()).toHaveLength(1));
+  expect(container.textContent).toContain(
+    "Country Code (Primary Feed Product ID)",
+  );
   expect(fields()[0].getAttribute("value")).toBe("GB");
   await input(fields()[0], "lb");
   country = "US";
@@ -268,7 +276,7 @@ it("Generate feed URL submits the override without replacing the Shopify market 
   );
   fireEvent.click(screen.getByText("French / FR", { selector: "s-button" }));
   const field = [
-    ...container.querySelectorAll('s-text-field[label="Country Code"]'),
+    ...container.querySelectorAll('s-text-field[label^="Country Code"]'),
   ].find((field) => !field.closest("s-modal"))!;
   await input(field, "lb");
   fireEvent.click(
@@ -445,7 +453,7 @@ it("Cancel hides the edit dialog without saving", async () => {
   await waitFor(() =>
     expect(
       modal
-        .querySelector('s-text-field[label="Country Code"]')
+        .querySelector('s-text-field[label^="Country Code"]')
         ?.getAttribute("value"),
     ).toBe("GB"),
   );

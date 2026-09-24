@@ -1237,7 +1237,7 @@ export function ConfigurationsPanel({
                 />
                 <s-text-field
                   error={fieldErrors.countryCode}
-                  label="Country Code"
+                  label="Country Code (Primary Feed Product ID)"
                   maxLength={2}
                   name="countryCode"
                   onInput={(event) =>

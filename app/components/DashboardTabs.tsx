@@ -13,11 +13,13 @@ import {
 import { Await, useLocation, useNavigate } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useQuery } from "@tanstack/react-query";
-import { HiHome } from "react-icons/hi2";
+import { GoPackage } from "react-icons/go";
+import { HiArrowRight, HiArrowTopRightOnSquare, HiHome } from "react-icons/hi2";
 import { IoMdSettings } from "react-icons/io";
 import { MdOutlineCreditCard, MdOutlineSupportAgent } from "react-icons/md";
 import { SiGoogleanalytics } from "react-icons/si";
 import { TbFileTypeXml } from "react-icons/tb";
+import "flag-icons/css/flag-icons.min.css";
 
 import { InlineLoadingValue } from "./DashboardStates";
 import {
@@ -86,6 +88,7 @@ interface DashboardTabsProps {
 
 interface DashboardPanelContentProps extends DashboardTabsProps {
   active: boolean;
+  onOpenDiagnostics: () => void;
   onOpenFeeds: () => void;
 }
 
@@ -103,6 +106,7 @@ interface StoreInformationProps {
 
 interface FeedOverviewProps {
   additional?: AdditionalFeedsResponse;
+  onOpenFeeds: () => void;
   primary?: FeedDataResponse;
   state: SectionState;
 }
@@ -140,6 +144,25 @@ function persistActiveTab(tabId: DashboardTabId, shop?: string) {
 
 function formatCount(value: number) {
   return new Intl.NumberFormat().format(value);
+}
+
+function formatGeneratedDate(value: string | null) {
+  if (!value) return "Never generated";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unavailable";
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function countryFlagClass(countryCode: string | null) {
+  const code = countryCode?.toUpperCase();
+  if (!code || !/^[A-Z]{2}$/.test(code)) return null;
+
+  return `fi fi-${code.toLowerCase()}`;
 }
 
 function StatisticsTable({ statistics, state }: StatisticsTableProps) {
@@ -252,7 +275,22 @@ function StoreInformationCard({
       <dl className={styles.descriptionList}>
         <div className={styles.descriptionRow}>
           <dt>Domain</dt>
-          <dd>{renderValue(store?.domain, "domain", "large")}</dd>
+          <dd>
+            {state === "ready" && store?.domain ? (
+              <a
+                className={styles.domainLink}
+                href={`https://${store.domain}`}
+                rel="noopener noreferrer"
+                target="_blank"
+                title={`Open ${store.domain} in a new tab`}
+              >
+                {store.domain}
+                <HiArrowTopRightOnSquare aria-hidden="true" />
+              </a>
+            ) : (
+              renderValue(store?.domain, "domain", "large")
+            )}
+          </dd>
         </div>
         <div className={styles.descriptionRow}>
           <dt>Primary Market</dt>
@@ -301,7 +339,12 @@ function StoreInformationCard({
   );
 }
 
-function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
+function FeedOverviewCard({
+  additional,
+  onOpenFeeds,
+  primary,
+  state,
+}: FeedOverviewProps) {
   const primaryData = primary?.ok ? primary : null;
   const additionalData = additional?.ok ? additional : null;
   const rows = [
@@ -313,7 +356,12 @@ function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
               primaryData.market?.countryCode ??
               "Not available",
             currency: primaryData.market?.currencyCode || "Not available",
+            flagClass: countryFlagClass(
+              primaryData.market?.countryCode ?? null,
+            ),
+            generatedItems: primaryData.feed.generatedItems,
             id: primaryData.feed.id,
+            lastGenerated: primaryData.feed.lastRefreshedAt,
             language:
               primaryData.market?.languageName ??
               primaryData.market?.locale.toUpperCase() ??
@@ -328,7 +376,10 @@ function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
     ...(additionalData?.feeds.map(({ feed, market }) => ({
       country: market.countryName ?? market.countryCode ?? "Not available",
       currency: market.currencyCode || "Not available",
+      flagClass: countryFlagClass(market.countryCode),
+      generatedItems: feed.generatedItems,
       id: feed.id,
+      lastGenerated: feed.lastRefreshedAt,
       language: market.languageName ?? market.locale.toUpperCase(),
       market: market.name,
       requiresRefresh: feed.requiresRefresh,
@@ -377,18 +428,41 @@ function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
           <div className={styles.feedOverviewTable}>
             <s-table>
               <s-table-header-row>
-                <s-table-header format="base" listSlot="primary">Feed</s-table-header>
-                <s-table-header format="base" listSlot="labeled">Market</s-table-header>
-                <s-table-header format="base" listSlot="labeled">Country</s-table-header>
-                <s-table-header format="base" listSlot="labeled">Language</s-table-header>
-                <s-table-header format="base" listSlot="labeled">Currency</s-table-header>
-                <s-table-header format="base" listSlot="labeled">Status</s-table-header>
+                <s-table-header format="base" listSlot="primary">
+                  Feed
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  Market
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  Country
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  Language
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  Currency
+                </s-table-header>
+                <s-table-header format="numeric" listSlot="labeled">
+                  Variants
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  Last generated
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  Status
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  Actions
+                </s-table-header>
               </s-table-header-row>
               <s-table-body>
                 {rows.map((row) => (
                   <s-table-row key={row.id}>
                     <s-table-cell>
-                      <s-badge tone={row.type === "Primary" ? "critical" : "info"}>
+                      <s-badge
+                        tone={row.type === "Primary" ? "critical" : "info"}
+                      >
                         {row.type}
                       </s-badge>
                     </s-table-cell>
@@ -396,19 +470,56 @@ function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
                       <s-badge tone="neutral">{row.market}</s-badge>
                     </s-table-cell>
                     <s-table-cell>
-                      <s-badge tone="neutral">{row.country}</s-badge>
+                      <s-badge tone="neutral">
+                        <span className={styles.countryValue}>
+                          {row.flagClass ? (
+                            <span
+                              aria-hidden="true"
+                              className={`${row.flagClass} ${styles.countryFlag}`}
+                            />
+                          ) : null}
+                          {row.country}
+                        </span>
+                      </s-badge>
                     </s-table-cell>
                     <s-table-cell>
-                      <s-badge tone="neutral">{row.language}</s-badge>
+                      <s-badge icon="language" tone="neutral">
+                        {row.language}
+                      </s-badge>
                     </s-table-cell>
                     <s-table-cell>
                       <s-badge tone="neutral">{row.currency}</s-badge>
+                    </s-table-cell>
+                    <s-table-cell>
+                      {row.status === "COMPLETED" && row.lastGenerated ? (
+                        <span className={styles.variantValue}>
+                          <GoPackage aria-hidden="true" />
+                          {formatCount(row.generatedItems)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </s-table-cell>
+                    <s-table-cell>
+                      {formatGeneratedDate(row.lastGenerated)}
                     </s-table-cell>
                     <s-table-cell>
                       <FeedStatusBadge
                         requiresRefresh={row.requiresRefresh}
                         status={row.status}
                       />
+                    </s-table-cell>
+                    <s-table-cell>
+                      <s-button
+                        accessibilityLabel={`Open ${row.type.toLowerCase()} ${row.market} ${row.language} feed in Feeds tab`}
+                        onClick={onOpenFeeds}
+                        variant="secondary"
+                      >
+                        <span className={styles.openFeedLabel}>
+                          Open feed
+                          <HiArrowTopRightOnSquare aria-hidden="true" />
+                        </span>
+                      </s-button>
                     </s-table-cell>
                   </s-table-row>
                 ))}
@@ -454,6 +565,7 @@ function DashboardPanelContent({
   statistics,
   storeInformation,
   isRefreshing,
+  onOpenDiagnostics,
   onOpenFeeds,
   onRefresh,
   planSelectionUrl,
@@ -617,88 +729,102 @@ function DashboardPanelContent({
           ) : null}
 
           <div className={styles.cardGrid}>
-            <s-section heading="Products">
-              <s-stack gap="base">
+            <div className={styles.summaryCards}>
+              <s-section accessibilityLabel="Products">
+                <div className={styles.cardHeader}>
+                  <s-heading>Products</s-heading>
+                  <button
+                    className={styles.cardAction}
+                    onClick={onOpenDiagnostics}
+                    type="button"
+                  >
+                    View all products
+                    <HiArrowRight aria-hidden="true" />
+                  </button>
+                </div>
+                <s-stack gap="base">
+                  <DashboardAsyncSection
+                    fallback={<StatisticsTable state="loading" />}
+                  >
+                    <Await
+                      errorElement={
+                        <DashboardSectionResult
+                          failed
+                          onStateChange={setStatisticsFailed}
+                        >
+                          <StatisticsTable state="error" />
+                        </DashboardSectionResult>
+                      }
+                      resolve={statistics}
+                    >
+                      {(loadedStatistics) => (
+                        <DashboardSectionResult
+                          failed={false}
+                          onStateChange={setStatisticsFailed}
+                        >
+                          <StatisticsTable
+                            state="ready"
+                            statistics={loadedStatistics}
+                          />
+                        </DashboardSectionResult>
+                      )}
+                    </Await>
+                  </DashboardAsyncSection>
+                </s-stack>
+              </s-section>
+
+              <s-section heading="Store">
                 <DashboardAsyncSection
-                  fallback={<StatisticsTable state="loading" />}
+                  fallback={
+                    <StoreInformationCard
+                      alertsEmail={
+                        configurationQuery.data?.configuration.alertsEmail
+                      }
+                      alertsEmailState={alertsEmailState}
+                      state="loading"
+                    />
+                  }
                 >
                   <Await
                     errorElement={
                       <DashboardSectionResult
                         failed
-                        onStateChange={setStatisticsFailed}
+                        onStateChange={setStoreInformationFailed}
                       >
-                        <StatisticsTable state="error" />
+                        <StoreInformationCard
+                          alertsEmail={
+                            configurationQuery.data?.configuration.alertsEmail
+                          }
+                          alertsEmailState={alertsEmailState}
+                          state="error"
+                        />
                       </DashboardSectionResult>
                     }
-                    resolve={statistics}
+                    resolve={storeInformation}
                   >
-                    {(loadedStatistics) => (
+                    {(store) => (
                       <DashboardSectionResult
                         failed={false}
-                        onStateChange={setStatisticsFailed}
+                        onStateChange={setStoreInformationFailed}
                       >
-                        <StatisticsTable
+                        <StoreInformationCard
+                          alertsEmail={
+                            configurationQuery.data?.configuration.alertsEmail
+                          }
+                          alertsEmailState={alertsEmailState}
                           state="ready"
-                          statistics={loadedStatistics}
+                          store={store}
                         />
                       </DashboardSectionResult>
                     )}
                   </Await>
                 </DashboardAsyncSection>
-              </s-stack>
-            </s-section>
-
-            <s-section heading="Store">
-              <DashboardAsyncSection
-                fallback={
-                  <StoreInformationCard
-                    alertsEmail={
-                      configurationQuery.data?.configuration.alertsEmail
-                    }
-                    alertsEmailState={alertsEmailState}
-                    state="loading"
-                  />
-                }
-              >
-                <Await
-                  errorElement={
-                    <DashboardSectionResult
-                      failed
-                      onStateChange={setStoreInformationFailed}
-                    >
-                      <StoreInformationCard
-                        alertsEmail={
-                          configurationQuery.data?.configuration.alertsEmail
-                        }
-                        alertsEmailState={alertsEmailState}
-                        state="error"
-                      />
-                    </DashboardSectionResult>
-                  }
-                  resolve={storeInformation}
-                >
-                  {(store) => (
-                    <DashboardSectionResult
-                      failed={false}
-                      onStateChange={setStoreInformationFailed}
-                    >
-                      <StoreInformationCard
-                        alertsEmail={
-                          configurationQuery.data?.configuration.alertsEmail
-                        }
-                        alertsEmailState={alertsEmailState}
-                        state="ready"
-                        store={store}
-                      />
-                    </DashboardSectionResult>
-                  )}
-                </Await>
-              </DashboardAsyncSection>
-            </s-section>
+              </s-section>
+            </div>
 
             <FeedOverviewCard
               additional={additionalFeedsQuery.data}
+              onOpenFeeds={onOpenFeeds}
               primary={primaryFeedQuery.data}
               state={feedOverviewState}
             />
@@ -896,6 +1022,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
             {...props}
             active={activeTab === "dashboard"}
             initialSubscription={subscription}
+            onOpenDiagnostics={() => void selectTab("diagnostics", 2)}
             onOpenFeeds={() => void selectTab("feeds", 1)}
           />
         </div>

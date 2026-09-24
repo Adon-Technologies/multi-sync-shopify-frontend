@@ -88,10 +88,16 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     // Router discards stale loader results after navigation or revalidation.
     storeInformation: subscription?.canUseApp
       ? getStoreInformation(admin, session.shop)
-      : Promise.resolve({ currency: null, domain: session.shop }),
+      : Promise.resolve({
+          currency: null,
+          defaultLanguage: null,
+          domain: session.shop,
+          primaryMarket: null,
+        }),
     statistics: subscription?.canUseApp
       ? getProductStatistics(admin, session.shop)
       : Promise.resolve({
+          draftProducts: 0,
           generatedAt: new Date().toISOString(),
           publishedProducts: 0,
           publishedProductVariants: 0,

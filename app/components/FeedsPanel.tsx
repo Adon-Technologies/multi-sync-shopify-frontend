@@ -114,6 +114,7 @@ function FeedFileDetails({ feed }: { feed: FeedMetadata }) {
         <TbFileTypeXml aria-hidden="true" />
         {formatFileSize(feed.fileSizeBytes) ?? "Size unavailable"}
       </span>
+      <span className={styles.feedFileDetail}>Format: XML</span>
     </span>
   );
 }
@@ -1580,21 +1581,6 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
               Create localized Google feeds for specific Shopify Markets,
               countries, currencies, and languages.
             </s-paragraph>
-            <s-paragraph color="subdued">
-              5 Additional Market feeds included with Pro. Additional feeds are
-              $1.49/month each.
-            </s-paragraph>
-            {additionalUsage && additionalUsage.billableQuantity > 0 ? (
-              <s-paragraph color="subdued">
-                {additionalUsage.additionalFeedCount} used · 5 included ·{" "}
-                {additionalUsage.billableQuantity} billable. Estimated
-                additional usage: $
-                {(additionalUsage.estimatedUsageCents / 100).toFixed(2)}/month;
-                estimated total: $
-                {(additionalUsage.estimatedTotalCents / 100).toFixed(2)}/month.
-                Shopify determines your final bill.
-              </s-paragraph>
-            ) : null}
           </div>
           <s-button
             disabled={

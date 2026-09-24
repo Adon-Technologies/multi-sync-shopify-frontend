@@ -27,6 +27,7 @@ interface ProductVariantCountPage {
 interface InitialStatisticsQuery {
   totalProducts: Count | null;
   publishedProducts: Count | null;
+  draftProducts: Count | null;
   publishedProductPage: ProductVariantCountPage;
 }
 
@@ -38,6 +39,13 @@ interface StoreInformationQuery {
   shop: {
     myshopifyDomain: string | null;
     currencyCode: string | null;
+  } | null;
+  shopLocales: {
+    name: string;
+    primary: boolean;
+  }[];
+  primaryMarket: {
+    name: string;
   } | null;
 }
 
@@ -80,6 +88,7 @@ interface CacheEntry<TValue> {
 export interface ProductStatistics {
   totalProducts: number;
   publishedProducts: number;
+  draftProducts: number;
   publishedProductVariants: number;
   unpublishedProducts: number;
   generatedAt: string;
@@ -87,7 +96,9 @@ export interface ProductStatistics {
 
 export interface StoreInformation {
   domain: string | null;
+  primaryMarket: string | null;
   currency: string | null;
+  defaultLanguage: string | null;
 }
 
 const statisticsCache = new Map<string, CacheEntry<ProductStatistics>>();
@@ -98,6 +109,13 @@ const STORE_INFORMATION_QUERY = `#graphql
     shop {
       myshopifyDomain
       currencyCode
+    }
+    shopLocales {
+      name
+      primary
+    }
+    primaryMarket {
+      name
     }
   }
 `;
@@ -112,6 +130,10 @@ const INITIAL_STATISTICS_QUERY = `#graphql
       limit: null
       query: $publishedQuery
     ) {
+      count
+      precision
+    }
+    draftProducts: productsCount(limit: null, query: "status:draft") {
       count
       precision
     }
@@ -239,10 +261,13 @@ async function fetchStoreInformation(
     STORE_INFORMATION_QUERY,
   );
   const shop = payload.data?.shop;
+  const primaryLocale = payload.data?.shopLocales.find((locale) => locale.primary);
 
   return {
     domain: shop?.myshopifyDomain ?? null,
+    primaryMarket: payload.data?.primaryMarket?.name ?? null,
     currency: shop?.currencyCode ?? null,
+    defaultLanguage: primaryLocale?.name ?? null,
   };
 }
 
@@ -262,6 +287,7 @@ async function fetchProductStatistics(
 
   assertExactCount(initial.totalProducts);
   assertExactCount(initial.publishedProducts);
+  assertExactCount(initial.draftProducts);
 
   let publishedProductVariants = addVariantCounts(initial.publishedProductPage);
   let pageInfo = initial.publishedProductPage.pageInfo;
@@ -298,14 +324,16 @@ async function fetchProductStatistics(
 
   const totalProducts = initial.totalProducts.count;
   const publishedProducts = initial.publishedProducts.count;
+  const draftProducts = initial.draftProducts.count;
 
-  if (publishedProducts > totalProducts) {
+  if (publishedProducts > totalProducts || draftProducts > totalProducts) {
     throw new DashboardDataError();
   }
 
   return {
     totalProducts,
     publishedProducts,
+    draftProducts,
     publishedProductVariants,
     unpublishedProducts: totalProducts - publishedProducts,
     generatedAt: new Date().toISOString(),

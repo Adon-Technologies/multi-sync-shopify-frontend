@@ -155,13 +155,19 @@ it.each([false, true])(
     });
     const recoverable = vi.fn();
     const statistics = {
+      draftProducts: 1,
       generatedAt: "2026-09-18T12:00:00Z",
       totalProducts: 42,
       publishedProducts: 40,
       publishedProductVariants: 45,
       unpublishedProducts: 2,
     };
-    const store = { currency: "USD", domain: "hydration-test.myshopify.com" };
+    const store = {
+      currency: "USD",
+      defaultLanguage: "French",
+      domain: "hydration-test.myshopify.com",
+      primaryMarket: "France",
+    };
     const scope = { shop: store.domain, sessionId: "test-session" };
     const subscription: SubscriptionView = {
       canUseApp: true,
@@ -196,6 +202,11 @@ it.each([false, true])(
       (element) => element.textContent === store.domain,
     );
     expect(originalDomain).toBeTruthy();
+    expect(container.textContent).toContain("Draft products");
+    expect(container.textContent).toContain("Default language");
+    expect(container.textContent).toContain("French");
+    expect(container.textContent).toContain("Primary Market");
+    expect(container.textContent).toContain("France");
     const pendingStatistics = deferred<typeof statistics>();
     const pendingStore = deferred<typeof store>();
     await act(async () => {
@@ -233,11 +244,17 @@ it.each([false, true])(
     // The two loader streams resolve independently; the store still hydrates.
     expect(recoverable).not.toHaveBeenCalled();
     expect(container.contains(originalDomain!)).toBe(true);
+    const draftRow = Array.from(container.querySelectorAll("s-table-row")).find(
+      (row) => row.textContent?.includes("Draft products"),
+    );
+    expect(draftRow?.textContent).toContain("1");
     await act(async () => {
       pendingStore.resolve(store);
     });
     expect(recoverable).not.toHaveBeenCalled();
     expect(container.contains(originalDomain!)).toBe(true);
+    expect(container.textContent).toContain("French");
+    expect(container.textContent).toContain("France");
     if (withStore) {
       expect(container.textContent).toContain("alerts@example.com");
       await act(async () => {

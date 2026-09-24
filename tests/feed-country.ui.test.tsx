@@ -427,12 +427,15 @@ it("uncertain cancellation keeps the explanation and offers the Shopify recovery
   expect(writes).toHaveLength(1);
 });
 
-it("24 Additional feeds show a $28.31 usage estimate and a $38.31 total", async () => {
+it("keeps Additional feeds visible without pricing or usage copy", async () => {
   additionalCount = 24;
-  await setup();
-  expect(
-    screen.getByText(/Estimated additional usage: \$28.31\/month/).textContent,
-  ).toContain("$38.31/month");
+  const container = await setup();
+  expect(screen.getByText("Additional Market feeds", { selector: "s-heading" })).toBeTruthy();
+  expect(screen.getByText(/Create localized Google feeds for specific Shopify Markets/)).toBeTruthy();
+  expect(screen.getByText("Additional feed")).toBeTruthy();
+  expect(container.querySelector('a[href="https://example.com/feed.xml"]')).toBeTruthy();
+  expect(screen.queryByText(/5 Additional Market feeds included with Pro/)).toBeNull();
+  expect(screen.queryByText(/Estimated additional usage:/)).toBeNull();
 });
 
 it("Cancel hides the edit dialog without saving", async () => {

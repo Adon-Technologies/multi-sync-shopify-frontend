@@ -151,6 +151,7 @@ function StatisticsTable({ statistics, state }: StatisticsTableProps) {
       label: "Published product variants",
     },
     { key: "unpublishedProducts", label: "Unpublished products" },
+    { key: "draftProducts", label: "Draft products" },
   ];
 
   return (
@@ -212,7 +213,11 @@ function StoreInformationCard({
   state,
 }: StoreInformationProps) {
   const hasMissingInformation =
-    state === "ready" && (!store?.domain || !store.currency);
+    state === "ready" &&
+    (!store?.domain ||
+      !store.primaryMarket ||
+      !store.currency ||
+      !store.defaultLanguage);
 
   const renderValue = (
     value: string | null | undefined,
@@ -250,6 +255,18 @@ function StoreInformationCard({
           <dd>{renderValue(store?.domain, "domain", "large")}</dd>
         </div>
         <div className={styles.descriptionRow}>
+          <dt>Primary Market</dt>
+          <dd>
+            {state === "ready" && store?.primaryMarket ? (
+              <span className={styles.badgeValue}>
+                <s-badge>{store.primaryMarket}</s-badge>
+              </span>
+            ) : (
+              renderValue(store?.primaryMarket, "primary market", "small")
+            )}
+          </dd>
+        </div>
+        <div className={styles.descriptionRow}>
           <dt>Currency</dt>
           <dd>
             {state === "ready" && store?.currency ? (
@@ -258,6 +275,18 @@ function StoreInformationCard({
               </span>
             ) : (
               renderValue(store?.currency, "currency", "small")
+            )}
+          </dd>
+        </div>
+        <div className={styles.descriptionRow}>
+          <dt>Default language</dt>
+          <dd>
+            {state === "ready" && store?.defaultLanguage ? (
+              <span className={styles.badgeValue}>
+                <s-badge>{store.defaultLanguage}</s-badge>
+              </span>
+            ) : (
+              renderValue(store?.defaultLanguage, "default language", "small")
             )}
           </dd>
         </div>
@@ -358,11 +387,23 @@ function FeedOverviewCard({ additional, primary, state }: FeedOverviewProps) {
               <s-table-body>
                 {rows.map((row) => (
                   <s-table-row key={row.id}>
-                    <s-table-cell><strong>{row.type}</strong></s-table-cell>
-                    <s-table-cell>{row.market}</s-table-cell>
-                    <s-table-cell>{row.country}</s-table-cell>
-                    <s-table-cell>{row.language}</s-table-cell>
-                    <s-table-cell>{row.currency}</s-table-cell>
+                    <s-table-cell>
+                      <s-badge tone={row.type === "Primary" ? "critical" : "info"}>
+                        {row.type}
+                      </s-badge>
+                    </s-table-cell>
+                    <s-table-cell>
+                      <s-badge tone="neutral">{row.market}</s-badge>
+                    </s-table-cell>
+                    <s-table-cell>
+                      <s-badge tone="neutral">{row.country}</s-badge>
+                    </s-table-cell>
+                    <s-table-cell>
+                      <s-badge tone="neutral">{row.language}</s-badge>
+                    </s-table-cell>
+                    <s-table-cell>
+                      <s-badge tone="neutral">{row.currency}</s-badge>
+                    </s-table-cell>
                     <s-table-cell>
                       <FeedStatusBadge
                         requiresRefresh={row.requiresRefresh}
@@ -578,9 +619,6 @@ function DashboardPanelContent({
           <div className={styles.cardGrid}>
             <s-section heading="Products">
               <s-stack gap="base">
-                <s-paragraph color="subdued">
-                  Variants usually become individual Google feed items.
-                </s-paragraph>
                 <DashboardAsyncSection
                   fallback={<StatisticsTable state="loading" />}
                 >
@@ -853,6 +891,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
           role="tabpanel"
           tabIndex={0}
         >
+          {activeTab === "dashboard" ? <PlanReviewBanner /> : null}
           <DashboardPanelContent
             {...props}
             active={activeTab === "dashboard"}
@@ -936,7 +975,10 @@ export function DashboardTabs(props: DashboardTabsProps) {
           tabIndex={0}
         >
           {activeTab === "support" ? (
-            <SupportPanel active scope={props.diagnosticsScope} />
+            <>
+              <PlanReviewBanner />
+              <SupportPanel active scope={props.diagnosticsScope} />
+            </>
           ) : null}
         </div>
 

@@ -27,6 +27,7 @@ import {
   DEFAULT_COLOR_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
   configurationRequiresFeedRefresh,
+  normalizeExcludedTitleAttributes,
   normalizeExcludedProductTags,
   normalizeOptionNames,
   normalizeProductTypes,
@@ -82,6 +83,7 @@ interface StoredConfiguration {
   defaultGender: string | null;
   diagnosticsRevision: string;
   excludedCollections: Prisma.JsonValue;
+  excludedTitleAttributes: string[];
   excludedTitleTerms: string[];
   excludedProductTags: string[];
   productTypes: string[];
@@ -179,6 +181,7 @@ function mapConfiguration(
     excludedCollections: normalizeSelectedCollections(
       configuration.excludedCollections,
     ),
+    excludedTitleAttributes: normalizeExcludedTitleAttributes(configuration.excludedTitleAttributes),
     excludedTitleTerms: configuration.excludedTitleTerms,
     excludedProductTags: normalizeExcludedProductTags(
       configuration.excludedProductTags,
@@ -306,6 +309,7 @@ export async function ensureConfigurationForSession(
         sizeOptions: DEFAULT_SIZE_OPTIONS,
       }),
       excludedCollections: [] as Prisma.InputJsonValue,
+      excludedTitleAttributes: [],
       excludedTitleTerms: [],
       excludedProductTags: [],
       productTypes: [],

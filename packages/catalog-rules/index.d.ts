@@ -34,3 +34,5 @@ export function resolveProductExclusions(
 ): CatalogExclusionReason[];
 
 export function normalizeCountryCode(value: unknown): string | null;
+
+export function normalizeExcludedTitleAttributes(values: unknown): string[];

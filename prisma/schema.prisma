@@ -172,6 +172,7 @@ model Configuration {
   optionMappingsInitialized          Boolean             @default(false)
   excludedCollections                Json
   excludedProductTags                String[]            @default([])
+  excludedTitleAttributes            String[] @default([])
   excludedTitleTerms                 String[]
   productTypes                       String[]            @default([])
   diagnosticsRevision                String              @default("")

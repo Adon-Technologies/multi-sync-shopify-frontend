@@ -116,6 +116,7 @@ function configurationResponse(alertsEmail: string): ConfigurationResponse {
       colorOptions: [],
       sizeOptions: [],
       excludedCollections: [],
+      excludedTitleAttributes: [],
       excludedTitleTerms: [],
       excludedProductTags: [],
       productTypes: [],

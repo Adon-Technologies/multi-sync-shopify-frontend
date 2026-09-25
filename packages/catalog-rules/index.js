@@ -130,3 +130,15 @@ export function normalizeCountryCode(value) {
   const normalized = value.normalize("NFKC").trim().toUpperCase();
   return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
 }
+
+/** Preserve literal merchant text while trimming and deduplicating entries. */
+export function normalizeExcludedTitleAttributes(values) {
+  if (!Array.isArray(values)) return [];
+  const seen = new Set();
+  return values.filter((value) => typeof value === "string").map((value) => value.trim()).filter((value) => {
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}

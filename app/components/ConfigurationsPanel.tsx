@@ -22,6 +22,7 @@ import {
   availableOptionNames,
   ConfigurationValidationError,
   normalizeConfigurationText,
+  normalizeExcludedTitleAttributes,
   normalizeExcludedTitleTerms,
   normalizeExcludedProductTags,
   normalizeOptionNames,
@@ -58,6 +59,7 @@ function configurationForm(
     colorOptions: configuration.colorOptions,
     sizeOptions: configuration.sizeOptions,
     excludedCollections: configuration.excludedCollections,
+    excludedTitleAttributes: configuration.excludedTitleAttributes ?? [],
     excludedTitleTerms: configuration.excludedTitleTerms,
     excludedProductTags: configuration.excludedProductTags ?? [],
     productTypes: configuration.productTypes,
@@ -355,6 +357,7 @@ function OptionNameSelector({
 
 const COLLECTIONS_MODAL_ID = "configuration-excluded-collections";
 const PRODUCT_TAGS_MODAL_ID = "configuration-excluded-product-tags";
+const TITLE_ATTRIBUTES_MODAL_ID = "configuration-excluded-title-attributes";
 const TITLE_TERMS_MODAL_ID = "configuration-excluded-product-titles";
 const PRODUCT_TYPES_MODAL_ID = "configuration-product-types";
 
@@ -945,6 +948,32 @@ function TitleTermsSelector(props: {
   );
 }
 
+export function TitleAttributesSelector(props: {
+  error?: string;
+  onChange: (value: string[]) => void;
+  value: string[];
+}) {
+  return (
+    <TextListSelector
+      accessibilityLabel="Edit excluded title attributes"
+      chipAccessibilityLabel={(value) => `${value}, excluded title attribute`}
+      duplicateError="This title attribute has already been added."
+      emptyLabel="No title attributes selected"
+      fieldLabel="Title attribute"
+      heading="Exclude attributes from title"
+      inputName="excludedTitleAttributeDraft"
+      maxLength={255}
+      modalId={TITLE_ATTRIBUTES_MODAL_ID}
+      normalize={normalizeExcludedTitleAttributes}
+      placeholder="Type a word or phrase and press Enter"
+      summary={(count) =>
+        `${count} title attribute${count === 1 ? "" : "s"} selected`
+      }
+      {...props}
+    />
+  );
+}
+
 function ProductTypesSelector(props: {
   error?: string;
   onChange: (value: string[]) => void;
@@ -1337,6 +1366,25 @@ export function ConfigurationsPanel({
                   error={fieldErrors.excludedTitleTerms}
                   onChange={(value) => updateForm("excludedTitleTerms", value)}
                   value={form?.excludedTitleTerms ?? []}
+                />
+              )}
+            </div>
+
+            <div className={styles.feature}>
+              <FeatureHeading
+                subtitle="Remove words or phrases from XML titles only"
+                title="Exclude attributes from title"
+                viewAccessibilityLabel="View and edit excluded title attributes"
+                viewDisabled={isLoading}
+                viewTarget={TITLE_ATTRIBUTES_MODAL_ID}
+              />
+              {isLoading ? (
+                <ConfigurationSkeleton />
+              ) : (
+                <TitleAttributesSelector
+                  error={fieldErrors.excludedTitleAttributes}
+                  onChange={(value) => updateForm("excludedTitleAttributes", value)}
+                  value={form?.excludedTitleAttributes ?? []}
                 />
               )}
             </div>

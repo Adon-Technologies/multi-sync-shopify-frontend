@@ -1,5 +1,5 @@
-import { normalizeCountryCode, normalizeExcludedProductTags } from "@multi-sync/catalog-rules";
-export { normalizeExcludedProductTags } from "@multi-sync/catalog-rules";
+import { normalizeCountryCode, normalizeExcludedTitleAttributes, normalizeExcludedProductTags } from "@multi-sync/catalog-rules";
+export { normalizeExcludedTitleAttributes, normalizeExcludedProductTags } from "@multi-sync/catalog-rules";
 
 export interface SelectedCollection {
   id: string;
@@ -23,6 +23,7 @@ export interface ConfigurationInput {
   colorOptions: string[];
   sizeOptions: string[];
   excludedCollections: SelectedCollection[];
+  excludedTitleAttributes: string[];
   excludedTitleTerms: string[];
   excludedProductTags: string[];
   productTypes: string[];
@@ -44,6 +45,7 @@ export interface ConfigurationFieldErrors {
   colorOptions?: string;
   sizeOptions?: string;
   excludedCollections?: string;
+  excludedTitleAttributes?: string;
   excludedTitleTerms?: string;
   excludedProductTags?: string;
   productTypes?: string;
@@ -311,6 +313,7 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
   const excludedCollections = normalizeSelectedCollections(
     input.excludedCollections,
   );
+  const excludedTitleAttributes = normalizeExcludedTitleAttributes(input.excludedTitleAttributes);
   const excludedTitleTerms = normalizeExcludedTitleTerms(
     input.excludedTitleTerms,
   );
@@ -417,6 +420,16 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     ) {
       fields.excludedProductTags =
         "Product tags must contain between 1 and 255 characters.";
+    }
+  }
+
+  if (input.excludedTitleAttributes !== undefined && !Array.isArray(input.excludedTitleAttributes)) {
+    fields.excludedTitleAttributes = "Add valid title attributes.";
+  } else if (Array.isArray(input.excludedTitleAttributes)) {
+    if (input.excludedTitleAttributes.length > 100) {
+      fields.excludedTitleAttributes = "Add no more than 100 title attributes.";
+    } else if (input.excludedTitleAttributes.some((value) => typeof value !== "string" || value.trim().length > 255)) {
+      fields.excludedTitleAttributes = "Title attributes must be text of at most 255 characters.";
     }
   }
 
@@ -544,6 +557,7 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
     colorOptions,
     sizeOptions,
     excludedCollections,
+    excludedTitleAttributes,
     excludedTitleTerms,
     excludedProductTags,
     productTypes,

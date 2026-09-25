@@ -784,14 +784,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       ),
     onSuccess: (result, request) => {
       applyAdditionalActionResult(result);
-      const pendingFeedId =
-        (result.ok ? result.entry?.feed.id : null) ?? request.retryFeedId;
+      // The queued feed is now in the table cache; show its status there.
       setAdditionalForms((forms) =>
-        forms.map((form) =>
-          form.id === request.formId
-            ? { ...form, error: null, pendingFeedId }
-            : form,
-        ),
+        forms.filter((form) => form.id !== request.formId),
       );
       setFeedback(null);
       void invalidateFeedQueries();

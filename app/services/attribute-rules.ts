@@ -48,11 +48,11 @@ export const GENDER_RULE_OPTIONS = [
 ] as const;
 
 export const AGE_RULE_OPTIONS = [
-  { label: "Adult", value: "adult" },
-  { label: "Infant", value: "infant" },
-  { label: "Kid", value: "kids" },
-  { label: "Toddler", value: "toddler" },
-  { label: "Newborn", value: "newborn" },
+  { label: "adult", value: "adult" },
+  { label: "infant", value: "infant" },
+  { label: "kids", value: "kids" },
+  { label: "toddler", value: "toddler" },
+  { label: "newborn", value: "newborn" },
 ] as const;
 
 const RULE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;

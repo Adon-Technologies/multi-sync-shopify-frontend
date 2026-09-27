@@ -36,3 +36,5 @@ export function resolveProductExclusions(
 export function normalizeCountryCode(value: unknown): string | null;
 
 export function normalizeExcludedTitleAttributes(values: unknown): string[];
+
+export function normalizeGenderValue(value: unknown): "male" | "female" | "unisex" | null;

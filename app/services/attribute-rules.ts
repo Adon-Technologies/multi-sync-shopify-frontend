@@ -1,3 +1,5 @@
+import { normalizeGenderValue } from "@multi-sync/catalog-rules";
+
 import {
   normalizeConfigurationText,
   normalizeSelectedCollections,
@@ -40,9 +42,9 @@ export type AttributeRulesConfiguration =
   | AgeRulesConfiguration;
 
 export const GENDER_RULE_OPTIONS = [
-  { label: "Men", value: "male" },
-  { label: "Women", value: "female" },
-  { label: "Unisex", value: "unisex" },
+  { label: "male", value: "male" },
+  { label: "female", value: "female" },
+  { label: "unisex", value: "unisex" },
 ] as const;
 
 export const AGE_RULE_OPTIONS = [
@@ -92,6 +94,7 @@ function normalizedRuleValue(
   allowed: ReadonlySet<string>,
   kind: AttributeRuleKind,
 ) {
+  if (kind === "gender") return normalizeGenderValue(value) ?? "";
   const normalized =
     typeof value === "string"
       ? normalizeConfigurationText(value).toLocaleLowerCase()
@@ -277,6 +280,7 @@ export function resolveRuleApplicationValue(
     existingValue ?? "",
   ).toLocaleLowerCase();
   const normalizedExisting =
+    kind === "gender" ? normalizeGenderValue(existing) ?? "" :
     kind === "age" && existing === "kid" ? "kids" : existing;
 
   if (allowed.has(normalizedExisting)) {

@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   AttributeRulesValidationError,
+  GENDER_RULE_OPTIONS,
+  parseStoredGenderRules,
   hasAttributeRuleProductAccess,
   resolveRuleApplicationValue,
   validateAgeRules,
@@ -68,6 +70,8 @@ test("Gender rule values and collections are unique", () => {
         ],
       }),
     AttributeRulesValidationError,
+  GENDER_RULE_OPTIONS,
+  parseStoredGenderRules,
   );
   assert.throws(
     () =>
@@ -217,4 +221,26 @@ test("completely empty draft rules are discarded without changing saved rules", 
       rules: [],
     },
   );
+});
+
+test("Gender choices display the exact canonical XML values", () => {
+  assert.deepEqual(GENDER_RULE_OPTIONS, [
+    {label: "male", value: "male"}, {label: "female", value: "female"}, {label: "unisex", value: "unisex"},
+  ]);
+});
+for (const [legacy, canonical] of [["Men", "male"], ["Women", "female"], ["Unisex", "unisex"]]) {
+  test(`saved ${legacy} rules survive read and save without recreation`, () => {
+    const original = { defaultGender: legacy, rules: [{id: "saved-rule", gender: legacy, collections: [collection(2), collection(1)]}] };
+    const expected = {defaultGender: canonical, rules: [{...original.rules[0], gender: canonical}]};
+    assert.deepEqual(parseStoredGenderRules(original.defaultGender, original.rules), expected);
+    assert.deepEqual(validateGenderRules(original), expected);
+    assert.deepEqual(validateGenderRules(expected), expected);
+    assert.deepEqual(resolveRuleApplicationValue("gender", legacy, "unisex", null), {source: "existing", value: canonical});
+  });
+}
+test("legacy and canonical aliases still cannot create duplicate gender rules", () => {
+  assert.throws(() => validateGenderRules({rules: [
+    {id: "a", gender: "Men", collections: [collection(1)]},
+    {id: "b", gender: "male", collections: [collection(2)]},
+  ]}), /only one rule/);
 });

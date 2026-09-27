@@ -142,3 +142,14 @@ export function normalizeExcludedTitleAttributes(values) {
     return true;
   });
 }
+
+/** Canonical Google gender values, including legacy Gender Rules labels. */
+export function normalizeGenderValue(value) {
+  const normalized = typeof value === "string"
+    ? value.normalize("NFKC").trim().toLowerCase()
+    : "";
+  if (normalized === "men" || normalized === "male") return "male";
+  if (normalized === "women" || normalized === "female") return "female";
+  if (normalized === "unisex") return "unisex";
+  return null;
+}

@@ -1,4 +1,5 @@
 import { normalizeCountryCode } from "@multi-sync/catalog-rules";
+import type { PlanEntitlements } from "../billing/types";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import {
@@ -36,6 +37,8 @@ export interface AdditionalLanguageOption {
 export type AdditionalFeedsResponse =
   | {
       usage?: {
+        plan: "FREE" | "PRO";
+        entitlements: PlanEntitlements;
         additionalFeedCount: number;
         billableQuantity: number;
         estimatedUsageCents: number;

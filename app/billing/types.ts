@@ -7,7 +7,21 @@ export type SubscriptionStatus =
   | "FROZEN"
   | "EXPIRED";
 
+// Entitlement values come from the backend; this is only the response contract.
+export interface PlanEntitlements {
+  plan: "FREE" | "PRO";
+  name: string;
+  monthlyPriceCents: number;
+  includedPrimaryFeeds: number;
+  includedAdditionalFeeds: number;
+  productLimit: number | null;
+  additionalFeedPriceCents: number;
+}
+
 export interface SubscriptionView {
+  plan: "FREE" | "PRO" | null;
+  entitlements: PlanEntitlements | null;
+  availablePlans: PlanEntitlements[];
   billingPeriod: string | null;
   cancelAtEndOfCycle: boolean;
   canUseApp: boolean;
@@ -63,7 +77,6 @@ export function remainingTrialMessage(value: RemainingTrialTime) {
   if (value.kind === "expired") {
     return "Your free trial is being refreshed.";
   }
-  const unit =
-    value.value === 1 ? value.kind.slice(0, -1) : value.kind;
+  const unit = value.value === 1 ? value.kind.slice(0, -1) : value.kind;
   return `You have ${value.value} ${unit} remaining in your free trial.`;
 }

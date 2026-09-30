@@ -45,6 +45,7 @@ const metadata = {
 let country = "GB";
 let savedFeed = { ...metadata };
 let additionalCount = 1;
+let currentPlan: "FREE" | "PRO" = "PRO";
 let requiresRenewal = false;
 let billingFailure = false;
 let renewalFailure = false;
@@ -58,6 +59,7 @@ beforeEach(() => {
   country = "GB";
   savedFeed = { ...metadata };
   additionalCount = 1;
+  currentPlan = "PRO";
   requiresRenewal = false;
   billingFailure = false;
   renewalFailure = false;
@@ -131,6 +133,16 @@ beforeEach(() => {
           backendUnavailable: false,
           feeds: [{ feed: savedFeed, market }],
           usage: {
+            plan: currentPlan,
+            entitlements: {
+              plan: currentPlan,
+              name: currentPlan === "FREE" ? "Free" : "Pro",
+              monthlyPriceCents: currentPlan === "FREE" ? 0 : 1000,
+              includedPrimaryFeeds: 1,
+              includedAdditionalFeeds: currentPlan === "FREE" ? 1 : 5,
+              productLimit: currentPlan === "FREE" ? 10 : null,
+              additionalFeedPriceCents: 149,
+            },
             additionalFeedCount: additionalCount,
             billableQuantity: Math.max(0, additionalCount - 5),
             estimatedUsageCents: Math.max(0, additionalCount - 5) * 149,
@@ -207,7 +219,10 @@ it("offers edit only on Additional feeds, saves only Country Code, and shows Ref
         .querySelector(`s-text-field[label="${label}"]`)
         ?.hasAttribute("readonly"),
     ).toBe(true);
-  await input(modal.querySelector('s-text-field[label^="Country Code"]')!, "lb");
+  await input(
+    modal.querySelector('s-text-field[label^="Country Code"]')!,
+    "lb",
+  );
   fireEvent.click(screen.getByText("Save", { selector: "s-button" }));
   await waitFor(() =>
     expect(writes).toEqual([
@@ -346,8 +361,8 @@ it("the sixth Additional feed requires a priced confirmation and cancel sends no
   await waitFor(() => expect(writes[0]?.paidFeedConfirmed).toBe(true));
 });
 
-async function openPaidFeedForm() {
-  additionalCount = 5;
+async function openPaidFeedForm(count = 5) {
+  additionalCount = count;
   const container = await setup();
   const renewalModal = container.querySelector(
     "#additional-feed-renewal-modal",
@@ -438,11 +453,21 @@ it("uncertain cancellation keeps the explanation and offers the Shopify recovery
 it("keeps Additional feeds visible without pricing or usage copy", async () => {
   additionalCount = 24;
   const container = await setup();
-  expect(screen.getByText("Additional Market feeds", { selector: "s-heading" })).toBeTruthy();
-  expect(screen.getByText(/Create localized Google feeds for specific Shopify Markets/)).toBeTruthy();
+  expect(
+    screen.getByText("Additional Market feeds", { selector: "s-heading" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByText(
+      /Create localized Google feeds for specific Shopify Markets/,
+    ),
+  ).toBeTruthy();
   expect(screen.getByText("Additional feed")).toBeTruthy();
-  expect(container.querySelector('a[href="https://example.com/feed.xml"]')).toBeTruthy();
-  expect(screen.queryByText(/5 Additional Market feeds included with Pro/)).toBeNull();
+  expect(
+    container.querySelector('a[href="https://example.com/feed.xml"]'),
+  ).toBeTruthy();
+  expect(
+    screen.queryByText(/5 Additional Market feeds included with Pro/),
+  ).toBeNull();
   expect(screen.queryByText(/Estimated additional usage:/)).toBeNull();
 });
 
@@ -471,4 +496,23 @@ it("Cancel hides the edit dialog without saving", async () => {
       .querySelector('s-button[slot="primary-action"]')
       ?.getAttribute("disabled"),
   ).toBe("true");
+});
+
+it("Free second Additional feed uses its backend allowance and requires explicit charge consent", async () => {
+  currentPlan = "FREE";
+  const { container, showPaid, showRenewal } = await openPaidFeedForm(1);
+  await waitFor(() => expect(showPaid).toHaveBeenCalledOnce());
+  expect(showRenewal).not.toHaveBeenCalled();
+  const modal = container.querySelector("#paid-additional-feed-modal")!;
+  expect(modal.textContent).toContain(
+    "Your Free plan includes 1 Additional Market feed",
+  );
+  expect(container.textContent).toContain(
+    "Each feed includes up to 10 eligible products",
+  );
+  expect(writes).toEqual([]);
+  fireEvent.click(
+    screen.getByText("Add feed for $1.49/month", { selector: "s-button" }),
+  );
+  await waitFor(() => expect(writes[0]?.paidFeedConfirmed).toBe(true));
 });

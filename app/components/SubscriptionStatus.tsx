@@ -282,23 +282,35 @@ export function SubscriptionPanel({
       {!query.data.canUseApp ? (
         <InactivePlanBanner planSelectionUrl={planSelectionUrl} />
       ) : null}
-      <s-section heading="Subscription">
-        <s-paragraph>Pro: $10/month with a 7 day free trial.</s-paragraph>
-        <s-paragraph color="subdued">
-          Includes 1 Primary Feed and 5 Additional Market feeds (6 total).
-          Additional Market feeds beyond the included 5 are $1.49/month each,
-          billed through Shopify.
-        </s-paragraph>
-        <dl className={styles.descriptionList}>
-          <div className={styles.descriptionRow}>
+      <section
+        className={styles.planSummary}
+        aria-labelledby="subscription-heading"
+      >
+        <h2 id="subscription-heading" className={styles.planSectionHeading}>
+          Subscription
+        </h2>
+        <dl className={styles.subscriptionDetails}>
+          <div>
             <dt>Status</dt>
             <dd>{statusLabel}</dd>
           </div>
-          <div className={styles.descriptionRow}>
+          <div>
             <dt>Plan</dt>
-            <dd>{query.data.planHandle ?? "Unavailable"}</dd>
+            <dd>{query.data.entitlements?.name ?? "Unavailable"}</dd>
           </div>
-          <div className={styles.descriptionRow}>
+          {query.data.entitlements ? (
+            <>
+              <div>
+                <dt>Products per feed</dt>
+                <dd>{query.data.entitlements.productLimit ?? "Unlimited"}</dd>
+              </div>
+              <div>
+                <dt>Included Additional feeds</dt>
+                <dd>{query.data.entitlements.includedAdditionalFeeds}</dd>
+              </div>
+            </>
+          ) : null}
+          <div>
             <dt>Billing period</dt>
             <dd>
               {query.data.billingPeriod === "EVERY_30_DAYS"
@@ -309,13 +321,13 @@ export function SubscriptionPanel({
             </dd>
           </div>
           {query.data.trialEndsAt ? (
-            <div className={styles.descriptionRow}>
+            <div>
               <dt>Trial ends</dt>
               <dd>{formatSubscriptionDate(query.data.trialEndsAt)}</dd>
             </div>
           ) : null}
           {query.data.currentBillingCycleEnd ? (
-            <div className={styles.descriptionRow}>
+            <div>
               <dt>
                 {query.data.cancelAtEndOfCycle ? "Active until" : "Renews on"}
               </dt>
@@ -325,35 +337,113 @@ export function SubscriptionPanel({
             </div>
           ) : null}
         </dl>
-        {query.data.cancelAtEndOfCycle ? (
-          <s-banner heading="Cancellation scheduled" tone="warning">
-            Your paid access remains active
-            {cycleEnd ? ` until ${formatSubscriptionDate(cycleEnd)}` : ""}. You
-            do not need to subscribe again before then. Billing will not renew
-            automatically.
-          </s-banner>
-        ) : null}
-        {cancellation.isError ? (
-          <s-banner heading="Cancellation failed" tone="critical">
-            {cancellation.error.message}
-          </s-banner>
-        ) : null}
-        {canCancel && cycleEnd ? (
-          <s-button
-            command="--show"
-            commandFor={CANCEL_SUBSCRIPTION_MODAL_ID}
-            disabled={cancellation.isPending ? true : undefined}
-            tone="critical"
-            variant="secondary"
-          >
-            Cancel subscription
-          </s-button>
-        ) : query.data.cancelAtEndOfCycle && cycleEnd ? (
-          <s-button disabled variant="secondary">
-            Access active until {formatSubscriptionDate(cycleEnd)}
-          </s-button>
-        ) : null}
-      </s-section>
+        <div className={styles.subscriptionActions}>
+          {query.data.cancelAtEndOfCycle ? (
+            <s-banner heading="Cancellation scheduled" tone="warning">
+              Your paid access remains active
+              {cycleEnd ? ` until ${formatSubscriptionDate(cycleEnd)}` : ""}.
+              You do not need to subscribe again before then. Billing will not
+              renew automatically.
+            </s-banner>
+          ) : null}
+          {cancellation.isError ? (
+            <s-banner heading="Cancellation failed" tone="critical">
+              {cancellation.error.message}
+            </s-banner>
+          ) : null}
+          {canCancel && cycleEnd ? (
+            <s-button
+              command="--show"
+              commandFor={CANCEL_SUBSCRIPTION_MODAL_ID}
+              disabled={cancellation.isPending ? true : undefined}
+              tone="critical"
+              variant="secondary"
+            >
+              Cancel subscription
+            </s-button>
+          ) : query.data.cancelAtEndOfCycle && cycleEnd ? (
+            <s-button disabled variant="secondary">
+              Access active until {formatSubscriptionDate(cycleEnd)}
+            </s-button>
+          ) : null}
+        </div>
+      </section>
+      {query.data.availablePlans?.length ? (
+        <section
+          className={styles.planComparison}
+          aria-labelledby="compare-plans-heading"
+        >
+          <div className={styles.planComparisonHeader}>
+            <h2
+              id="compare-plans-heading"
+              className={styles.planSectionHeading}
+            >
+              Compare plans
+            </h2>
+            <p>Choose the right fit for your product catalog.</p>
+          </div>
+          <div className={styles.planGrid}>
+            {query.data.availablePlans.map((plan) => {
+              const isCurrent =
+                query.data.plan === plan.plan && query.data.canUseApp;
+              return (
+                <article
+                  key={plan.plan}
+                  className={`${styles.planOption} ${isCurrent ? styles.planOptionCurrent : ""}`}
+                  aria-labelledby={`plan-${plan.plan}-heading`}
+                >
+                  <div className={styles.planOptionHeader}>
+                    <h3 id={`plan-${plan.plan}-heading`}>{plan.name}</h3>
+                    {isCurrent ? (
+                      <s-badge tone="success">Current plan</s-badge>
+                    ) : null}
+                  </div>
+                  <p className={styles.planPrice}>
+                    <span>${plan.monthlyPriceCents / 100}</span>
+                    <span>/month</span>
+                  </p>
+                  <ul className={styles.planFeatures}>
+                    <li>{plan.includedPrimaryFeeds} Primary Feed included</li>
+                    <li>
+                      {plan.includedAdditionalFeeds} Additional Market{" "}
+                      {plan.includedAdditionalFeeds === 1 ? "feed" : "feeds"}{" "}
+                      included
+                    </li>
+                    <li>
+                      {plan.productLimit === null
+                        ? "Unlimited products and variants"
+                        : `Up to ${plan.productLimit} products per feed, including their eligible variants`}
+                    </li>
+                  </ul>
+                  <div className={styles.planOptionFooter}>
+                    <p>
+                      Additional feeds:{" "}
+                      <strong>
+                        ${(plan.additionalFeedPriceCents / 100).toFixed(2)}
+                        /month each
+                      </strong>
+                      <span>Billed through Shopify.</span>
+                    </p>
+                    {isCurrent ? (
+                      <s-button disabled variant="secondary">
+                        Selected plan
+                      </s-button>
+                    ) : planSelectionUrl ? (
+                      <s-button
+                        href={planSelectionUrl}
+                        target="_top"
+                        variant="primary"
+                      >
+                        Choose {plan.name} on Shopify
+                      </s-button>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
       {canCancel && cycleEnd ? (
         <CancelSubscriptionModal
           billingCycleEnd={cycleEnd}

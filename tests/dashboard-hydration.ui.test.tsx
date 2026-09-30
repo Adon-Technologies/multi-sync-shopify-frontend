@@ -171,6 +171,17 @@ it.each([false, true])(
     };
     const scope = { shop: store.domain, sessionId: "test-session" };
     const subscription: SubscriptionView = {
+      plan: "PRO",
+      entitlements: {
+        plan: "PRO",
+        name: "Pro",
+        monthlyPriceCents: 1000,
+        includedPrimaryFeeds: 1,
+        includedAdditionalFeeds: 5,
+        productLimit: null,
+        additionalFeedPriceCents: 149,
+      },
+      availablePlans: [],
       canUseApp: true,
       status: "ACTIVE",
       billingPeriod: "Monthly",

@@ -956,7 +956,10 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       ({ feed: candidate }) =>
         candidate.lastRefreshedAt && candidate.gcsObjectName,
     ).length;
-  const nextAdditionalIsPaid = additionalCount >= 5;
+  const entitlements = additionalUsage?.entitlements;
+  const nextAdditionalIsPaid = Boolean(
+    entitlements && additionalCount >= entitlements.includedAdditionalFeeds,
+  );
   const feedRefreshRequired = Boolean(
     feed?.requiresRefresh ||
     additionalFeeds.some(({ feed: candidate }) => candidate.requiresRefresh),
@@ -1595,6 +1598,16 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           </s-button>
         </div>
 
+        {entitlements ? (
+          <s-paragraph color="subdued">
+            Includes {entitlements.includedAdditionalFeeds} Additional Market{" "}
+            {entitlements.includedAdditionalFeeds === 1 ? "feed" : "feeds"}.
+            Additional feeds are ${(entitlements.additionalFeedPriceCents / 100).toFixed(2)}/month each.
+            {entitlements.productLimit !== null
+              ? ` Each feed includes up to ${entitlements.productLimit} eligible products and their eligible variants.`
+              : " Products and variants are unlimited."}
+          </s-paragraph>
+        ) : null}
         {additionalUsage?.message ? (
           <s-banner
             tone={additionalUsage.status === "TRIAL" ? "info" : "warning"}
@@ -1971,7 +1984,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
         ref={paidFeedModalRef}
       >
         <s-paragraph>
-          Your Pro plan includes 5 Additional Market feeds. This feed will add
+          Your {entitlements?.name} plan includes{" "}
+          {entitlements?.includedAdditionalFeeds} Additional Market{" "}
+          {entitlements?.includedAdditionalFeeds === 1 ? "feed" : "feeds"}. This feed will add
           $1.49/month in usage charges to your Shopify app bill.
         </s-paragraph>
         <s-button
@@ -2009,13 +2024,13 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
         <s-stack direction="block" gap="base">
           <s-paragraph>
             Your current subscription does not include paid Additional Market
-            feeds. To add more than the 5 included Additional feeds, cancel your
-            current subscription and resubscribe to the updated Pro plan on
-            Shopify.
+            feeds. To add more than your {entitlements?.includedAdditionalFeeds}{" "}
+            included Additional feeds, cancel your current subscription and
+            select a plan with usage billing on Shopify.
           </s-paragraph>
           <s-paragraph>
-            The updated plan is $10/month plus $1.49/month for each Additional
-            feed beyond the included 5. Cancellation takes effect immediately.
+            Additional feeds beyond your selected plan&apos;s allowance cost
+            $1.49/month each. Cancellation takes effect immediately.
             Access to subscription features pauses until you approve the
             replacement plan. Shopify determines any charges and credits; review
             the billing terms before approving. A new free trial is not
@@ -2027,7 +2042,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           {renewalComplete ? (
             <s-paragraph>
               Your previous subscription has ended. Continue on Shopify to
-              select and approve the updated Pro plan, then return to Feeds.
+              select and approve your plan, then return to Feeds.
             </s-paragraph>
           ) : null}
           {renewalTarget && (renewalError || renewalComplete) ? (

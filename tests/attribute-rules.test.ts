@@ -70,8 +70,6 @@ test("Gender rule values and collections are unique", () => {
         ],
       }),
     AttributeRulesValidationError,
-  GENDER_RULE_OPTIONS,
-  parseStoredGenderRules,
   );
   assert.throws(
     () =>

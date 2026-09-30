@@ -146,6 +146,11 @@
   margin-bottom: 16px;
 }
 
+.feedLimitNotice {
+  flex: 0 0 auto;
+  padding: 16px clamp(16px, 2.75vw, 46px) 0;
+}
+
 .subscriptionBanner {
   margin-bottom: 16px;
 }

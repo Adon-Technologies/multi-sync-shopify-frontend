@@ -193,7 +193,7 @@ test("additional generation forms show the pending feed product progress", () =>
 
   assert.match(
     panelSource,
-    /progress=\{\s*pendingEntry\s*\?\s*generationProgress\(pendingEntry\.feed\)/,
+    /progress=\{\s*pendingEntry\s*\?\s*generationProgress\(\s*pendingEntry\.feed,\s*entitlements\?\.productLimit,?\s*\)/,
   );
   assert.match(panelSource, /\{progress \? ` \(\$\{progress\}\)` : ""\}/);
 });

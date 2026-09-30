@@ -32,6 +32,7 @@ import {
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { ConfigurationsPanel } from "./ConfigurationsPanel";
 import { FeedsPanel } from "./FeedsPanel";
+import { FreePlanFeedLimitBanner } from "./FreePlanFeedLimitBanner";
 import { FeedStatusBadge } from "./FeedStatusBadge";
 import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 import { SupportPanel } from "./SupportPanel";
@@ -1008,6 +1009,15 @@ export function DashboardTabs(props: DashboardTabsProps) {
             style={tabIndicatorStyle}
           />
         </div>
+
+        {props.feedScope ? (
+          <FreePlanFeedLimitBanner
+            active={activeTab === "dashboard" || activeTab === "feeds"}
+            scope={props.feedScope}
+            statistics={props.statistics}
+            subscription={subscription}
+          />
+        ) : null}
 
         <div
           aria-labelledby="tab-dashboard"

@@ -48,7 +48,10 @@ import {
   type FeedQueryScope,
 } from "../services/feed-query";
 import { useHydrated } from "../hooks/useHydrated";
-import { shouldPollPrimaryFeed } from "../services/feed-generation-state";
+import {
+  formatFeedGenerationProgress as generationProgress,
+  shouldPollPrimaryFeed,
+} from "../services/feed-generation-state";
 import styles from "../styles/feeds.module.css";
 import { AutomaticRefreshCard } from "./AutomaticRefreshCard";
 import { FeedStatusBadge } from "./FeedStatusBadge";
@@ -155,22 +158,6 @@ function LoadingRow() {
       </s-table-cell>
     </s-table-row>
   );
-}
-
-function generationProgress(feed: FeedMetadata) {
-  if (feed.status === "QUEUED") {
-    return "Waiting for the feed worker";
-  }
-  if (feed.status !== "PROCESSING") {
-    return null;
-  }
-  if (feed.totalProducts && feed.totalProducts > 0) {
-    return `${new Intl.NumberFormat().format(feed.processedProducts)} of ${new Intl.NumberFormat().format(feed.totalProducts)} products`;
-  }
-
-  return feed.processedProducts > 0
-    ? `${new Intl.NumberFormat().format(feed.processedProducts)} products processed`
-    : "Preparing catalog";
 }
 
 interface AdditionalMarketFormProps {
@@ -1003,7 +990,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     additionalFeeds.some(({ feed: candidate }) =>
       Boolean(candidate.gcsObjectName && candidate.lastRefreshedAt),
     );
-  const progress = feed ? generationProgress(feed) : null;
+  const progress = feed
+    ? generationProgress(feed, entitlements?.productLimit)
+    : null;
 
   useEffect(() => {
     setAdditionalForms((forms) =>
@@ -1681,7 +1670,10 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                   const candidateReady = Boolean(
                     candidate.gcsObjectName && candidate.lastRefreshedAt,
                   );
-                  const candidateProgress = generationProgress(candidate);
+                  const candidateProgress = generationProgress(
+                    candidate,
+                    entitlements?.productLimit,
+                  );
 
                   return (
                     <s-table-row key={candidate.id}>
@@ -1948,7 +1940,12 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                     : []
                 }
                 progress={
-                  pendingEntry ? generationProgress(pendingEntry.feed) : null
+                  pendingEntry
+                    ? generationProgress(
+                        pendingEntry.feed,
+                        entitlements?.productLimit,
+                      )
+                    : null
                 }
                 onGenerate={(form) => generateAdditional(form)}
                 onRemove={(formId) =>

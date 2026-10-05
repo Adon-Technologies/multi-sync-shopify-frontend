@@ -10,7 +10,9 @@ const api = vi.hoisted(() => ({
   summaryReads: vi.fn(),
   pageReads: vi.fn(),
   refreshed: false,
+  preview: vi.fn(),
 }));
+vi.mock("../app/services/feed-preview", () => ({ requestProductFeedPreview: api.preview }));
 vi.mock("@shopify/app-bridge-react", () => ({
   useAppBridge: () => ({ toast: { show: api.toast } }),
 }));
@@ -186,6 +188,20 @@ function choose(modal: Element, value: string) {
   ].find((button) => button.textContent?.trim() === value)!;
   fireEvent.click(option);
 }
+it("Feed Preview follows Product type, opens immediately and requests only the clicked parent", async () => {
+  api.preview.mockResolvedValue({ ok: true, productId: "gid://shopify/Product/2", productTitle: "Product 2", feedType: "PRIMARY", status: "included", xml: "<rss><item>Variant</item></rss>", itemCount: 1, message: null });
+  const ui = setup();
+  const headings = [...ui.container.querySelectorAll("thead th")].map(cell => cell.textContent?.trim());
+  expect(headings.indexOf("Feed Preview")).toBe(headings.indexOf("Product type") + 1);
+  const buttons = [...ui.container.querySelectorAll("tbody s-button")].filter(button => button.textContent === "Preview XML");
+  expect(buttons).toHaveLength(3); expect(api.preview).not.toHaveBeenCalled();
+  fireEvent.click(buttons[1]);
+  expect((ui.container.querySelector("#diagnostics-xml-preview") as unknown as { showOverlay: ReturnType<typeof vi.fn> }).showOverlay).toHaveBeenCalled();
+  await waitFor(() => expect(api.preview).toHaveBeenCalledExactlyOnceWith("gid://shopify/Product/2", expect.any(AbortSignal)));
+  expect(api.request).not.toHaveBeenCalled();
+  expect(api.summaryReads).not.toHaveBeenCalled(); expect(api.pageReads).not.toHaveBeenCalled();
+  ui.client.clear();
+});
 for (const [kind, title, values] of [
   ["gender", "Gender", ["male", "female", "unisex"]],
   ["ageGroup", "Age Group", ["adult", "infant", "kids", "toddler", "newborn"]],

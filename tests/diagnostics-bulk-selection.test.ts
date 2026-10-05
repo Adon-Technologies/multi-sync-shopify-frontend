@@ -199,8 +199,8 @@ test("Diagnostics UI keeps normal headers and provides the Polaris bulk workflow
   assert.match(styles, /\.statusImage[\s\S]*width: 20px;[\s\S]*height: 20px;/);
   assert.match(source, /<img alt="Google" src="\/google-icon\.png" \/>/);
   assert.doesNotMatch(source, /SLVD_Navy\.png|time\.png|styles\.slvd/);
-  assert.match(source, /<th colSpan=\{4\} scope="col">/);
-  assert.match(source, /className=\{styles\.emptyCell\} colSpan=\{5\}/);
+  assert.match(source, /<th colSpan=\{5\} scope="col">/);
+  assert.match(source, /className=\{styles\.emptyCell\} colSpan=\{6\}/);
   assert.doesNotMatch(styles, /\.slvdColumn|\.slvdHeader|\.slvdCell|\.slvdTimeImage/);
   assert.match(source, /CollectionFilterPicker/);
   assert.match(source, /Search store collections/);

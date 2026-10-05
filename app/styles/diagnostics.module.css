@@ -416,7 +416,7 @@
 
 .diagnosticsTable {
   width: 100%;
-  min-width: 1050px;
+  min-width: 1170px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
@@ -439,23 +439,44 @@
 }
 
 .productColumn {
-  width: 27%;
+  width: 26%;
 }
 
 .categoryColumn {
-  width: 21%;
+  width: 18%;
 }
 
 .productTypeColumn {
-  width: 14%;
+  width: 12%;
+}
+
+.previewColumn { width: 12%; }
+
+.previewCell s-button {
+  display: inline-block;
+  zoom: 0.875;
+  white-space: nowrap;
+}
+
+.xmlPreview {
+  max-height: min(60vh, 480px);
+  margin: 0;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid #e3e3e3;
+  border-radius: 8px;
+  background: #f7f7f7;
+  color: #303030;
+  font: 12px/1.6 ui-monospace, Consolas, monospace;
+  white-space: pre;
 }
 
 .statusColumn {
-  width: 7%;
+  width: 5%;
 }
 
 .errorColumn {
-  width: 31%;
+  width: 27%;
 }
 
 .diagnosticsTable td {

@@ -8,6 +8,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { ProductFeedPreviewModal, type PreviewTarget } from "./ProductFeedPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { VscCircleSlash } from "react-icons/vsc";
 
@@ -248,6 +249,7 @@ interface DiagnosticsTableProps {
   searchTerm: string;
   totalProducts?: number;
   onOpenBulkEdit: (target: DiagnosticsBulkEditTarget) => void;
+  onPreviewProduct: (target: PreviewTarget) => void;
   onNext: () => void;
   onPageSizeChange: (pageSize: DiagnosticsPageSize) => void;
   onPrevious: () => void;
@@ -1059,6 +1061,7 @@ function SkeletonRows() {
           <td>
             <span className={styles.skeletonCategory} />
           </td>
+          <td><span className={styles.skeletonCategory} /></td>
           <td className={styles.statusCell}>
             <span className={styles.skeletonStatus} />
           </td>
@@ -1086,6 +1089,7 @@ function DiagnosticsTable({
   searchTerm,
   totalProducts,
   onOpenBulkEdit,
+  onPreviewProduct,
   onNext,
   onPageSizeChange,
   onPrevious,
@@ -1132,6 +1136,7 @@ function DiagnosticsTable({
             <col className={styles.productColumn} />
             <col className={styles.categoryColumn} />
             <col className={styles.productTypeColumn} />
+            <col className={styles.previewColumn} />
             <col className={styles.statusColumn} />
             <col className={styles.errorColumn} />
           </colgroup>
@@ -1173,7 +1178,7 @@ function DiagnosticsTable({
                 </div>
               </th>
               {bulkMode ? (
-                <th colSpan={4} scope="col">
+                <th colSpan={5} scope="col">
                   <div className={styles.bulkHeaderActions}>
                     <s-button
                       accessibilityLabel="Bulk edit selected products"
@@ -1236,6 +1241,7 @@ function DiagnosticsTable({
                     </span>
                   </th>
                   <th scope="col">Product type</th>
+                  <th scope="col">Feed Preview</th>
                   <th className={styles.googleHeader} scope="col">
                     <img alt="Google" src="/google-icon.png" />
                   </th>
@@ -1264,13 +1270,13 @@ function DiagnosticsTable({
               <SkeletonRows />
             ) : error && products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={5}>
+                <td className={styles.emptyCell} colSpan={6}>
                   {error}
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={5}>
+                <td className={styles.emptyCell} colSpan={6}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -1325,6 +1331,11 @@ function DiagnosticsTable({
                     >
                       {product.productType || "—"}
                     </span>
+                  </td>
+                  <td className={styles.previewCell}>
+                    <s-button variant="primary" accessibilityLabel={`Preview XML for ${product.title || "untitled product"}`} onClick={() => onPreviewProduct({ id: product.id, title: product.title || "Untitled product" })}>
+                      Preview XML
+                    </s-button>
                   </td>
                   <td className={styles.statusCell}>
                     <StatusIcon status={product.status} />
@@ -1417,6 +1428,8 @@ export function DiagnosticsPanel({
   scope,
 }: DiagnosticsPanelProps) {
   const shopify = useAppBridge();
+  const [previewTarget, setPreviewTarget] = useState<PreviewTarget | null>(null);
+  useEffect(() => { if (!active) setPreviewTarget(null); }, [active]);
   const queryClient = useQueryClient();
   const queryScope = scope ?? {
     shop: "pending-shop",
@@ -2454,6 +2467,7 @@ export function DiagnosticsPanel({
             isLoading={pageLoading}
             isRefreshing={isRefreshing}
             onOpenBulkEdit={openBulkEditModal}
+            onPreviewProduct={setPreviewTarget}
             onNext={loadNext}
             onPageSizeChange={changePageSize}
             onPrevious={loadPrevious}
@@ -2471,6 +2485,8 @@ export function DiagnosticsPanel({
           />
         </div>
       </div>
+
+      <ProductFeedPreviewModal target={previewTarget} onClose={() => setPreviewTarget(null)} />
 
       <s-modal
         accessibilityLabel={`Assign ${bulkEditField} to selected products`}

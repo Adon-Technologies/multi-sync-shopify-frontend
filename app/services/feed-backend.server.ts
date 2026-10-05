@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 
 import { upsertInstalledStore } from "./store.server";
+import prisma from "../db.server";
 
 const backendBaseUrl = (
   process.env.MULTI_SYNC_BACKEND_URL || "http://127.0.0.1:3000"
@@ -44,10 +45,13 @@ export async function requestFeedBackend<TResponse>(
   method: "DELETE" | "GET" | "POST",
   pathname: string,
   input?: unknown,
+  options: { readOnlyStore?: boolean; signal?: AbortSignal } = {},
 ) {
-  const store = await upsertInstalledStore(session);
+  const store = options.readOnlyStore
+    ? await prisma.store.findUnique({ where: { shopDomain: session.shop }, select: { shopDomain: true, accessToken: true } })
+    : await upsertInstalledStore(session);
 
-  if (!session.accessToken || !store.accessToken) {
+  if (!session.accessToken || !store?.accessToken) {
     throw new FeedBackendError(
       "Shopify authentication needs to be renewed. Reopen the app and try again.",
       401,
@@ -85,8 +89,10 @@ export async function requestFeedBackend<TResponse>(
         "x-multi-sync-timestamp": timestamp,
       },
       ...(body ? { body } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
     });
   } catch {
+    if (options.signal?.aborted) throw new FeedBackendError("XML preview timed out. Close the dialog and try again.", 504);
     throw new FeedBackendError(
       "The feed service is unavailable. Make sure the backend is running and try again.",
     );

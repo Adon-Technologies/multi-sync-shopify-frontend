@@ -2,31 +2,44 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import { AppProvider, Banner, BlockStack, Box, Icon, InlineStack, Text } from "@shopify/polaris";
 import { StarFilledIcon, StarIcon } from "@shopify/polaris-icons";
 import enTranslations from "@shopify/polaris/locales/en.json";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { requestShopifyReview } from "../services/shopify-reviews";
+import { SHOPIFY_APP_STORE_URL, recordShopifyReviewClick, reviewClickKey, reviewClickQueryOptions } from "../services/shopify-reviews";
 import styles from "../styles/reviews.module.css";
 
-export function PlanReviewBanner() {
+export function PlanReviewBanner({ shop }: { shop: string | null }) {
   const [reviewSelection, setReviewSelection] = useState(0);
-  const [requestingReview, setRequestingReview] = useState(false);
   const [reviewNotice, setReviewNotice] = useState("");
   const reviewPending = useRef(false);
-  async function requestReview(value: number) {
-    if (reviewPending.current) return;
+  const queryClient = useQueryClient();
+  const status = useQuery({ ...reviewClickQueryOptions(shop ?? ""), enabled: Boolean(shop) });
+  const recordClick = useMutation({
+    mutationFn: recordShopifyReviewClick,
+    retry: 1,
+    onError: () => {
+      reviewPending.current = false;
+      setReviewNotice("Your App Store visit couldn't be saved. Please try again.");
+      if (shop) queryClient.setQueryData(reviewClickKey(shop), { clicked: false });
+    },
+  });
+  function requestReview(value: number) {
+    if (!shop || reviewPending.current) return;
     reviewPending.current = true;
     setReviewSelection(value);
-    setRequestingReview(true);
-    setReviewNotice("Requesting Shopify’s review form…");
     try {
-      const outcome = await requestShopifyReview();
-      setReviewNotice(outcome === "not-displayed"
-        ? "Shopify’s review form isn’t available right now. You can continue using Multi Sync."
-        : outcome === "already-opening" ? "Continue your review in Shopify." : "");
-    } finally {
+      // Open in the click handler, before awaiting persistence, to preserve the
+      // browser's user activation. App Store stays outside the embedded app.
+      window.open(SHOPIFY_APP_STORE_URL, "_blank", "noopener,noreferrer");
+    } catch {
       reviewPending.current = false;
-      setRequestingReview(false);
+      setReviewNotice("The Shopify App Store couldn't be opened. Please try again.");
+      return;
     }
+    queryClient.setQueryData(reviewClickKey(shop), { clicked: true });
+    recordClick.mutate();
   }
+
+  if (!shop || !status.isSuccess || status.data.clicked) return null;
 
   return <AppProvider i18n={enTranslations}>
     <Box paddingBlockStart="400" paddingBlockEnd="600">
@@ -34,8 +47,8 @@ export function PlanReviewBanner() {
         <BlockStack gap="200">
           <InlineStack align="space-between" blockAlign="center" gap="400">
             <Text as="p" tone="subdued">Rate your experience on the Shopify App Store</Text>
-            <RatingStars rating={reviewSelection} onSelect={value => void requestReview(value)}
-              label="Rate your experience" disabled={requestingReview} />
+            <RatingStars rating={reviewSelection} onSelect={requestReview}
+              label="Rate your experience" disabled={recordClick.isPending} />
           </InlineStack>
           <div role="status" aria-label="Shopify review request" aria-live="polite">{reviewNotice && <Text as="p" tone="subdued">{reviewNotice}</Text>}</div>
         </BlockStack>

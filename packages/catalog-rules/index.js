@@ -153,3 +153,36 @@ export function normalizeGenderValue(value) {
   if (normalized === "unisex") return "unisex";
   return null;
 }
+
+/** Existing Google age groups; normalize output without changing Shopify sources. */
+export function normalizeAgeGroupValue(value) {
+  const normalized = typeof value === "string"
+    ? value.normalize("NFKC").trim().toLowerCase() : "";
+  if (normalized === "kid") return "kids";
+  return ["adult", "toddler", "infant", "newborn", "kids"].includes(normalized)
+    ? normalized : null;
+}
+
+/** Compile once per feed. Storage order remains first-match-wins. */
+export function createFeedAttributeResolver(kind, configuration) {
+  const normalize = kind === "gender" ? normalizeGenderValue : normalizeAgeGroupValue;
+  const rules = (configuration?.rules ?? []).map((rule) => ({
+    value: normalize(rule.value),
+    collections: new Set(rule.collectionIds ?? []),
+    tags: new Set(normalizeExcludedProductTags(rule.tags).map(normalizeCatalogText)),
+  }));
+  const fallback = normalize(configuration?.defaultValue);
+  return (product, existingValues) => {
+    const collections = product.collectionIds ?? [];
+    const tags = (product.tags ?? []).map(normalizeCatalogText);
+    for (const rule of rules) {
+      if (rule.value && (collections.some((id) => rule.collections.has(id)) ||
+        tags.some((tag) => rule.tags.has(tag)))) return rule.value;
+    }
+    for (const value of Array.isArray(existingValues) ? existingValues : [existingValues]) {
+      const existing = normalize(value);
+      if (existing) return existing;
+    }
+    return fallback;
+  };
+}

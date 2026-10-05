@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const panelSource = readFileSync(
-  new URL("../app/components/ConfigurationsPanel.tsx", import.meta.url),
-  "utf8",
-);
+const panelSource =
+  readFileSync(
+    new URL("../app/components/ConfigurationsPanel.tsx", import.meta.url),
+    "utf8",
+  ) +
+  readFileSync(
+    new URL("../app/components/ProductTagsSelector.tsx", import.meta.url),
+    "utf8",
+  );
 const panelStyles = readFileSync(
   new URL("../app/styles/configurations.module.css", import.meta.url),
   "utf8",

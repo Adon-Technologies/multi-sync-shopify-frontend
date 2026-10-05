@@ -7,6 +7,7 @@ import {
 } from "../services/feed-backend.server";
 import { deleteShopifySessionsForShop } from "../services/shopify-session-cleanup";
 import { getCurrentStoreUninstallMarker } from "../services/store.server";
+import { redactReviewClicks } from "../services/review-click.server";
 
 /**
  * Multi Sync doesn't request customer or order scopes and doesn't persist
@@ -30,6 +31,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const marker = await getCurrentStoreUninstallMarker(shop);
     if (marker?.uninstalledAt) {
       await requestStoreUninstallCleanup(shop, marker.uninstalledAt);
+      await redactReviewClicks(shop, marker.uninstalledAt);
       await deleteShopifySessionsForShop(shop, sessionStorage);
     }
   } catch (error) {

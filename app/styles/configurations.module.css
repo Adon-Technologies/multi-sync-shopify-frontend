@@ -477,6 +477,26 @@
   line-height: 20px;
 }
 
+.ruleMatchFields {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.ruleMatchFields > .ruleCollectionsField {
+  min-width: 0;
+}
+
+.ruleMatchDivider {
+  align-self: start;
+  color: #616161;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  margin-block-start: 38px;
+}
+
 .ruleCardSkeleton {
   display: grid;
   gap: 8px;

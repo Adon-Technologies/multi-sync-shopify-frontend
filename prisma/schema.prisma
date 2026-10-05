@@ -13,6 +13,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// App Store click records share the historic Feedback collection. Legacy
+// ratings/messages remain readable; new click records leave them empty.
+model Feedback {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String?  @db.ObjectId
+  storeId           String   @db.ObjectId
+  shopifyUserId     String?
+  submissionId      String
+  eventType         String?
+  userName          String?
+  email             String?
+  emailVerified     Boolean?
+  accountOwner      Boolean?
+  collaborator      Boolean?
+  storeName         String?
+  shopDomain        String
+  storeDomain       String?
+  shopifyStoreId    String?
+  storeEmail        String?
+  storeContactEmail String?
+  appStoreUrl       String?
+  clickedAt         DateTime?
+  rating            Int?
+  message           String?
+  hasMessage        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([storeId, submissionId])
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
+  @@index([rating, createdAt(sort: Desc), id(sort: Desc)])
+}
+
+
 enum StoreStatus {
   INSTALLED
   UNINSTALLED
@@ -329,6 +363,8 @@ enum BulkProductTypeJobStatus {
 enum BulkCatalogEditAction {
   PRODUCT_TYPE
   CUSTOM_LABEL
+  GENDER
+  AGE_GROUP
 }
 
 model BulkProductTypeJob {
@@ -349,6 +385,7 @@ model BulkProductTypeJob {
   productType            String                       @default("")
   customLabelIndex       Int?
   customLabelValue       String?
+  attributeValue         String?
   status                 BulkProductTypeJobStatus     @default(QUEUED)
   attemptCount           Int                          @default(0)
   requestedCount         Int

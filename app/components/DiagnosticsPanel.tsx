@@ -86,6 +86,11 @@ import styles from "../styles/diagnostics.module.css";
 import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 import { useOverlayEvents } from "../hooks/useOverlayEvents";
 
+import {
+  AGE_RULE_OPTIONS,
+  GENDER_RULE_OPTIONS,
+} from "../services/attribute-rules";
+
 const diagnosticTabs: Array<{
   id: DiagnosticsTab;
   label: string;
@@ -124,6 +129,8 @@ const CLEAR_BULK_EDIT_MODAL_ID = "diagnostics-clear-bulk-edit-confirmation";
 
 type DiagnosticsBulkEditTarget =
   | { kind: "productType" }
+  | { kind: "gender" }
+  | { kind: "ageGroup" }
   | { index: 0 | 1 | 2 | 3 | 4; kind: "customLabel" };
 
 const customLabelTargets: Array<{
@@ -134,10 +141,66 @@ const customLabelTargets: Array<{
   kind: "customLabel",
 }));
 
+function DiagnosticsSelectionCheckbox({
+  onChange,
+  ...props
+}: {
+  accessibilityLabel: string;
+  checked: boolean;
+  disabled: boolean;
+  indeterminate?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const ref = useRef<HTMLElementTagNameMap["s-checkbox"]>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const change = () => onChange(element.checked);
+    element.addEventListener("change", change);
+    return () => element.removeEventListener("change", change);
+  }, [onChange]);
+  return <s-checkbox {...props} ref={ref} />;
+}
+
+function BulkAttributePicker({
+  disabled,
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  disabled: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  options: readonly { label: string; value: string }[];
+  value: string;
+}) {
+  return (
+    <s-stack gap="small-100">
+      <s-text>{label}</s-text>
+      <PolarisOptionPicker
+        accessibilityLabel={label}
+        disabled={disabled}
+        id="diagnostics-bulk-attribute-values"
+        onChange={(selected) => {
+          if (!disabled) onChange(selected);
+        }}
+        options={options}
+        placeholder="Choose a value"
+        value={value}
+      />
+    </s-stack>
+  );
+}
+
 function bulkEditFieldName(target: DiagnosticsBulkEditTarget) {
   return target.kind === "productType"
     ? "product type"
-    : `custom_label_${target.index}`;
+    : target.kind === "gender"
+      ? "Gender"
+      : target.kind === "ageGroup"
+        ? "Age Group"
+        : `custom_label_${target.index}`;
 }
 
 const diagnosticsFilterFieldOptions = diagnosticsFilterFields.map((field) => ({
@@ -331,11 +394,7 @@ function SearchableFilterValuePicker({
           <s-icon color="subdued" type="chevron-down" />
         </span>
       </s-clickable>
-      <s-popover
-        id={id}
-        inlineSize="320px"
-        ref={popoverRef}
-      >
+      <s-popover id={id} inlineSize="320px" ref={popoverRef}>
         <s-box padding="small-200">
           <div className={styles.filterSuggestionDialog}>
             <s-search-field
@@ -1080,16 +1139,14 @@ function DiagnosticsTable({
             <tr>
               <th scope="col">
                 <div className={styles.productHeader}>
-                  <s-checkbox
+                  <DiagnosticsSelectionCheckbox
                     accessibilityLabel="Select all products on this page"
                     checked={pageSelection.checked}
                     disabled={
                       isLoading || products.length === 0 || selectionLocked
                     }
                     indeterminate={pageSelection.indeterminate}
-                    onChange={(event) =>
-                      onTogglePage(event.currentTarget.checked)
-                    }
+                    onChange={onTogglePage}
                   />
                   <span>Product</span>
                   {bulkSelection.mode === "allMatching" ? (
@@ -1143,6 +1200,18 @@ function DiagnosticsTable({
                           >
                             Assign product type
                           </s-button>
+                          {(["gender", "ageGroup"] as const).map((kind) => (
+                            <s-button
+                              command="--hide"
+                              commandFor={BULK_EDIT_POPOVER_ID}
+                              key={kind}
+                              onClick={() => onOpenBulkEdit({ kind })}
+                              variant="tertiary"
+                            >
+                              Assign{" "}
+                              {kind === "gender" ? "Gender" : "Age Group"}
+                            </s-button>
+                          ))}
                           {customLabelTargets.map((target) => (
                             <s-button
                               command="--hide"
@@ -1210,18 +1279,15 @@ function DiagnosticsTable({
                 <tr key={product.id}>
                   <td>
                     <div className={styles.productCell}>
-                      <s-checkbox
+                      <DiagnosticsSelectionCheckbox
                         accessibilityLabel={`Select ${product.title || "untitled product"}`}
                         checked={isDiagnosticsProductSelected(
                           bulkSelection,
                           product.id,
                         )}
                         disabled={selectionLocked}
-                        onChange={(event) =>
-                          onToggleProduct(
-                            product.id,
-                            event.currentTarget.checked,
-                          )
+                        onChange={(checked) =>
+                          onToggleProduct(product.id, checked)
                         }
                       />
                       <ProductImage product={product} />
@@ -1357,6 +1423,8 @@ export function DiagnosticsPanel({
     sessionId: "pending-session",
   };
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const bulkEditSubmitting = useRef(false);
+  const bulkEditRequestId = useRef("");
   const bulkEditModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
   const clearBulkEditModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
   const handledBulkJobs = useRef(new Set<string>());
@@ -1469,6 +1537,7 @@ export function DiagnosticsPanel({
     mutationFn: (request: DiagnosticsBulkEditRequest) =>
       requestDiagnosticsBulkEdit(request),
     onSuccess: (job) => {
+      observedActiveBulkJobs.current.add(job.id);
       queryClient.setQueryData(
         diagnosticsBulkEditStatusQueryOptions(queryScope).queryKey,
         job,
@@ -1482,6 +1551,9 @@ export function DiagnosticsPanel({
           ? `${fieldName} is being added.`
           : `${fieldName} is being cleared.`,
       );
+    },
+    onSettled: () => {
+      bulkEditSubmitting.current = false;
     },
     onError: (error) => {
       const message =
@@ -1556,13 +1628,32 @@ export function DiagnosticsPanel({
           )
           .catch(() => undefined);
       }
+      if (job.edit.kind === "gender" || job.edit.kind === "ageGroup") {
+        void queryClient.invalidateQueries({
+          queryKey: ["configuration", scope.shop],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["feeds", scope.shop, scope.sessionId],
+        });
+      }
       const fieldName = bulkEditFieldName(job.edit);
       shopify.toast.show(
         job.edit.value
-          ? `${fieldName} added to ${formatCount(job.successfulCount)} products.`
+          ? `${fieldName} added to ${formatCount(job.successfulCount)} products.${job.edit.kind === "gender" || job.edit.kind === "ageGroup" ? " Refresh feeds to include these changes." : ""}`
           : `${fieldName} cleared from ${formatCount(job.successfulCount)} products.`,
       );
     } else if (job.status === "PARTIALLY_COMPLETED") {
+      if (job.edit.kind === "gender" || job.edit.kind === "ageGroup") {
+        void queryClient.invalidateQueries({
+          queryKey: ["configuration", scope.shop],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["feeds", scope.shop, scope.sessionId],
+        });
+        setBulkEditError(
+          `${formatCount(job.successfulCount)} products updated. ${formatCount(job.failedCount)} products could not be updated.${job.errorSamples[0] ? ` ${job.errorSamples[0]}` : ""}`,
+        );
+      }
       setBulkSelection(emptyDiagnosticsBulkSelection());
       bulkEditModalRef.current?.hideOverlay();
       clearBulkEditModalRef.current?.hideOverlay();
@@ -1584,7 +1675,7 @@ export function DiagnosticsPanel({
           .catch(() => undefined);
       }
       shopify.toast.show(
-        `${formatCount(job.successfulCount)} products updated. ${formatCount(job.failedCount)} products could not be updated.`,
+        `${formatCount(job.successfulCount)} products updated. ${formatCount(job.failedCount)} products could not be updated.${(job.edit.kind === "gender" || job.edit.kind === "ageGroup") && job.errorSamples[0] ? ` ${job.errorSamples[0]}` : ""}`,
         { isError: true },
       );
     } else {
@@ -1745,6 +1836,7 @@ export function DiagnosticsPanel({
   };
 
   const openBulkEditModal = (target: DiagnosticsBulkEditTarget) => {
+    bulkEditRequestId.current = crypto.randomUUID();
     setBulkEditTarget(target);
     setBulkEditValue("");
     setBulkEditError(null);
@@ -1756,29 +1848,38 @@ export function DiagnosticsPanel({
     if (
       diagnosticsBulkSelectionCount(bulkSelection) === 0 ||
       !currentSelectionScope.snapshotVersion ||
-      isActiveBulkEditJob(activeBulkJob)
+      isActiveBulkEditJob(activeBulkJob) ||
+      bulkEditMutation.isPending ||
+      bulkEditSubmitting.current
     ) {
       return;
     }
     const edit: DiagnosticsBulkEdit =
-      bulkEditTarget.kind === "productType"
-        ? { kind: "productType", value: bulkEditValue }
+      bulkEditTarget.kind !== "customLabel"
+        ? { kind: bulkEditTarget.kind, value: bulkEditValue }
         : {
             index: bulkEditTarget.index,
             kind: "customLabel",
             value: bulkEditValue,
           };
+    bulkEditSubmitting.current = true;
     bulkEditMutation.mutate(
       serializeDiagnosticsBulkSelection(
         bulkSelection,
         currentSelectionScope,
         edit,
-        crypto.randomUUID(),
+        bulkEditRequestId.current,
       ),
     );
   };
 
   const applyBulkEdit = () => {
+    if (
+      (bulkEditTarget.kind === "gender" ||
+        bulkEditTarget.kind === "ageGroup") &&
+      !bulkEditValue
+    )
+      return;
     if (bulkEditValue.trim()) {
       submitBulkEdit();
       return;
@@ -2094,6 +2195,8 @@ export function DiagnosticsPanel({
   const selectedProductCount = diagnosticsBulkSelectionCount(bulkSelection);
   const activeJobInProgress = isActiveBulkEditJob(activeBulkJob);
   const bulkEditField = bulkEditFieldName(bulkEditTarget);
+  const isAttributeEdit =
+    bulkEditTarget.kind === "gender" || bulkEditTarget.kind === "ageGroup";
   const bulkEditMaxLength =
     bulkEditTarget.kind === "productType"
       ? MAX_PRODUCT_TYPE_LENGTH
@@ -2107,7 +2210,7 @@ export function DiagnosticsPanel({
         </div>
       ) : null}
 
-      {bulkEditError ? (
+      {bulkEditError && !isAttributeEdit ? (
         <div className={styles.bulkJobBanner}>
           <s-banner heading="Catalog bulk edit needs attention" tone="critical">
             <s-paragraph>{bulkEditError}</s-paragraph>
@@ -2379,7 +2482,9 @@ export function DiagnosticsPanel({
       >
         <s-box padding="base">
           <div className={styles.productTypeModalContent}>
-            {bulkEditError ? (
+            {bulkEditError && isAttributeEdit ? (
+              <p role="alert">{bulkEditError}</p>
+            ) : bulkEditError ? (
               <s-banner
                 heading="The bulk edit could not be started"
                 tone="critical"
@@ -2416,6 +2521,21 @@ export function DiagnosticsPanel({
                   </s-banner>
                 ) : null}
               </>
+            ) : isAttributeEdit ? (
+              <BulkAttributePicker
+                disabled={activeJobInProgress || bulkEditMutation.isPending}
+                label={`Choose Product ${bulkEditField}`}
+                onChange={(value) => {
+                  setBulkEditValue(value);
+                  setBulkEditError(null);
+                }}
+                options={
+                  bulkEditTarget.kind === "gender"
+                    ? GENDER_RULE_OPTIONS
+                    : AGE_RULE_OPTIONS
+                }
+                value={bulkEditValue}
+              />
             ) : (
               <s-text-field
                 disabled={activeJobInProgress || bulkEditMutation.isPending}
@@ -2430,27 +2550,33 @@ export function DiagnosticsPanel({
                 value={bulkEditValue}
               />
             )}
-            <s-banner
-              heading={`Empty values clear ${bulkEditField}`}
-              tone="warning"
-            >
-              <s-paragraph>
-                {bulkEditTarget.kind === "customLabel"
-                  ? "Leaving this field blank and clicking Apply in bulk will clear this custom label from all variants of the selected products."
-                  : "Leaving this field blank and clicking Apply in bulk will erase the currently assigned product type from all selected products."}
-              </s-paragraph>
-            </s-banner>
+            {!isAttributeEdit ? (
+              <s-banner
+                heading={`Empty values clear ${bulkEditField}`}
+                tone="warning"
+              >
+                <s-paragraph>
+                  {bulkEditTarget.kind === "customLabel"
+                    ? "Leaving this field blank and clicking Apply in bulk will clear this custom label from all variants of the selected products."
+                    : "Leaving this field blank and clicking Apply in bulk will erase the currently assigned product type from all selected products."}
+                </s-paragraph>
+              </s-banner>
+            ) : null}
             <s-paragraph color="subdued">
               This change will be applied to {formatCount(selectedProductCount)}{" "}
               selected product{selectedProductCount === 1 ? "" : "s"}
-              {bulkEditTarget.kind === "productType"
+              {bulkEditTarget.kind !== "customLabel"
                 ? " in Shopify."
                 : " and included in the next generated feeds."}
             </s-paragraph>
           </div>
         </s-box>
         <s-button
-          disabled={activeJobInProgress || bulkEditMutation.isPending}
+          disabled={
+            activeJobInProgress ||
+            bulkEditMutation.isPending ||
+            (isAttributeEdit && !bulkEditValue)
+          }
           loading={bulkEditMutation.isPending ? true : undefined}
           onClick={applyBulkEdit}
           slot="primary-action"
@@ -2469,52 +2595,54 @@ export function DiagnosticsPanel({
         </s-button>
       </s-modal>
 
-      <s-modal
-        accessibilityLabel={`Confirm clearing ${bulkEditField}`}
-        heading={`Clear ${bulkEditField}?`}
-        id={CLEAR_BULK_EDIT_MODAL_ID}
-        padding="none"
-        ref={clearBulkEditModalRef}
-        size="base"
-      >
-        <s-box padding="base">
-          <div className={styles.productTypeModalContent}>
-            {bulkEditError ? (
-              <s-banner
-                heading="The bulk edit could not be started"
-                tone="critical"
-              >
-                <s-paragraph>{bulkEditError}</s-paragraph>
+      {!isAttributeEdit ? (
+        <s-modal
+          accessibilityLabel={`Confirm clearing ${bulkEditField}`}
+          heading={`Clear ${bulkEditField}?`}
+          id={CLEAR_BULK_EDIT_MODAL_ID}
+          padding="none"
+          ref={clearBulkEditModalRef}
+          size="base"
+        >
+          <s-box padding="base">
+            <div className={styles.productTypeModalContent}>
+              {bulkEditError ? (
+                <s-banner
+                  heading="The bulk edit could not be started"
+                  tone="critical"
+                >
+                  <s-paragraph>{bulkEditError}</s-paragraph>
+                </s-banner>
+              ) : null}
+              <s-banner heading="This removes existing data" tone="warning">
+                <s-paragraph>
+                  This will clear the assigned {bulkEditField} from all{" "}
+                  {formatCount(selectedProductCount)} selected product
+                  {selectedProductCount === 1 ? "" : "s"}.
+                </s-paragraph>
               </s-banner>
-            ) : null}
-            <s-banner heading="This removes existing data" tone="warning">
-              <s-paragraph>
-                This will clear the assigned {bulkEditField} from all{" "}
-                {formatCount(selectedProductCount)} selected product
-                {selectedProductCount === 1 ? "" : "s"}.
-              </s-paragraph>
-            </s-banner>
-          </div>
-        </s-box>
-        <s-button
-          disabled={activeJobInProgress || bulkEditMutation.isPending}
-          loading={bulkEditMutation.isPending ? true : undefined}
-          onClick={submitBulkEdit}
-          slot="primary-action"
-          tone="critical"
-          variant="primary"
-        >
-          Clear {bulkEditField}
-        </s-button>
-        <s-button
-          disabled={activeJobInProgress || bulkEditMutation.isPending}
-          onClick={cancelBulkEditClear}
-          slot="secondary-actions"
-          variant="secondary"
-        >
-          Cancel
-        </s-button>
-      </s-modal>
+            </div>
+          </s-box>
+          <s-button
+            disabled={activeJobInProgress || bulkEditMutation.isPending}
+            loading={bulkEditMutation.isPending ? true : undefined}
+            onClick={submitBulkEdit}
+            slot="primary-action"
+            tone="critical"
+            variant="primary"
+          >
+            Clear {bulkEditField}
+          </s-button>
+          <s-button
+            disabled={activeJobInProgress || bulkEditMutation.isPending}
+            onClick={cancelBulkEditClear}
+            slot="secondary-actions"
+            variant="secondary"
+          >
+            Cancel
+          </s-button>
+        </s-modal>
+      ) : null}
     </div>
   );
 }

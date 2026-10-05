@@ -20,6 +20,8 @@ import type { DiagnosticsTab } from "./diagnostics.server";
 import type { AdminGraphQLClient } from "./shopify-admin.server";
 import { normalizeShopDomain } from "./store-lifecycle";
 
+import { AGE_RULE_OPTIONS, GENDER_RULE_OPTIONS } from "./attribute-rules";
+
 const validTabs = new Set<DiagnosticsTab>([
   "all",
   "submitted",
@@ -43,7 +45,12 @@ function mapJob(job: BulkProductTypeJob): DiagnosticsBulkEditJob {
   return {
     completedAt: job.completedAt?.toISOString() ?? null,
     createdAt: job.createdAt.toISOString(),
-    errorSamples: job.errorSamples.slice(0, 5),
+    errorSamples:
+      job.errorSamples.length ||
+      !job.lastError ||
+      (job.action !== "GENDER" && job.action !== "AGE_GROUP")
+        ? job.errorSamples.slice(0, 5)
+        : [job.lastError],
     failedCount: job.failedCount,
     id: job.id,
     edit:
@@ -53,7 +60,12 @@ function mapJob(job: BulkProductTypeJob): DiagnosticsBulkEditJob {
             kind: "customLabel",
             value: job.customLabelValue ?? "",
           }
-        : { kind: "productType", value: job.productType },
+        : job.action === "GENDER" || job.action === "AGE_GROUP"
+          ? {
+              kind: job.action === "GENDER" ? "gender" : "ageGroup",
+              value: job.attributeValue ?? "",
+            }
+          : { kind: "productType", value: job.productType },
     processedCount: job.processedCount,
     requestedCount: job.requestedCount,
     startedAt: job.startedAt?.toISOString() ?? null,
@@ -71,6 +83,17 @@ function normalizeEdit(value: unknown): DiagnosticsBulkEdit {
   const edit = value as Record<string, unknown>;
   const normalizedValue =
     typeof edit.value === "string" ? edit.value.trim() : "";
+
+  if (edit.kind === "gender" || edit.kind === "ageGroup") {
+    const options =
+      edit.kind === "gender" ? GENDER_RULE_OPTIONS : AGE_RULE_OPTIONS;
+    if (!options.some(({ value }) => value === normalizedValue)) {
+      throw new DiagnosticsBulkEditRequestError(
+        `Choose a supported ${edit.kind === "gender" ? "Gender" : "Age Group"} value.`,
+      );
+    }
+    return { kind: edit.kind, value: normalizedValue };
+  }
 
   if (edit.kind === "productType") {
     if (normalizedValue.length > MAX_PRODUCT_TYPE_LENGTH) {
@@ -330,28 +353,59 @@ export async function createDiagnosticsBulkEditJob(
     );
   }
 
-  const job = await prisma.bulkProductTypeJob.create({
-    data: {
-      diagnosticsFilterField: scope.filters[0]?.field ?? null,
-      diagnosticsFilterValue: scope.filters[0]?.value ?? null,
-      diagnosticsFilters: scope.filters as unknown as Prisma.InputJsonValue,
-      diagnosticsSearch: scope.search,
-      diagnosticsTab: scope.diagnosticsTab,
-      excludedProductIds,
-      idempotencyKey: request.idempotencyKey,
-      productIds,
-      action: edit.kind === "customLabel" ? "CUSTOM_LABEL" : "PRODUCT_TYPE",
-      customLabelIndex: edit.kind === "customLabel" ? edit.index : null,
-      customLabelValue: edit.kind === "customLabel" ? edit.value : null,
-      productType: edit.kind === "productType" ? edit.value : "",
-      requestedCount,
-      selectionMode:
-        request.selection.mode === "explicit" || collectionFilter
-          ? "EXPLICIT"
-          : "ALL_MATCHING",
-      snapshotVersion: scope.snapshotVersion,
-      storeId: store.id,
-    },
-  });
+  const job = await prisma.bulkProductTypeJob
+    .create({
+      data: {
+        diagnosticsFilterField: scope.filters[0]?.field ?? null,
+        diagnosticsFilterValue: scope.filters[0]?.value ?? null,
+        diagnosticsFilters: scope.filters as unknown as Prisma.InputJsonValue,
+        diagnosticsSearch: scope.search,
+        diagnosticsTab: scope.diagnosticsTab,
+        excludedProductIds,
+        idempotencyKey: request.idempotencyKey,
+        productIds,
+        action:
+          edit.kind === "gender"
+            ? "GENDER"
+            : edit.kind === "ageGroup"
+              ? "AGE_GROUP"
+              : edit.kind === "customLabel"
+                ? "CUSTOM_LABEL"
+                : "PRODUCT_TYPE",
+        attributeValue:
+          edit.kind === "gender" || edit.kind === "ageGroup"
+            ? edit.value
+            : null,
+        customLabelIndex: edit.kind === "customLabel" ? edit.index : null,
+        customLabelValue: edit.kind === "customLabel" ? edit.value : null,
+        productType: edit.kind === "productType" ? edit.value : "",
+        requestedCount,
+        selectionMode:
+          request.selection.mode === "explicit" || collectionFilter
+            ? "EXPLICIT"
+            : "ALL_MATCHING",
+        snapshotVersion: scope.snapshotVersion,
+        storeId: store.id,
+      },
+    })
+    .catch(async (error: unknown) => {
+      if (
+        typeof error === "object" &&
+        error &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
+        const duplicate = await prisma.bulkProductTypeJob.findUnique({
+          where: {
+            storeId_idempotencyKey: {
+              storeId: store.id,
+              idempotencyKey: request.idempotencyKey,
+            },
+          },
+        });
+        if (duplicate) return duplicate;
+      }
+      throw error;
+    });
   return mapJob(job);
 }

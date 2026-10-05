@@ -1027,7 +1027,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
           role="tabpanel"
           tabIndex={0}
         >
-          {activeTab === "dashboard" ? <PlanReviewBanner /> : null}
+          {activeTab === "dashboard" ? <PlanReviewBanner shop={props.diagnosticsScope?.shop ?? null} /> : null}
           <DashboardPanelContent
             {...props}
             active={activeTab === "dashboard"}
@@ -1045,6 +1045,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
           role="tabpanel"
           tabIndex={0}
         >
+          {activeTab === "feeds" ? <PlanReviewBanner shop={props.diagnosticsScope?.shop ?? null} /> : null}
           <BillingAccessGate
             canUseApp={canUseApp}
             planSelectionUrl={props.planSelectionUrl}
@@ -1064,6 +1065,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
           role="tabpanel"
           tabIndex={0}
         >
+          {activeTab === "diagnostics" ? <PlanReviewBanner shop={props.diagnosticsScope?.shop ?? null} /> : null}
           <BillingAccessGate
             canUseApp={canUseApp}
             planSelectionUrl={props.planSelectionUrl}
@@ -1088,6 +1090,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
           role="tabpanel"
           tabIndex={0}
         >
+          {activeTab === "configurations" ? <PlanReviewBanner shop={props.diagnosticsScope?.shop ?? null} /> : null}
           <BillingAccessGate
             canUseApp={canUseApp}
             planSelectionUrl={props.planSelectionUrl}
@@ -1113,7 +1116,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
         >
           {activeTab === "support" ? (
             <>
-              <PlanReviewBanner />
+              <PlanReviewBanner shop={props.diagnosticsScope?.shop ?? null} />
               <SupportPanel active scope={props.diagnosticsScope} />
             </>
           ) : null}
@@ -1129,7 +1132,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
         >
           {activeTab === "plan" ? (
             <>
-              <PlanReviewBanner />
+              <PlanReviewBanner shop={props.diagnosticsScope?.shop ?? null} />
               <SubscriptionPanel
                 initialSubscription={subscription}
                 planSelectionUrl={props.planSelectionUrl}

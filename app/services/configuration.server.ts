@@ -140,7 +140,7 @@ export interface PublicAttributeRuleJobs {
 export class AttributeRuleScopeError extends Error {
   constructor() {
     super(
-      "Gender and Age rules require the write_products Shopify scope. Deploy the updated app scopes and reauthorize the store.",
+      "Gender and Age rules require the read_products Shopify scope. Deploy the updated app scopes and reauthorize the store.",
     );
     this.name = "AttributeRuleScopeError";
   }
@@ -181,7 +181,9 @@ function mapConfiguration(
     excludedCollections: normalizeSelectedCollections(
       configuration.excludedCollections,
     ),
-    excludedTitleAttributes: normalizeExcludedTitleAttributes(configuration.excludedTitleAttributes),
+    excludedTitleAttributes: normalizeExcludedTitleAttributes(
+      configuration.excludedTitleAttributes,
+    ),
     excludedTitleTerms: configuration.excludedTitleTerms,
     excludedProductTags: normalizeExcludedProductTags(
       configuration.excludedProductTags,
@@ -412,7 +414,10 @@ export async function saveConfigurationForShop(
   const previousCountryCode = normalizeCountryCode(
     previousConfiguration?.countryCode,
   );
-  if (previousCountryCode && previousCountryCode !== verifiedInput.countryCode) {
+  if (
+    previousCountryCode &&
+    previousCountryCode !== verifiedInput.countryCode
+  ) {
     await prisma.xmlLink.updateMany({
       where: {
         storeId: store.id,
@@ -648,27 +653,40 @@ export async function saveAttributeRulesForShop(
       create: {
         kind: prismaKind,
         ruleVersion,
-        status: "QUEUED",
+        generationCompletedAt: new Date(),
+        status: "COMPLETED",
+        totalProducts: 0,
         storeId: store.id,
       },
       update: {
-        generationCompletedAt: null,
+        generationCompletedAt: new Date(),
         generationStartedAt: null,
         lastError: null,
         leaseExpiresAt: null,
         leaseOwner: null,
         processedProducts: 0,
         ruleVersion,
-        status: "QUEUED",
-        totalProducts: null,
+        status: "COMPLETED",
+        totalProducts: 0,
       },
     });
 
-    return { configuration, job };
+    // Rule saves change local configuration only. XML updates on the next refresh.
+    const refreshedFeeds = await transaction.xmlLink.updateMany({
+      where: { gcsObjectName: { not: null }, storeId: store.id },
+      data: { requiresRefresh: true },
+    });
+
+    return {
+      configuration,
+      job,
+      feedRefreshRequired: refreshedFeeds.count > 0,
+    };
   });
 
   return {
     configuration: mapConfiguration(result.configuration),
+    feedRefreshRequired: result.feedRefreshRequired,
     job: mapAttributeRuleJob(result.job)!,
     ruleJobs: await getAttributeRuleJobStatuses(store.id),
   };

@@ -1,4 +1,8 @@
-import { normalizeGenderValue } from "@multi-sync/catalog-rules";
+import {
+  normalizeGenderValue,
+  normalizeAgeGroupValue,
+  normalizeExcludedProductTags,
+} from "@multi-sync/catalog-rules";
 
 import {
   normalizeConfigurationText,
@@ -8,15 +12,11 @@ import {
 
 export type AttributeRuleKind = "gender" | "age";
 export type GenderRuleValue = "male" | "female" | "unisex";
-export type AgeRuleValue =
-  | "adult"
-  | "infant"
-  | "kids"
-  | "toddler"
-  | "newborn";
+export type AgeRuleValue = "adult" | "infant" | "kids" | "toddler" | "newborn";
 
 export interface GenderCollectionRule {
   collections: SelectedCollection[];
+  tags: string[];
   gender: GenderRuleValue | "";
   id: string;
 }
@@ -24,6 +24,7 @@ export interface GenderCollectionRule {
 export interface AgeCollectionRule {
   ageGroup: AgeRuleValue | "";
   collections: SelectedCollection[];
+  tags: string[];
   id: string;
 }
 
@@ -72,9 +73,8 @@ export function hasAttributeRuleProductAccess(scope: string | undefined) {
       .filter(Boolean),
   );
 
-  // Shopify grants read_products implicitly with write_products, so persisted
-  // sessions can legitimately contain only the write scope.
-  return scopes.has("write_products");
+  // These feed transformations require product reads only.
+  return scopes.has("read_products") || scopes.has("write_products");
 }
 
 function inputRecord(value: unknown): Record<string, unknown> {
@@ -84,23 +84,13 @@ function inputRecord(value: unknown): Record<string, unknown> {
 }
 
 function normalizedRuleId(value: unknown, index: number) {
-  const id =
-    typeof value === "string" ? normalizeConfigurationText(value) : "";
+  const id = typeof value === "string" ? normalizeConfigurationText(value) : "";
   return RULE_ID.test(id) ? id : `rule-${index + 1}`;
 }
 
-function normalizedRuleValue(
-  value: unknown,
-  allowed: ReadonlySet<string>,
-  kind: AttributeRuleKind,
-) {
+function normalizedRuleValue(value: unknown, kind: AttributeRuleKind) {
   if (kind === "gender") return normalizeGenderValue(value) ?? "";
-  const normalized =
-    typeof value === "string"
-      ? normalizeConfigurationText(value).toLocaleLowerCase()
-      : "";
-  const mapped = kind === "age" && normalized === "kid" ? "kids" : normalized;
-  return allowed.has(mapped) ? mapped : "";
+  return normalizeAgeGroupValue(value) ?? "";
 }
 
 function normalizeRules(
@@ -108,23 +98,24 @@ function normalizeRules(
   value: unknown,
 ): Array<{
   collections: SelectedCollection[];
+  tags: string[];
   id: string;
   value: string;
 }> {
   const record = inputRecord(value);
   const inputRules = Array.isArray(record.rules) ? record.rules : [];
   const options = kind === "gender" ? GENDER_RULE_OPTIONS : AGE_RULE_OPTIONS;
-  const allowed = new Set<string>(options.map(({ value }) => value));
   const maxRules = options.length;
 
   if (inputRules.length > maxRules) {
     throw new AttributeRulesValidationError(
-      `${kind === "gender" ? "Gender" : "Age"} supports no more than ${maxRules} collection rules.`,
+      `${kind === "gender" ? "Gender" : "Age"} supports no more than ${maxRules} rules.`,
     );
   }
 
   const normalized: Array<{
     collections: SelectedCollection[];
+    tags: string[];
     id: string;
     value: string;
   }> = [];
@@ -135,21 +126,33 @@ function normalizeRules(
     const rule = inputRecord(ruleValue);
     const selectedValue = normalizedRuleValue(
       kind === "gender" ? rule.gender : rule.ageGroup,
-      allowed,
       kind,
     );
     const rawCollections = Array.isArray(rule.collections)
       ? rule.collections
       : [];
     const collections = normalizeSelectedCollections(rawCollections);
+    const rawTags = rule.tags ?? [];
+    if (
+      !Array.isArray(rawTags) ||
+      rawTags.some(
+        (tag) =>
+          typeof tag !== "string" || !tag.trim() || tag.trim().length > 255,
+      )
+    ) {
+      throw new AttributeRulesValidationError(
+        `Rule ${index + 1} contains an invalid product tag.`,
+      );
+    }
+    const tags = normalizeExcludedProductTags(rawTags);
     const isCompletelyEmpty =
-      !selectedValue && rawCollections.length === 0;
+      !selectedValue && rawCollections.length === 0 && tags.length === 0;
 
     if (isCompletelyEmpty) return;
 
-    if (!selectedValue || collections.length === 0) {
+    if (!selectedValue || (collections.length === 0 && tags.length === 0)) {
       throw new AttributeRulesValidationError(
-        `Rule ${index + 1} must include both a ${kind === "gender" ? "Gender" : "Age Group"} and at least one collection.`,
+        `Rule ${index + 1} must include both a ${kind === "gender" ? "Gender" : "Age Group"} and at least one collection or product tag.`,
       );
     }
     if (collections.length !== rawCollections.length) {
@@ -175,6 +178,7 @@ function normalizeRules(
     usedValues.add(selectedValue);
     normalized.push({
       collections,
+      tags,
       id: normalizedRuleId(rule.id, index),
       value: selectedValue,
     });
@@ -183,29 +187,21 @@ function normalizeRules(
   return normalized;
 }
 
-export function validateGenderRules(
-  value: unknown,
-): GenderRulesConfiguration {
+export function validateGenderRules(value: unknown): GenderRulesConfiguration {
   const record = inputRecord(value);
-  const allowed = new Set<string>(
-    GENDER_RULE_OPTIONS.map(({ value }) => value),
-  );
   const defaultGenderValue = normalizedRuleValue(
     record.defaultGender,
-    allowed,
     "gender",
   );
   if (record.defaultGender && !defaultGenderValue) {
-    throw new AttributeRulesValidationError(
-      "Choose a valid Default Gender.",
-    );
+    throw new AttributeRulesValidationError("Choose a valid Default Gender.");
   }
 
   return {
-    defaultGender:
-      (defaultGenderValue as GenderRuleValue | "") || null,
+    defaultGender: (defaultGenderValue as GenderRuleValue | "") || null,
     rules: normalizeRules("gender", value).map((rule) => ({
       collections: rule.collections,
+      tags: rule.tags,
       gender: rule.value as GenderRuleValue,
       id: rule.id,
     })),
@@ -214,12 +210,8 @@ export function validateGenderRules(
 
 export function validateAgeRules(value: unknown): AgeRulesConfiguration {
   const record = inputRecord(value);
-  const allowed = new Set<string>(
-    AGE_RULE_OPTIONS.map(({ value }) => value),
-  );
   const defaultAgeGroupValue = normalizedRuleValue(
     record.defaultAgeGroup,
-    allowed,
     "age",
   );
   if (record.defaultAgeGroup && !defaultAgeGroupValue) {
@@ -229,31 +221,28 @@ export function validateAgeRules(value: unknown): AgeRulesConfiguration {
   }
 
   return {
-    defaultAgeGroup:
-      (defaultAgeGroupValue as AgeRuleValue | "") || null,
+    defaultAgeGroup: (defaultAgeGroupValue as AgeRuleValue | "") || null,
     rules: normalizeRules("age", value).map((rule) => ({
       ageGroup: rule.value as AgeRuleValue,
       collections: rule.collections,
+      tags: rule.tags,
       id: rule.id,
     })),
   };
 }
 
-export function parseStoredGenderRules(
-  defaultGender: unknown,
-  rules: unknown,
-) {
+export function parseStoredGenderRules(defaultGender: unknown, rules: unknown) {
   try {
     return validateGenderRules({ defaultGender, rules });
   } catch {
-    return { defaultGender: null, rules: [] } satisfies GenderRulesConfiguration;
+    return {
+      defaultGender: null,
+      rules: [],
+    } satisfies GenderRulesConfiguration;
   }
 }
 
-export function parseStoredAgeRules(
-  defaultAgeGroup: unknown,
-  rules: unknown,
-) {
+export function parseStoredAgeRules(defaultAgeGroup: unknown, rules: unknown) {
   try {
     return validateAgeRules({ defaultAgeGroup, rules });
   } catch {
@@ -280,8 +269,11 @@ export function resolveRuleApplicationValue(
     existingValue ?? "",
   ).toLocaleLowerCase();
   const normalizedExisting =
-    kind === "gender" ? normalizeGenderValue(existing) ?? "" :
-    kind === "age" && existing === "kid" ? "kids" : existing;
+    kind === "gender"
+      ? (normalizeGenderValue(existing) ?? "")
+      : kind === "age" && existing === "kid"
+        ? "kids"
+        : existing;
 
   if (allowed.has(normalizedExisting)) {
     return { source: "existing" as const, value: normalizedExisting };

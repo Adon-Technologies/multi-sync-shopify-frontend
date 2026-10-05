@@ -33,7 +33,8 @@ import {
   diagnosticsKeys,
   type DiagnosticsQueryScope,
 } from "../services/diagnostics-query";
-import { useHydrated } from "../hooks/useHydrated";
+import { RuleProductTagPicker } from "./ProductTagsSelector";
+import { useOverlayEvents } from "../hooks/useOverlayEvents";
 import styles from "../styles/configurations.module.css";
 
 interface AttributeRulesCardProps {
@@ -44,6 +45,7 @@ interface AttributeRulesCardProps {
 
 interface EditorRule {
   collections: SelectedCollection[];
+  tags: string[];
   id: string;
   value: string;
 }
@@ -140,7 +142,6 @@ function RuleCollectionPicker({
   selected,
   unavailableCollectionIds,
 }: RuleCollectionPickerProps) {
-  const hydrated = useHydrated();
   const popoverId = `attribute-rule-collections-${ruleId}`;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -148,6 +149,18 @@ function RuleCollectionPicker({
   const [cursor, setCursor] = useState<string | null>(null);
   const [results, setResults] = useState<SelectedCollection[]>([]);
   const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const popoverRef = useRef<HTMLElementTagNameMap["s-popover"]>(null);
+  useOverlayEvents(popoverRef, {
+    onHide: (event) => {
+      event.stopPropagation();
+      setOpen(false);
+      setSearch("");
+    },
+    onShow: () => {
+      setOpen(true);
+      window.requestAnimationFrame(() => searchRef.current?.focus());
+    },
+  });
   const query = useQuery({
     ...collectionsQueryOptions(scope, debouncedSearch, cursor),
     enabled: open,
@@ -196,22 +209,6 @@ function RuleCollectionPicker({
 
   return (
     <div className={styles.ruleCollectionPicker}>
-      <div className={styles.tags}>
-        {selected.map((collection) => (
-          <span className={styles.tag} key={collection.id}>
-            <span>{collection.title}</span>
-            <button
-              aria-label={`Remove ${collection.title}`}
-              onClick={() =>
-                onChange(selected.filter(({ id }) => id !== collection.id))
-              }
-              type="button"
-            >
-              ×
-            </button>
-          </span>
-        ))}
-      </div>
       <s-clickable
         accessibilityLabel="Select collections for this rule"
         background="base"
@@ -233,26 +230,29 @@ function RuleCollectionPicker({
           <s-icon color="subdued" type="chevron-down" />
         </s-stack>
       </s-clickable>
+      {selected.length > 0 ? (
+        <div className={styles.tags}>
+          {selected.map((collection) => (
+            <span className={styles.tag} key={collection.id}>
+              <span>{collection.title}</span>
+              <button
+                aria-label={`Remove ${collection.title}`}
+                onClick={() =>
+                  onChange(selected.filter(({ id }) => id !== collection.id))
+                }
+                type="button"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <s-popover
         blockSize="340px"
         id={popoverId}
         inlineSize="400px"
-        onHide={
-          hydrated
-            ? () => {
-                setOpen(false);
-                setSearch("");
-              }
-            : undefined
-        }
-        onShow={
-          hydrated
-            ? () => {
-                setOpen(true);
-                window.requestAnimationFrame(() => searchRef.current?.focus());
-              }
-            : undefined
-        }
+        ref={popoverRef}
       >
         <s-box padding="small-200">
           <div className={styles.configurationPopoverContent}>
@@ -345,7 +345,7 @@ function RuleJobStatus({
   retrying: boolean;
 }) {
   if (!job) {
-    return <s-text color="subdued">{label}: Not applied yet</s-text>;
+    return <s-text color="subdued">{label}: No saved rules</s-text>;
   }
   const progress =
     job.totalProducts !== null
@@ -365,7 +365,7 @@ function RuleJobStatus({
       <s-stack alignItems="center" direction="inline" gap="small">
         {job.status === "QUEUED" || job.status === "PROCESSING" ? (
           <s-spinner
-            accessibilityLabel={`Applying ${label} rules`}
+            accessibilityLabel={`Preparing ${label} rules`}
             size="base"
           />
         ) : null}
@@ -374,10 +374,13 @@ function RuleJobStatus({
           {job.status === "QUEUED"
             ? "Queued"
             : job.status === "PROCESSING"
-              ? "Applying rules"
-              : job.status.charAt(0) + job.status.slice(1).toLocaleLowerCase()}
+              ? "Preparing rules"
+              : job.status === "COMPLETED"
+                ? "Saved"
+                : job.status.charAt(0) +
+                  job.status.slice(1).toLocaleLowerCase()}
         </s-badge>
-        {job.status === "PROCESSING" || job.status === "COMPLETED" ? (
+        {job.status === "PROCESSING" ? (
           <s-text color="subdued">{progress}</s-text>
         ) : null}
       </s-stack>
@@ -413,6 +416,7 @@ function AttributeRulesEditor({
     kind: AttributeRuleKind,
     configuration: PublicConfiguration,
     jobs: PublicAttributeRuleJobs,
+    feedRefreshRequired: boolean,
   ) => void;
   saved: EditorDraft;
   scope: ConfigurationQueryScope;
@@ -475,6 +479,7 @@ function AttributeRulesEditor({
               defaultGender: draft.defaultValue || null,
               rules: draft.rules.map((rule) => ({
                 collections: rule.collections,
+                tags: rule.tags,
                 gender: rule.value,
                 id: rule.id,
               })),
@@ -484,12 +489,18 @@ function AttributeRulesEditor({
               rules: draft.rules.map((rule) => ({
                 ageGroup: rule.value,
                 collections: rule.collections,
+                tags: rule.tags,
                 id: rule.id,
               })),
             });
       setError(null);
       const result = await mutation.mutateAsync(configuration);
-      onSaved(kind, result.configuration, result.ruleJobs);
+      onSaved(
+        kind,
+        result.configuration,
+        result.ruleJobs,
+        result.feedRefreshRequired,
+      );
       modalRef.current?.hideOverlay();
     } catch (caught) {
       const message =
@@ -527,9 +538,9 @@ function AttributeRulesEditor({
             <div className={styles.rulesSectionBox}>
               <s-heading>{defaultTitle}</s-heading>
               <s-paragraph color="subdued">
-                Used only when no collection rule matches and the product&apos;s{" "}
-                {kind === "gender" ? "Gender" : "Age Group"} metafield is empty
-                or missing.
+                {kind === "gender"
+                  ? "Leave empty to not set any default value, otherwise select which gender to set in case no rules match."
+                  : "Leave empty to not set any default value, otherwise select which age group to set in case no rules match."}
               </s-paragraph>
               <RuleValuePicker
                 emptyLabel="-- None --"
@@ -550,10 +561,11 @@ function AttributeRulesEditor({
             <div className={styles.rulesCollectionSection}>
               <div className={styles.rulesSectionHeader}>
                 <div>
-                  <s-heading>Collection Rules</s-heading>
+                  <s-heading>Collection & Tag Rules</s-heading>
                   <s-paragraph color="subdued">
-                    Collection rules override the default and any existing value
-                    for products in the selected collections.
+                    {kind === "gender"
+                      ? "This will set g:gender-field for products in specific collections or with a specific product tag."
+                      : "This will set g:age_group-field for products in specific collections or with a specific product tag."}
                   </s-paragraph>
                 </div>
                 <s-button
@@ -566,6 +578,7 @@ function AttributeRulesEditor({
                         ...current.rules,
                         {
                           collections: [],
+                          tags: [],
                           id: `rule-${Date.now()}-${nextRuleId.current}`,
                           value: "",
                         },
@@ -581,7 +594,7 @@ function AttributeRulesEditor({
               <div className={styles.rulesList}>
                 {draft.rules.length === 0 ? (
                   <div className={styles.rulesEmptyState}>
-                    <s-text color="subdued">No collection rules added.</s-text>
+                    <s-text color="subdued">No rules added.</s-text>
                   </div>
                 ) : (
                   draft.rules.map((rule, index) => {
@@ -631,21 +644,35 @@ function AttributeRulesEditor({
                           )}
                           value={rule.value}
                         />
-                        <div className={styles.ruleCollectionsField}>
-                          <span className={styles.ruleFieldLabel}>
-                            Collections
-                          </span>
-                          <RuleCollectionPicker
-                            onChange={(collections) =>
-                              updateRule(rule.id, { collections })
-                            }
-                            ruleId={`${kind}-${rule.id}`}
-                            scope={scope}
-                            selected={rule.collections}
-                            unavailableCollectionIds={
-                              usedCollectionsByRule.get(rule.id) ?? new Set()
-                            }
-                          />
+                        <div className={styles.ruleMatchFields}>
+                          <div className={styles.ruleCollectionsField}>
+                            <span className={styles.ruleFieldLabel}>
+                              Collections
+                            </span>
+                            <RuleCollectionPicker
+                              onChange={(collections) =>
+                                updateRule(rule.id, { collections })
+                              }
+                              ruleId={`${kind}-${rule.id}`}
+                              scope={scope}
+                              selected={rule.collections}
+                              unavailableCollectionIds={
+                                usedCollectionsByRule.get(rule.id) ?? new Set()
+                              }
+                            />
+                          </div>
+                          <div className={styles.ruleMatchDivider}>OR</div>
+                          <div className={styles.ruleCollectionsField}>
+                            <span className={styles.ruleFieldLabel}>
+                              Product Tags
+                            </span>
+                            <RuleProductTagPicker
+                              ruleId={`${kind}-${rule.id}`}
+                              onChange={(tags) => updateRule(rule.id, { tags })}
+                              scope={scope}
+                              selected={rule.tags}
+                            />
+                          </div>
                         </div>
                       </div>
                     );
@@ -722,6 +749,7 @@ export function AttributeRulesCard({
       rules:
         configuration?.genderRules.map((rule) => ({
           collections: rule.collections,
+          tags: rule.tags ?? [],
           id: rule.id,
           value: rule.gender,
         })) ?? [],
@@ -734,6 +762,7 @@ export function AttributeRulesCard({
       rules:
         configuration?.ageRules.map((rule) => ({
           collections: rule.collections,
+          tags: rule.tags ?? [],
           id: rule.id,
           value: rule.ageGroup,
         })) ?? [],
@@ -781,6 +810,7 @@ export function AttributeRulesCard({
     kind: AttributeRuleKind,
     nextConfiguration: PublicConfiguration,
     nextJobs: PublicAttributeRuleJobs,
+    feedRefreshRequired: boolean,
   ) => {
     queryClient.setQueryData(
       configurationQueryOptions(scope).queryKey,
@@ -789,6 +819,7 @@ export function AttributeRulesCard({
           ? {
               ...current,
               configuration: nextConfiguration,
+              feedRefreshRequired,
               ruleJobs: nextJobs,
             }
           : current,
@@ -798,7 +829,7 @@ export function AttributeRulesCard({
       nextJobs,
     );
     shopify.toast.show(
-      `${kind === "gender" ? "Gender" : "Age"} rules saved and are being applied.`,
+      `${kind === "gender" ? "Gender" : "Age"} rules saved. Refresh feeds to update XML.`,
     );
   };
 
@@ -806,8 +837,9 @@ export function AttributeRulesCard({
     <s-section heading="Gender & Age Rules">
       <div className={styles.attributeRulesCard}>
         <s-paragraph color="subdued">
-          Set a default gender and age group, and add collection-based
-          overrides. Products without a matching rule still use the defaults.
+          Set a default gender and age group, and add collection or product tag
+          overrides for XML only. Existing usable values take priority over
+          defaults. Shopify products stay unchanged.
         </s-paragraph>
         <div className={styles.attributeRuleButtons}>
           <AttributeRulesEditor

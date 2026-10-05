@@ -183,7 +183,7 @@ test("Diagnostics UI keeps normal headers and provides the Polaris bulk workflow
   assert.match(source, /Google product category/);
   assert.match(source, /Product type/);
   assert.match(source, /product\.productType \|\| "—"/);
-  assert.match(source, /Error from multi-sync/);
+  assert.match(source, /Error from Multi-Sync/);
   assert.match(
     source,
     /accessibilityLabel="Refresh product errors"[\s\S]*tone="critical"[\s\S]*variant="primary"/,

@@ -75,6 +75,7 @@ interface AttributeRuleStatusResponse {
 
 interface SaveAttributeRulesResponse {
   ok: true;
+  feedRefreshRequired: boolean;
   configuration: PublicConfiguration;
   job: PublicAttributeRuleJob;
   ruleJobs: PublicAttributeRuleJobs;

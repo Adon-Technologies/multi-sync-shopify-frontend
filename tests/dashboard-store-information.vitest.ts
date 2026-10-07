@@ -6,7 +6,7 @@ import {
 
 it("shows the primary shop locale and primary market name", async () => {
   const shop = "dashboard-language-test.myshopify.com";
-  const graphql = vi.fn(async (_query: string) =>
+  const graphql = vi.fn<(query: string) => Promise<Response>>(async () =>
     new Response(
       JSON.stringify({
         data: {

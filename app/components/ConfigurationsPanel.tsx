@@ -1,3 +1,4 @@
+import { PolarisCheckbox, PolarisChoiceList } from "./PolarisFormControls";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SaveBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,6 +16,7 @@ import { useOverlayEvents } from "../hooks/useOverlayEvents";
 import type { PublicConfiguration } from "../services/configuration.server";
 import {
   collectionsQueryOptions,
+  collectionNamesQueryOptions,
   configurationKeys,
   configurationQueryOptions,
   ConfigurationRequestError,
@@ -39,6 +41,11 @@ import {
 import styles from "../styles/configurations.module.css";
 
 interface ConfigurationsPanelProps {
+  market?: {
+    value: ConfigurationInput;
+    onChange: (value: ConfigurationInput) => void;
+    onCopy: (section: string) => void;
+  };
   active: boolean;
   onOpenFeeds: () => void;
   onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
@@ -54,7 +61,7 @@ const checkoutLinkModeOptions: ReadonlyArray<{
   { label: "Link to checkout", value: "CHECKOUT" },
 ];
 
-function configurationForm(
+export function configurationForm(
   configuration: PublicConfiguration,
 ): ConfigurationInput {
   return {
@@ -103,12 +110,14 @@ function ConfigurationSkeleton() {
 }
 
 function FeatureHeading({
+  onCopy,
   subtitle,
   title,
   viewAccessibilityLabel,
   viewDisabled,
   viewTarget,
 }: {
+  onCopy?: () => void;
   subtitle: string;
   title: string;
   viewAccessibilityLabel: string;
@@ -121,6 +130,7 @@ function FeatureHeading({
         <h3>{title}</h3>
         <p>{subtitle}</p>
       </div>
+      {onCopy ? <s-button onClick={onCopy} variant="tertiary">Copy from Primary</s-button> : null}
       <s-button
         accessibilityLabel={viewAccessibilityLabel}
         command="--show"
@@ -325,7 +335,7 @@ function OptionNameSelector({
 
                   return (
                     <div className={styles.optionListItem} key={comparable}>
-                      <s-checkbox
+                      <PolarisCheckbox
                         checked={selectedOptions.has(comparable)}
                         label={option}
                         onChange={(event) =>
@@ -722,6 +732,7 @@ function ProductTypesSelector(props: {
 }
 
 export function ConfigurationsPanel({
+  market,
   active,
   onOpenFeeds,
   onUnsavedChangesChange,
@@ -734,7 +745,8 @@ export function ConfigurationsPanel({
     shop: "pending-shop",
     sessionId: "pending-session",
   };
-  const [form, setForm] = useState<ConfigurationInput | null>(null);
+  const [primaryForm, setForm] = useState<ConfigurationInput | null>(null);
+  const form = market?.value ?? primaryForm;
   const [savedForm, setSavedForm] = useState<ConfigurationInput | null>(null);
   const [includedCollectionDisplay, setIncludedCollectionDisplay] = useState<SelectedCollection[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -745,9 +757,21 @@ export function ConfigurationsPanel({
   } | null>(null);
   const configurationQuery = useQuery({
     ...configurationQueryOptions(queryScope),
-    enabled: Boolean(scope) && active,
+    enabled: Boolean(scope) && active && !market,
     refetchOnMount: "always",
   });
+  const includedCollectionNamesQuery = useQuery({
+    ...collectionNamesQueryOptions(queryScope, form?.includedCollectionIds ?? []),
+    enabled: Boolean(scope) && active && Boolean(form?.includedCollectionIds?.length) &&
+      form?.productSubmissionMode === "SELECTED_COLLECTIONS",
+  });
+  const selectedIncludedCollections = (form?.includedCollectionIds ?? []).map((id) =>
+    includedCollectionNamesQuery.data?.find((collection) => collection.id === id) ??
+    includedCollectionDisplay.find((collection) => collection.id === id) ??
+    configurationQuery.data?.configuration.includedCollections?.find((collection) => collection.id === id) ?? {
+      id,
+      title: includedCollectionNamesQuery.isError ? "Collection name unavailable" : "Loading collection…",
+    });
   const locationsQuery = useQuery({
     ...shopifyLocationsQueryOptions(queryScope),
     enabled:
@@ -760,20 +784,21 @@ export function ConfigurationsPanel({
   });
 
   useEffect(() => {
-    if (!form && !savedForm && configurationQuery.data?.configuration) {
+    if (!market && !form && !savedForm && configurationQuery.data?.configuration) {
       const initialForm = configurationForm(
         configurationQuery.data.configuration,
       );
       setForm(initialForm);
       setSavedForm(initialForm);
     }
-  }, [configurationQuery.data, form, savedForm]);
+  }, [configurationQuery.data, form, savedForm, market]);
 
   const updateForm = <TKey extends keyof ConfigurationInput>(
     key: TKey,
     value: ConfigurationInput[TKey],
   ) => {
-    setForm((current) => (current ? { ...current, [key]: value } : current));
+    if (market) market.onChange({ ...market.value, [key]: value });
+    else setForm((current) => (current ? { ...current, [key]: value } : current));
     setFieldErrors((current) => ({ ...current, [key]: undefined }));
     setFeedback(null);
   };
@@ -917,7 +942,7 @@ export function ConfigurationsPanel({
 
   return (
     <div className={styles.configurations}>
-      {isHydrated ? (
+      {isHydrated && !market ? (
         <SaveBar
           id="configuration-contextual-save-bar"
           open={hasUnsavedChanges}
@@ -936,7 +961,7 @@ export function ConfigurationsPanel({
         </SaveBar>
       ) : null}
 
-      <div className={styles.header}>
+      {!market ? <div className={styles.header}>
         <div>
           <s-heading>Configurations</s-heading>
           <s-paragraph color="subdued">
@@ -944,9 +969,9 @@ export function ConfigurationsPanel({
             exclusions.
           </s-paragraph>
         </div>
-      </div>
+      </div> : null}
 
-      {configurationQuery.data?.feedRefreshRequired ? (
+      {!market && configurationQuery.data?.feedRefreshRequired ? (
         <s-banner heading="XML feed refresh required" tone="warning">
           <div className={styles.xmlRefreshWarningContent}>
             <s-paragraph>
@@ -966,7 +991,7 @@ export function ConfigurationsPanel({
       <TabAlertNavigator alerts={tabAlerts} />
 
       <div className={styles.cards}>
-        <s-section heading="Information">
+        {!market ? <s-section heading="Information">
           <div className={styles.informationGrid}>
             {isLoading ? (
               <>
@@ -989,7 +1014,7 @@ export function ConfigurationsPanel({
                 <s-text-field
                   error={fieldErrors.countryCode}
                   label="Country Code (Primary Feed Product ID)"
-                  maxLength={2}
+                  maxLength={3}
                   name="countryCode"
                   onInput={(event) =>
                     updateForm(
@@ -1003,11 +1028,11 @@ export function ConfigurationsPanel({
               </>
             )}
           </div>
-        </s-section>
+        </s-section> : null}
 
         <s-section heading="Attributes and Exclusions">
           <div className={styles.features}>
-            <div className={styles.feature}>
+            {!market ? <div className={styles.feature}>
               <FeatureHeading
                 subtitle="Select color option"
                 title="Color option"
@@ -1028,9 +1053,9 @@ export function ConfigurationsPanel({
                   value={form?.colorOptions ?? []}
                 />
               )}
-            </div>
+            </div> : null}
 
-            <div className={styles.feature}>
+            {!market ? <div className={styles.feature}>
               <FeatureHeading
                 subtitle="Select size option"
                 title="Size option"
@@ -1051,12 +1076,13 @@ export function ConfigurationsPanel({
                   value={form?.sizeOptions ?? []}
                 />
               )}
-            </div>
+            </div> : null}
 
             <div className={styles.feature}>
               <FeatureHeading
                 subtitle="Collections"
                 title="Exclude collection"
+                onCopy={market ? () => market.onCopy("collections") : undefined}
                 viewAccessibilityLabel="View and edit excluded collections"
                 viewDisabled={isLoading}
                 viewTarget={COLLECTIONS_MODAL_ID}
@@ -1078,6 +1104,7 @@ export function ConfigurationsPanel({
               <FeatureHeading
                 subtitle="Product titles"
                 title="Exclude product by title"
+                onCopy={market ? () => market.onCopy("titles") : undefined}
                 viewAccessibilityLabel="View and edit excluded product titles"
                 viewDisabled={isLoading}
                 viewTarget={TITLE_TERMS_MODAL_ID}
@@ -1097,6 +1124,7 @@ export function ConfigurationsPanel({
               <FeatureHeading
                 subtitle="Remove words or phrases from XML titles only"
                 title="Exclude attributes from title"
+                onCopy={market ? () => market.onCopy("titleCleanup") : undefined}
                 viewAccessibilityLabel="View and edit excluded title attributes"
                 viewDisabled={isLoading}
                 viewTarget={TITLE_ATTRIBUTES_MODAL_ID}
@@ -1116,6 +1144,7 @@ export function ConfigurationsPanel({
               <FeatureHeading
                 subtitle="Product tags"
                 title="Exclude product by tag"
+                onCopy={market ? () => market.onCopy("tags") : undefined}
                 viewAccessibilityLabel="View and edit excluded product tags"
                 viewDisabled={isLoading}
                 viewTarget={PRODUCT_TAGS_MODAL_ID}
@@ -1132,7 +1161,7 @@ export function ConfigurationsPanel({
               )}
             </div>
 
-            <div className={styles.feature}>
+            {!market ? <div className={styles.feature}>
               <FeatureHeading
                 subtitle="Product type"
                 title="Add Product type"
@@ -1149,12 +1178,13 @@ export function ConfigurationsPanel({
                   value={form?.productTypes ?? []}
                 />
               )}
-            </div>
+            </div> : null}
 
             <div className={styles.googleFeedOptions}>
               <div className={styles.googleFeedOptionsHeading}>
                 <h3>Google feed options</h3>
                 <p>Control optional product data in generated XML feeds.</p>
+                {market ? <s-button onClick={() => market.onCopy("google")} variant="tertiary">Copy from Primary</s-button> : null}
               </div>
               {isLoading ? (
                 <div className={styles.googleFeedOptionsGrid}>
@@ -1169,6 +1199,7 @@ export function ConfigurationsPanel({
                     <PolarisAppProvider i18n={enTranslations}>
                       <fieldset className={styles.submissionChoices}>
                         <legend>Which products need to be submitted in the feed?</legend>
+                        {market ? <s-button onClick={() => market.onCopy("submission")} variant="tertiary">Copy from Primary</s-button> : null}
                         <InlineStack gap="400">
                           <RadioButton label="All products" id="submission-all-products" name="product-submission-mode"
                             checked={form?.productSubmissionMode !== "SELECTED_COLLECTIONS"}
@@ -1185,24 +1216,22 @@ export function ConfigurationsPanel({
                         <s-text>Which collections would you like to choose?</s-text>
                         <CollectionSelector inclusion scope={scope} error={fieldErrors.includedCollectionIds}
                           excludedIds={form.excludedCollections.map(({ id }) => id)}
-                          value={(form.includedCollectionIds ?? []).map((id) =>
-                            configurationQuery.data?.configuration.includedCollections?.find((collection) => collection.id === id) ??
-                            includedCollectionDisplay.find((collection) => collection.id === id) ?? { id, title: `Collection (${id.split("/").at(-1)})` })}
+                          value={selectedIncludedCollections}
                           onChange={(collections) => {
                             setIncludedCollectionDisplay(collections);
                             updateForm("includedCollectionIds", collections.map(({ id }) => id));
                           }} />
                         <div className={styles.dialogTags} aria-label="Selected included collections">
-                          {(form.includedCollectionIds ?? []).map((id) => {
-                            const collection = configurationQuery.data?.configuration.includedCollections?.find((entry) => entry.id === id) ?? includedCollectionDisplay.find((entry) => entry.id === id);
-                            return <IncludedCollectionChip key={id} collection={collection ?? { id, title: `Collection (${id.split("/").at(-1)})` }}
+                          {selectedIncludedCollections.map((collection) => {
+                            const { id } = collection;
+                            return <IncludedCollectionChip key={id} collection={collection}
                               onRemove={() => updateForm("includedCollectionIds", form.includedCollectionIds?.filter((entry) => entry !== id) ?? [])} />;
                           })}
                         </div>
                       </>
                     ) : null}
                   </div>
-                  <s-checkbox
+                  <PolarisCheckbox
                     checked={form?.showSalePriceInGoogleFeed ?? false}
                     details="When enabled, Google receives the original price plus sale_price. When disabled, only the final current price is sent."
                     error={fieldErrors.showSalePriceInGoogleFeed}
@@ -1214,7 +1243,7 @@ export function ConfigurationsPanel({
                       )
                     }
                   />
-                  <s-checkbox
+                  <PolarisCheckbox
                     checked={form?.includeShippingWeightInGoogleFeed ?? false}
                     details="When enabled, variants with a valid Shopify weight include shipping_weight in the XML."
                     error={fieldErrors.includeShippingWeightInGoogleFeed}
@@ -1226,7 +1255,7 @@ export function ConfigurationsPanel({
                       )
                     }
                   />
-                  <s-checkbox
+                  <PolarisCheckbox
                     checked={form?.useProductImageAsMainImage ?? false}
                     details="The main product image is the image which is usually shown on the category page."
                     error={fieldErrors.useProductImageAsMainImage}
@@ -1238,7 +1267,7 @@ export function ConfigurationsPanel({
                       )
                     }
                   />
-                  <s-checkbox
+                  <PolarisCheckbox
                     checked={form?.excludeOutOfStockItems ?? false}
                     details="When enabled, out-of-stock variants are excluded. This is ignored when Shopify inventory is not tracked or selling can continue."
                     disabled={
@@ -1262,6 +1291,7 @@ export function ConfigurationsPanel({
         </s-section>
 
         <s-section heading="Inventory & Availability">
+          {market ? <s-button onClick={() => market.onCopy("inventory")} variant="tertiary">Copy from Primary</s-button> : null}
           <div className={styles.inventoryAvailability}>
             <s-paragraph color="subdued">
               Control how Shopify inventory becomes Google feed availability.
@@ -1274,7 +1304,7 @@ export function ConfigurationsPanel({
               </>
             ) : (
               <>
-                <s-checkbox
+                <PolarisCheckbox
                   checked={form?.ignoreShopifyInventoryInGoogleFeed ?? false}
                   details="When enabled, active products are sent to Google as in stock even if Shopify inventory is 0. Use only if your storefront also remains purchasable."
                   error={fieldErrors.ignoreShopifyInventoryInGoogleFeed}
@@ -1306,7 +1336,7 @@ export function ConfigurationsPanel({
                     </p>
                   </div>
 
-                  <s-choice-list
+                  <PolarisChoiceList
                     error={fieldErrors.inventorySourceMode}
                     label="Inventory source"
                     labelAccessibilityVisibility="exclusive"
@@ -1327,7 +1357,7 @@ export function ConfigurationsPanel({
                     <s-choice value="SELECTED_LOCATIONS">
                       Selected locations
                     </s-choice>
-                  </s-choice-list>
+                  </PolarisChoiceList>
 
                   {form?.inventorySourceMode === "SELECTED_LOCATIONS" ? (
                     <div className={styles.inventoryLocations}>
@@ -1367,7 +1397,7 @@ export function ConfigurationsPanel({
                       ) : (
                         <div className={styles.inventoryLocationList}>
                           {locationsQuery.data?.map((location) => (
-                            <s-checkbox
+                            <PolarisCheckbox
                               checked={form.selectedInventoryLocationIds.includes(
                                 location.id,
                               )}
@@ -1383,7 +1413,7 @@ export function ConfigurationsPanel({
                           ))}
 
                           {unavailableSelectedLocationIds.map((id) => (
-                            <s-checkbox
+                            <PolarisCheckbox
                               checked
                               details="This saved location is no longer active or accessible. Uncheck it to remove it."
                               key={id}
@@ -1419,6 +1449,7 @@ export function ConfigurationsPanel({
         </s-section>
 
         <s-section heading="URL Options">
+          {market ? <s-button onClick={() => market.onCopy("urls")} variant="tertiary">Copy from Primary</s-button> : null}
           <div className={styles.urlOptions}>
             <s-paragraph color="subdued">
               Control tracking, currency, and checkout URLs used in the final
@@ -1433,7 +1464,7 @@ export function ConfigurationsPanel({
               </>
             ) : (
               <>
-                <s-checkbox
+                <PolarisCheckbox
                   checked={form?.disableUtmParameters ?? false}
                   details="By default, links include Google Shopping UTM parameters for analytics tracking."
                   error={fieldErrors.disableUtmParameters}
@@ -1446,7 +1477,7 @@ export function ConfigurationsPanel({
                   }
                 />
 
-                <s-checkbox
+                {!market ? <PolarisCheckbox
                   checked={form?.disablePrimaryCurrencyParameter ?? false}
                   details="Shopify Market feeds always keep the currency parameter so market pricing keeps working."
                   error={fieldErrors.disablePrimaryCurrencyParameter}
@@ -1457,7 +1488,7 @@ export function ConfigurationsPanel({
                       event.currentTarget.checked,
                     )
                   }
-                />
+                /> : null}
 
                 <div className={styles.checkoutLinkSetting}>
                   <span className={styles.checkoutLinkLabel}>
@@ -1552,7 +1583,7 @@ export function ConfigurationsPanel({
           </div>
         </s-section>
 
-        {scope ? (
+        {!market ? scope ? (
           <AttributeRulesCard
             configuration={configurationQuery.data?.configuration ?? null}
             initialJobs={configurationQuery.data?.ruleJobs ?? null}
@@ -1562,7 +1593,7 @@ export function ConfigurationsPanel({
           <s-section heading="Gender & Age Rules">
             <ConfigurationSkeleton />
           </s-section>
-        )}
+        ) : null}
       </div>
     </div>
   );

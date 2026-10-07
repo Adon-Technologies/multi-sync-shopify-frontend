@@ -16,6 +16,8 @@ export type FeedStatus =
   | "FAILED";
 
 export interface FeedMetadata {
+  customConfigurationEnabled?: boolean;
+  marketConfigurationRevision?: number;
   idCountryCode?: string | null;
   createdAt: string;
   feedType: "PRIMARY" | "ADDITIONAL";

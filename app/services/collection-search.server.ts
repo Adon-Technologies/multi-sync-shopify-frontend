@@ -255,6 +255,6 @@ export async function resolveIncludedCollections(admin: AdminGraphQLClient, ids:
     for (const node of data.nodes) if (node) found.set(node.id, node);
   }
   return ids.map((id) => found.get(id) ?? {
-    id, title: `Unavailable collection (${id.split("/").at(-1)})`, missing: true,
+    id, title: "Unavailable collection", missing: true,
   });
 }

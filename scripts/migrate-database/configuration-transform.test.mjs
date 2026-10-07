@@ -38,6 +38,20 @@ test("Configuration candidate uses Shopify CSV identity and app defaults", () =>
   assert.match(result.document.diagnosticsRevision, /^[a-f0-9]{64}$/);
 });
 
+test("Configuration CSV accepts and preserves 1-3 letters and rejects invalid country codes", () => {
+  for (const code of ["L", "FR", "FRA", "USA", "LBN"]) {
+    const shop = parseConfigurationCsv(`Shop domain,Shop email,Shop country\nexample.myshopify.com,owner@example.com, ${code.toLowerCase()} `).get("example.myshopify.com");
+    assert.equal(shop.countryCode, code);
+    const result = buildConfigurationEntry({ generatedAt: new Date(), legacyStore: undefined,
+      shop: { ...shop, shopDomain: "example.myshopify.com" }, storeId: "6a758b00694d376a5b3ddcaf" });
+    assert.equal(result.document.countryCode, code);
+  }
+  for (const code of ["USAA", "FRANCE", "1234", "L1", ""]) {
+    const shop = parseConfigurationCsv(`Shop domain,Shop email,Shop country\nexample.myshopify.com,owner@example.com,${code}`).get("example.myshopify.com");
+    assert.equal(shop.countryCode, null);
+  }
+});
+
 test("Configuration candidate records empty fallbacks as warnings", () => {
   const result = buildConfigurationEntry({
     generatedAt: new Date("2026-08-07T12:00:00.000Z"),

@@ -16,7 +16,7 @@ test("Dashboard loads the authenticated store's Primary and Additional feeds", (
 test("Dashboard shows feed count and each Market detail requested", () => {
   assert.match(dashboardSource, /rows\.length === 1 \? "feed" : "feeds"/);
   for (const heading of ["Market", "Country", "Language", "Currency", "Status"]) {
-    assert.match(dashboardSource, new RegExp(`>${heading}<\\/s-table-header>`));
+    assert.match(dashboardSource, new RegExp(`>\\s*${heading}\\s*<\\/s-table-header>`));
   }
   assert.match(dashboardSource, /primaryData\.market\?\.languageName/);
   assert.match(dashboardSource, /additionalData\?\.feeds\.map/);

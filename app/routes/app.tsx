@@ -1,5 +1,5 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, useLoaderData, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useRouteError, useLocation } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
@@ -15,10 +15,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
+  const focusedMarketFlow = useLocation().pathname.startsWith("/app/market-feed/");
 
   return (
     <AppProvider embedded apiKey={apiKey}>
-      <s-app-nav>
+      {!focusedMarketFlow ? <s-app-nav>
         {/* App Bridge supports rel="home"; Polaris's s-link types omit it. */}
         <s-link href="/app" {...{ rel: "home" }}>
           Home
@@ -28,7 +29,7 @@ export default function App() {
             {label}
           </s-link>
         ))}
-      </s-app-nav>
+      </s-app-nav> : null}
       <Outlet />
     </AppProvider>
   );

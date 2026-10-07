@@ -41,6 +41,7 @@ const db = vi.hoisted(() => {
       findUnique: vi.fn(async () => ({ id: "store", configuration: stored })),
     },
     xmlLink: {
+      findMany: vi.fn(async () => [{ id: "primary", feedType: "PRIMARY" }, { id: "additional", feedType: "ADDITIONAL" }]),
       updateMany: vi.fn(async () => ({ count: 2 })),
       count: vi.fn(async () => 2),
     },
@@ -79,7 +80,7 @@ it("persists, reloads and clears custom tag exclusions through the real configur
   ]);
   expect(db.xmlLink.updateMany).toHaveBeenCalledWith(
     expect.objectContaining({
-      where: { gcsObjectName: { not: null }, storeId: "store" },
+      where: { gcsObjectName: { not: null }, storeId: "store", id: { in: ["primary", "additional"] } },
       data: { requiresRefresh: true },
     }),
   );

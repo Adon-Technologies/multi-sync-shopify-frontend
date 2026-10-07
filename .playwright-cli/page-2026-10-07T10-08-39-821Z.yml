@@ -1,0 +1,30 @@
+- main [ref=e4]:
+  - heading "New market feed" [level=2] [ref=e6]
+  - link "← Feeds" [ref=e8] [cursor=pointer]:
+    - /url: /app/feeds
+  - generic [ref=e9]:
+    - generic [ref=e11]:
+      - heading "Market feed" [level=2] [ref=e16]
+      - generic [ref=e18]:
+        - generic:
+          - paragraph [ref=e19]:
+            - generic: France · France · French
+          - generic [ref=e20]: "Country Code: FR"
+    - generic [ref=e23]:
+      - heading "Configuration" [level=2] [ref=e28]
+      - generic:
+        - generic [ref=e31] [cursor=pointer]:
+          - checkbox "Customize configuration" [ref=e32]
+          - text: Customize configuration
+        - paragraph [ref=e33]:
+          - generic: Uses the same configuration as the Primary Feed, including future changes.
+    - generic [ref=e35]:
+      - generic:
+        - button "Back to Feeds" [ref=e36] [cursor=pointer]
+        - button "Generate feed" [ref=e39] [cursor=pointer]
+  - generic: This feed exceeds your included allowance and adds $1.49/month in usage charges to your Shopify app bill.
+  - generic: Cancel
+  - generic: Add feed for $1.49/month
+  - generic: Your current subscription does not include paid Additional Market feeds. Cancel and select a plan with usage billing on Shopify. Cancellation takes effect immediately and access pauses until you approve the replacement. Additional feeds cost $1.49/month each. Shopify determines charges and credits; a new free trial is not guaranteed.
+  - generic: Not now
+  - generic: Cancel and resubscribe

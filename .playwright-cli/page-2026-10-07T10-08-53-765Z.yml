@@ -1,0 +1,174 @@
+- main [ref=e4]:
+  - heading "New market feed" [level=2] [ref=e6]
+  - link "← Feeds" [ref=e8] [cursor=pointer]:
+    - /url: /app/feeds
+  - generic [ref=e9]:
+    - generic [ref=e11]:
+      - heading "Market feed" [level=2] [ref=e16]
+      - generic [ref=e18]:
+        - generic:
+          - paragraph [ref=e19]:
+            - generic: France · France · French
+          - generic [ref=e20]: "Country Code: FR"
+    - generic [ref=e23]:
+      - heading "Configuration" [level=2] [ref=e28]
+      - generic:
+        - generic [ref=e31] [cursor=pointer]:
+          - checkbox "Customize configuration" [checked] [ref=e32]
+          - text: Customize configuration
+        - paragraph [ref=e33]:
+          - generic: Use your own settings for this market feed. Color, size, gender, and age settings continue to follow Primary.
+    - generic [ref=e44]:
+      - generic [ref=e46]:
+        - heading "Attributes and Exclusions" [level=2] [ref=e51]
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - generic [ref=e54]:
+              - generic [ref=e55]:
+                - heading "Exclude collection" [level=3] [ref=e56]
+                - paragraph [ref=e57]: Collections
+              - button "Copy from Primary" [ref=e58] [cursor=pointer]
+              - button "View and edit excluded collections" [ref=e62] [cursor=pointer]
+            - generic [ref=e67]:
+              - button "Edit excluded collections" [ref=e69]:
+                - generic: 1 collection selected
+              - generic: Excluded
+              - generic: Cancel
+              - generic: Confirm
+          - generic [ref=e78]:
+            - generic [ref=e79]:
+              - generic [ref=e80]:
+                - heading "Exclude product by title" [level=3] [ref=e81]
+                - paragraph [ref=e82]: Product titles
+              - button "Copy from Primary" [ref=e83] [cursor=pointer]
+              - button "View and edit excluded product titles" [ref=e87] [cursor=pointer]
+            - generic [ref=e92]:
+              - button "Edit excluded product titles" [ref=e94]:
+                - generic: 1 title term selected
+              - generic:
+                - generic: hidden
+                - generic: Add
+              - generic: Cancel
+              - generic: Confirm
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - generic [ref=e105]:
+                - heading "Exclude attributes from title" [level=3] [ref=e106]
+                - paragraph [ref=e107]: Remove words or phrases from XML titles only
+              - button "Copy from Primary" [ref=e108] [cursor=pointer]
+              - button "View and edit excluded title attributes" [ref=e112] [cursor=pointer]
+            - generic [ref=e117]:
+              - button "Edit excluded title attributes" [ref=e119]:
+                - generic: 1 title attribute selected
+              - generic:
+                - generic: Blue
+                - generic: Add
+              - generic: Cancel
+              - generic: Confirm
+          - generic [ref=e128]:
+            - generic [ref=e129]:
+              - generic [ref=e130]:
+                - heading "Exclude product by tag" [level=3] [ref=e131]
+                - paragraph [ref=e132]: Product tags
+              - button "Copy from Primary" [ref=e133] [cursor=pointer]
+              - button "View and edit excluded product tags" [ref=e137] [cursor=pointer]
+            - generic [ref=e142]:
+              - button "Edit excluded product tags" [ref=e144]:
+                - generic: 1 product tag selected
+              - generic:
+                - generic: sale
+                - generic: Add
+              - generic: Cancel
+              - generic: Confirm
+          - generic [ref=e153]:
+            - generic [ref=e154]:
+              - heading "Google feed options" [level=3] [ref=e155]
+              - paragraph [ref=e156]: Control optional product data in generated XML feeds.
+              - button "Copy from Primary" [ref=e157] [cursor=pointer]
+            - generic [ref=e160]:
+              - group "Which products need to be submitted in the feed?" [ref=e162]:
+                - button "Copy from Primary" [ref=e164] [cursor=pointer]
+                - generic [ref=e167]:
+                  - generic [ref=e168] [cursor=pointer]:
+                    - radio "All products" [checked] [ref=e171]
+                    - generic [ref=e173]: All products
+                  - generic [ref=e174] [cursor=pointer]:
+                    - radio "Products from collections" [ref=e177]
+                    - generic [ref=e179]: Products from collections
+              - generic [ref=e180]:
+                - generic [ref=e181] [cursor=pointer]:
+                  - checkbox "Show sale price in Google feed" [checked] [ref=e183]
+                  - generic [ref=e184]: Show sale price in Google feed
+                - generic [ref=e185]: When enabled, Google receives the original price plus sale_price. When disabled, only the final current price is sent.
+              - generic [ref=e186]:
+                - generic [ref=e187] [cursor=pointer]:
+                  - checkbox "Include shipping weight in Google feed" [checked] [ref=e189]
+                  - generic [ref=e190]: Include shipping weight in Google feed
+                - generic [ref=e191]: When enabled, variants with a valid Shopify weight include shipping_weight in the XML.
+              - generic [ref=e192]:
+                - generic [ref=e193] [cursor=pointer]:
+                  - checkbox "Use product image as main image" [ref=e195]
+                  - generic [ref=e196]: Use product image as main image
+                - generic [ref=e197]: The main product image is the image which is usually shown on the category page.
+              - generic [ref=e198]:
+                - generic [ref=e199] [cursor=pointer]:
+                  - checkbox "Exclude out of stock items" [checked] [ref=e201]
+                  - generic [ref=e202]: Exclude out of stock items
+                - generic [ref=e203]: When enabled, out-of-stock variants are excluded. This is ignored when Shopify inventory is not tracked or selling can continue.
+      - generic [ref=e205]:
+        - heading "Inventory & Availability" [level=2] [ref=e210]
+        - generic:
+          - button "Copy from Primary" [ref=e211] [cursor=pointer]
+          - generic [ref=e214]:
+            - paragraph [ref=e215]:
+              - generic: Control how Shopify inventory becomes Google feed availability.
+            - generic [ref=e216]:
+              - generic [ref=e217] [cursor=pointer]:
+                - checkbox "Ignore Shopify inventory in Google feed" [ref=e219]
+                - generic [ref=e220]: Ignore Shopify inventory in Google feed
+              - generic [ref=e221]: When enabled, active products are sent to Google as in stock even if Shopify inventory is 0. Use only if your storefront also remains purchasable.
+            - generic [ref=e222]:
+              - generic [ref=e223]:
+                - heading "Inventory source" [level=3] [ref=e224]
+                - paragraph [ref=e225]: Choose which Shopify locations are used to calculate variant availability.
+              - group "Inventory source" [ref=e226]:
+                - generic [ref=e228] [cursor=pointer]:
+                  - radio "All Shopify locations" [checked] [ref=e230]
+                  - text: All Shopify locations
+                - generic [ref=e231] [cursor=pointer]:
+                  - radio "Selected locations" [ref=e233]
+                  - text: Selected locations
+      - generic [ref=e235]:
+        - heading "URL Options" [level=2] [ref=e240]
+        - generic:
+          - button "Copy from Primary" [ref=e241] [cursor=pointer]
+          - generic [ref=e244]:
+            - paragraph [ref=e245]:
+              - generic: Control tracking, currency, and checkout URLs used in the final XML feed.
+            - generic [ref=e246]:
+              - generic [ref=e247] [cursor=pointer]:
+                - checkbox "Do not add UTM parameters to product links" [ref=e249]
+                - generic [ref=e250]: Do not add UTM parameters to product links
+              - generic [ref=e251]: By default, links include Google Shopping UTM parameters for analytics tracking.
+            - generic [ref=e252]:
+              - generic [ref=e253]: Add checkout link URL
+              - button "Choose checkout link URL behavior" [ref=e255]:
+                - generic: Disabled
+              - paragraph [ref=e263]:
+                - text: This will include a checkout URL in your product data which gives online shoppers the option to go directly to checkout in Free listings. See
+                - link "Google Merchant support" [ref=e264] [cursor=pointer]:
+                  - /url: https://support.google.com/merchants/answer/13580733
+                - text: and
+                - link "Shopify help" [ref=e265] [cursor=pointer]:
+                  - /url: https://help.shopify.com/en/manual/products/details/cart-permalink
+                - text: .
+    - generic [ref=e35]:
+      - generic:
+        - button "Back to Feeds" [ref=e36] [cursor=pointer]
+        - button "Generate feed" [ref=e39] [cursor=pointer]
+  - generic: This feed exceeds your included allowance and adds $1.49/month in usage charges to your Shopify app bill.
+  - generic: Cancel
+  - generic: Add feed for $1.49/month
+  - generic: Your current subscription does not include paid Additional Market feeds. Cancel and select a plan with usage billing on Shopify. Cancellation takes effect immediately and access pauses until you approve the replacement. Additional feeds cost $1.49/month each. Shopify determines charges and credits; a new free trial is not guaranteed.
+  - generic: Not now
+  - generic: Cancel and resubscribe

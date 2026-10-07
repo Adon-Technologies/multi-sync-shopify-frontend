@@ -7,10 +7,16 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
+    },
+    "./market-configuration": {
+      "types": "./market-configuration.d.ts",
+      "default": "./market-configuration.js"
     }
   },
   "files": [
     "index.d.ts",
-    "index.js"
+    "index.js",
+    "market-configuration.js",
+    "market-configuration.d.ts"
   ]
 }

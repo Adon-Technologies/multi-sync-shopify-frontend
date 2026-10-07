@@ -6,7 +6,7 @@ import {
 
 it("counts draft products separately from the published feed products", async () => {
   const shop = "dashboard-statistics-test.myshopify.com";
-  const graphql = vi.fn(async (_query: string) =>
+  const graphql = vi.fn<(query: string) => Promise<Response>>(async () =>
     new Response(
       JSON.stringify({
         data: {

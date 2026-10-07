@@ -585,6 +585,9 @@ model XmlLink {
   publicUrl             String
   gcsObjectName         String?
   // Merchant consent only; never identifies a feed as paid/free.
+  customConfigurationEnabled Boolean? @default(false)
+  customConfiguration Json?
+  marketConfigurationRevision Int? @default(0)
   additionalFeedChargeConsentAt DateTime?
   status                XmlFeedStatus     @default(NOT_GENERATED)
   generationSource      FeedRefreshSource @default(MANUAL)

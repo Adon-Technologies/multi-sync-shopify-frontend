@@ -226,6 +226,8 @@ async function mutateAdditionalFeed(
         countryCode: string;
         intent: "generate";
         paidFeedConfirmed?: boolean;
+        customConfigurationEnabled?: boolean;
+        customConfiguration?: object;
         idCountryCode: string;
         locale: string;
         marketId: string;
@@ -249,6 +251,8 @@ async function mutateAdditionalFeed(
 export function generateAdditionalFeed(
   input: {
     paidFeedConfirmed?: boolean;
+    customConfigurationEnabled?: boolean;
+    customConfiguration?: object;
     idCountryCode: string;
     countryCode: string;
     locale: string;

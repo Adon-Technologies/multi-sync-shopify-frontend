@@ -16,6 +16,7 @@ import {
   normalizeConfigurationText,
   type ConfigurationFieldErrors,
   type ConfigurationInput,
+  type SelectedCollection,
 } from "./configuration-validation";
 
 export interface ConfigurationQueryScope {
@@ -251,6 +252,36 @@ export function collectionsQueryOptions(
       const payload = await readJson<CollectionsResponse>(response);
       return payload.page;
     },
+  });
+}
+
+export function collectionNamesQueryOptions(
+  scope: ConfigurationQueryScope,
+  ids: string[],
+  endpoint = defaultEndpoint,
+) {
+  const selectedIds = [...new Set(ids)].sort();
+  return queryOptions({
+    ...sessionCacheOptions,
+    queryKey: ["configuration-collection-names", scope.shop, scope.sessionId, selectedIds, endpoint] as const,
+    queryFn: async ({ signal }): Promise<SelectedCollection[]> => {
+      const collections: SelectedCollection[] = [];
+      for (let index = 0; index < selectedIds.length; index += 250) {
+        const params = new URLSearchParams({ intent: "collection-names" });
+        for (const id of selectedIds.slice(index, index + 250)) params.append("id", id);
+        const response = await fetch(`${endpoint}?${params}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          signal,
+        });
+        const payload = await readJson<{ ok: true; collections: SelectedCollection[] }>(response);
+        collections.push(...payload.collections);
+      }
+      return collections;
+    },
+    refetchOnMount: "always",
+    staleTime: 0,
   });
 }
 

@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { getShopProductTags } from "../services/product-tag-discovery.server";
-import { searchShopCollections } from "../services/collection-search.server";
+import { resolveIncludedCollections, searchShopCollections } from "../services/collection-search.server";
 import {
   AttributeRuleScopeError,
   getAttributeRuleJobStatusesForShop,
@@ -12,7 +12,7 @@ import {
   saveConfigurationForShop,
 } from "../services/configuration.server";
 import { AttributeRulesValidationError } from "../services/attribute-rules";
-import { ConfigurationValidationError } from "../services/configuration-validation";
+import { ConfigurationValidationError, normalizeIncludedCollectionIds } from "../services/configuration-validation";
 import { getShopVariantOptionNames } from "../services/variant-option-discovery.server";
 import {
   clearShopProductTypesCache,
@@ -31,6 +31,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const intent = url.searchParams.get("intent");
 
   try {
+    if (intent === "collection-names") {
+      const ids = url.searchParams.getAll("id");
+      const normalizedIds = normalizeIncludedCollectionIds(ids);
+      if (ids.length > 250 || ids.length !== normalizedIds.length) {
+        return Response.json({ ok: false, error: "Select valid collections." }, { status: 400 });
+      }
+      const collections = await resolveIncludedCollections(admin, normalizedIds);
+      return Response.json({ ok: true, intent, collections });
+    }
+
     if (intent === "collections") {
       const page = await searchShopCollections(
         admin,
@@ -86,7 +96,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         error:
           intent === "product-tags"
             ? "Shopify tags could not be loaded. You can still enter tags manually."
-            : intent === "collections"
+            : intent === "collections" || intent === "collection-names"
               ? "Collections couldn't be loaded. Try again."
               : intent === "option-names"
                 ? "Product option names couldn't be loaded. Try again."

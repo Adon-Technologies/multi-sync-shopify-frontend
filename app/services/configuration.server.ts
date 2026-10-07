@@ -24,6 +24,7 @@ import {
   resolveIncludedCollections,
 } from "./collection-search.server";
 import { createDiagnosticsConfigurationRevision } from "./configuration-revision.server";
+import { primaryChangeAffectsFeed } from "@multi-sync/catalog-rules/market-configuration";
 import {
   DEFAULT_COLOR_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
@@ -499,14 +500,16 @@ export async function saveConfigurationForShop(
     }
     throw error;
   }
-  // Configured Product Types are reusable Diagnostics suggestions and are not
-  // read by feed generation. Every other Configuration change remains
-  // feed-affecting and invalidates already-published XML for this store.
+  // Product Types are Diagnostics suggestions. Compare each feed's effective
+  // settings so custom markets stay fresh when only a Primary override changes.
   if (shouldInvalidatePublishedFeeds) {
+    const published = await prisma.xmlLink.findMany({ where: { storeId: store.id, gcsObjectName: { not: null } } });
+    const affectedIds = published.filter(feed => primaryChangeAffectsFeed(previousInput, verifiedInput, feed)).map(feed => feed.id);
     await prisma.xmlLink.updateMany({
       where: {
         gcsObjectName: { not: null },
         storeId: store.id,
+        id: { in: affectedIds },
       },
       data: { requiresRefresh: true },
     });

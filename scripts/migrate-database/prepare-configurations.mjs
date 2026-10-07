@@ -5,6 +5,7 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { MongoClient } from "mongodb";
+import { normalizeCountryCode } from "@multi-sync/catalog-rules";
 
 import { parseCsv } from "./shopify-csv-store-transform.mjs";
 import { isValidShopDomain, normalizeShopDomain } from "./store-transform.mjs";
@@ -13,7 +14,6 @@ const SOURCE_DATABASE = "gsf";
 const TARGET_DATABASE = "Multi-sync";
 const DEFAULT_OUTPUT = "scripts/migrate-database/configurations.candidate.json";
 const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const COUNTRY_CODE = /^[A-Z]{2}$/;
 const DEFAULT_COLOR_OPTIONS = ["Color", "Colour"];
 const DEFAULT_SIZE_OPTIONS = ["Size"];
 
@@ -117,10 +117,10 @@ export function parseConfigurationCsv(text) {
     }
 
     const alertsEmail = normalizedText(row["Shop email"]).toLowerCase();
-    const countryCode = normalizedText(row["Shop country"]).toUpperCase();
+    const countryCode = normalizeCountryCode(row["Shop country"]);
     shops.set(shopDomain, {
       alertsEmail: EMAIL_ADDRESS.test(alertsEmail) ? alertsEmail : null,
-      countryCode: COUNTRY_CODE.test(countryCode) ? countryCode : null,
+      countryCode,
     });
   }
   return shops;

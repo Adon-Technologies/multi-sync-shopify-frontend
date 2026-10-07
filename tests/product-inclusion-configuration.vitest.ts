@@ -15,7 +15,7 @@ const db = vi.hoisted(() => {
         return stored;
       }),
     },
-    xmlLink: { updateMany: vi.fn(async () => ({ count: 2 })), count: vi.fn(async () => 2) },
+    xmlLink: { findMany: vi.fn(async () => [{ id: "primary", feedType: "PRIMARY" }, { id: "additional", feedType: "ADDITIONAL" }]), updateMany: vi.fn(async () => ({ count: 2 })), count: vi.fn(async () => 2) },
     attributeRuleJob: { findMany: vi.fn(async () => []) },
   };
 });
@@ -40,7 +40,7 @@ it("saves inclusion IDs, marks all published feeds Refresh required and returns 
   const result = await saveConfigurationForShop(admin, session, { ...base, productSubmissionMode: "SELECTED_COLLECTIONS", includedCollectionIds: [id(1), id(2)] });
   expect(result.configuration.includedCollectionIds).toEqual([id(1), id(2)]);
   expect(result.configuration.includedCollections?.[0]?.title).toBe("Summer");
-  expect(db.xmlLink.updateMany).toHaveBeenCalledWith({ where: { gcsObjectName: { not: null }, storeId: "store" }, data: { requiresRefresh: true } });
+  expect(db.xmlLink.updateMany).toHaveBeenCalledWith({ where: { gcsObjectName: { not: null }, storeId: "store", id: { in: ["primary", "additional"] } }, data: { requiresRefresh: true } });
   expect(result.feedRefreshRequired).toBe(true);
   // Only configuration and refresh-state writes exist in this mocked DB. No queue or GCS writes are available.
   expect(admin.graphql.mock.calls.every(([query]) => !query.includes("mutation"))).toBe(true);
@@ -97,4 +97,26 @@ it("collection selector fetches paginated counts with search without fetching co
   expect(query).toContain("productsCount { count precision }");
   expect(query).not.toContain("products(");
   expect(options.variables).toEqual({ after: "previous", first: 20, query: "title:Summer*" });
+});
+
+it("Primary inclusion changes invalidate Primary and OFF markets while leaving custom markets fresh", async () => {
+  await saveConfigurationForShop(admin, session, base);
+  db.xmlLink.findMany.mockResolvedValueOnce([
+    { id: "primary", feedType: "PRIMARY" }, { id: "additional", feedType: "ADDITIONAL" },
+    { id: "custom", feedType: "ADDITIONAL", customConfigurationEnabled: true, customConfiguration: { productSubmissionMode: "ALL_PRODUCTS", includedCollectionIds: [] } },
+  ] as never);
+  db.xmlLink.updateMany.mockClear();
+  await saveConfigurationForShop(admin, session, { ...base, productSubmissionMode: "SELECTED_COLLECTIONS", includedCollectionIds: [id(1)] });
+  expect(db.xmlLink.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: ["primary", "additional"] } }) }));
+});
+
+it("Primary Color changes invalidate custom and inherited markets because mappings remain global", async () => {
+  await saveConfigurationForShop(admin, session, base);
+  db.xmlLink.findMany.mockResolvedValueOnce([
+    { id: "primary", feedType: "PRIMARY" }, { id: "additional", feedType: "ADDITIONAL" },
+    { id: "custom", feedType: "ADDITIONAL", customConfigurationEnabled: true, customConfiguration: { colorOptions: ["stale-forbidden"] } },
+  ] as never);
+  db.xmlLink.updateMany.mockClear();
+  await saveConfigurationForShop(admin, session, { ...base, colorOptions: ["Colour"] });
+  expect(db.xmlLink.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: ["primary", "additional", "custom"] } }) }));
 });

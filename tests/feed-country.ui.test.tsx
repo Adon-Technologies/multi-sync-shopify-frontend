@@ -1,3 +1,5 @@
+import { feedKeys } from "../app/services/feed-query";
+import { updateMarketFeedCache } from "../app/services/market-configuration-query";
 import {
   act,
   fireEvent,
@@ -9,9 +11,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FeedsPanel } from "../app/components/FeedsPanel";
 
-const toast = vi.hoisted(() => ({ show: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  toast: { show: vi.fn() },
+}));
+vi.mock("react-router", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("@shopify/app-bridge-react", () => ({
-  useAppBridge: () => ({ toast }),
+  useAppBridge: () => ({ toast: mocks.toast }),
 }));
 vi.mock("../app/components/AutomaticRefreshCard", () => ({
   AutomaticRefreshCard: () => null,
@@ -41,90 +47,47 @@ const metadata = {
   generatedItems: 1,
   gcsObjectName: "feed.xml",
   fileSizeBytes: "100",
+  marketConfigurationRevision: 0,
 };
-let country = "GB";
-let savedFeed = { ...metadata };
-let additionalCount = 1;
-let currentPlan: "FREE" | "PRO" = "PRO";
-let requiresRenewal = false;
-let billingFailure = false;
-let renewalFailure = false;
-const planUrl =
-  "https://admin.shopify.com/store/test/charges/app/pricing_plans";
+let savedFeed: typeof metadata & { customConfigurationEnabled?: boolean };
 let client: QueryClient;
+let failure: boolean;
+let deferred: (() => void) | null;
 const writes: Record<string, unknown>[] = [];
-const hideOverlay = vi.fn();
-
 beforeEach(() => {
-  country = "GB";
   savedFeed = { ...metadata };
-  additionalCount = 1;
-  currentPlan = "PRO";
-  requiresRenewal = false;
-  billingFailure = false;
-  renewalFailure = false;
   writes.length = 0;
-  hideOverlay.mockReset();
+  failure = false;
+  deferred = null;
+  vi.clearAllMocks();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, options?: RequestInit) => {
-      if (url.includes("additional-feed-billing")) {
-        if (options?.method === "POST") {
-          writes.push(JSON.parse(String(options.body)));
-          return renewalFailure
-            ? Response.json(
-                { ok: false, error: "Shopify could not confirm cancellation." },
-                { status: 503 },
-              )
-            : Response.json({ ok: true, url: planUrl });
-        }
-        return billingFailure
-          ? Response.json(
-              { ok: false, error: "Shopify is unavailable. Try again." },
-              { status: 503 },
-            )
-          : Response.json({
-              ok: true,
-              requiresRenewal,
-              subscriptionId: "gid://shopify/AppSubscription/1",
-              url: planUrl,
-            });
-      }
       if (options?.method === "POST") {
         const input = JSON.parse(String(options.body));
         writes.push(input);
+        if (deferred !== null)
+          await new Promise<void>((resolve) => {
+            deferred = resolve;
+          });
+        if (failure)
+          return Response.json(
+            { ok: false, error: "Save failed" },
+            { status: 503 },
+          );
         savedFeed = {
           ...savedFeed,
-          idCountryCode: input.idCountryCode,
+          customConfigurationEnabled: input.customConfigurationEnabled,
           requiresRefresh: true,
+          marketConfigurationRevision: 1,
         };
         return Response.json({ ok: true, entry: { feed: savedFeed, market } });
       }
       if (url.includes("configuration-data"))
         return Response.json({
           ok: true,
-          configuration: { countryCode: country },
+          configuration: { countryCode: "GB" },
           feedRefreshRequired: savedFeed.requiresRefresh,
-        });
-      if (url.includes("resource=markets"))
-        return Response.json({
-          ok: true,
-          options: [
-            {
-              marketId: "market",
-              marketName: "Germany",
-              countryCode: "DE",
-              countryName: "Germany",
-              currencyCode: "EUR",
-              value: "market|DE",
-              availableLanguageCount: 1,
-            },
-          ],
-        });
-      if (url.includes("resource=languages"))
-        return Response.json({
-          ok: true,
-          languages: [{ locale: "fr", name: "French" }],
         });
       if (url.includes("additional-feeds"))
         return Response.json({
@@ -132,24 +95,6 @@ beforeEach(() => {
           activeGeneration: null,
           backendUnavailable: false,
           feeds: [{ feed: savedFeed, market }],
-          usage: {
-            plan: currentPlan,
-            entitlements: {
-              plan: currentPlan,
-              name: currentPlan === "FREE" ? "Free" : "Pro",
-              monthlyPriceCents: currentPlan === "FREE" ? 0 : 1000,
-              includedPrimaryFeeds: 1,
-              includedAdditionalFeeds: currentPlan === "FREE" ? 1 : 5,
-              productLimit: currentPlan === "FREE" ? 10 : null,
-              additionalFeedPriceCents: 149,
-            },
-            additionalFeedCount: additionalCount,
-            billableQuantity: Math.max(0, additionalCount - 5),
-            estimatedUsageCents: Math.max(0, additionalCount - 5) * 149,
-            estimatedTotalCents: 1000 + Math.max(0, additionalCount - 5) * 149,
-            status: "SYNCED",
-            message: null,
-          },
         });
       return Response.json({
         ok: true,
@@ -168,351 +113,91 @@ afterEach(() => {
   client.clear();
   vi.unstubAllGlobals();
 });
-
 async function setup() {
-  const result = render(
+  const ui = render(
     <QueryClientProvider client={client}>
       <FeedsPanel active scope={scope} />
     </QueryClientProvider>,
   );
   await waitFor(() =>
-    expect(
-      result.container.querySelector('s-button[icon="edit"]'),
-    ).toBeTruthy(),
+    expect(ui.container.querySelector('s-button[icon="edit"]')).toBeTruthy(),
   );
-  const modal = result.container.querySelector("#edit-additional-feed-modal")!;
-  Object.assign(modal, { showOverlay: vi.fn(), hideOverlay });
-  return result.container;
+  return ui.container;
 }
-async function input(element: Element, value: string) {
-  Object.defineProperty(element, "value", {
+async function toggle(element: Element, checked: boolean) {
+  Object.defineProperty(element, "checked", {
     configurable: true,
     writable: true,
-    value,
+    value: checked,
   });
   await act(async () => {
-    element.dispatchEvent(new Event("input", { bubbles: true }));
+    fireEvent.change(element);
   });
 }
-
-it("offers edit only on Additional feeds, saves only Country Code, and shows Refresh required", async () => {
+it("Add Market and Edit navigate to dedicated pages with no old dialogs or inline forms", async () => {
   const container = await setup();
-  const editButtons = container.querySelectorAll('s-button[icon="edit"]');
-  expect(editButtons).toHaveLength(1);
-  fireEvent.click(editButtons[0]);
-  const modal = container.querySelector("#edit-additional-feed-modal")!;
-  expect(
-    modal
-      .querySelector('s-text-field[label^="Country Code"]')
-      ?.getAttribute("label"),
-  ).toBe("Country Code (Primary Feed Product ID)");
-  await waitFor(() =>
-    expect(
-      modal
-        .querySelector('s-text-field[label^="Country Code"]')
-        ?.getAttribute("value"),
-    ).toBe("GB"),
-  );
-  for (const label of ["Market and country", "Language"])
-    expect(
-      modal
-        .querySelector(`s-text-field[label="${label}"]`)
-        ?.hasAttribute("readonly"),
-    ).toBe(true);
-  await input(
-    modal.querySelector('s-text-field[label^="Country Code"]')!,
-    "lb",
-  );
-  fireEvent.click(screen.getByText("Save", { selector: "s-button" }));
-  await waitFor(() =>
-    expect(writes).toEqual([
-      { intent: "edit", feedId: "feed", idCountryCode: "LB" },
-    ]),
-  );
-  await waitFor(() =>
-    expect(
-      screen.getByText("Refresh required", { selector: "s-badge" }),
-    ).toBeTruthy(),
-  );
-  expect(hideOverlay).toHaveBeenCalledOnce();
-});
-
-it("validates edits before sending and keeps the dialog open", async () => {
-  const container = await setup();
+  fireEvent.click(screen.getByText("+ Add Market", { selector: "s-button" }));
+  expect(mocks.navigate).toHaveBeenCalledWith("/app/market-feed/new");
   fireEvent.click(container.querySelector('s-button[icon="edit"]')!);
-  const field = container.querySelector(
-    '#edit-additional-feed-modal s-text-field[label^="Country Code"]',
-  )!;
-  await waitFor(() => expect(field.getAttribute("value")).toBe("GB"));
-  await input(field, "  ");
-  fireEvent.click(screen.getByText("Save", { selector: "s-button" }));
-  expect(field.getAttribute("error")).toMatch(/two-letter/);
-  expect(writes).toEqual([]);
-  expect(hideOverlay).not.toHaveBeenCalled();
-});
-
-it("each Add Market form snapshots current Configuration and keeps its override", async () => {
-  const container = await setup();
-  fireEvent.click(screen.getByText("+ Add Market"));
-  const fields = () =>
-    [
-      ...container.querySelectorAll('s-text-field[label^="Country Code"]'),
-    ].filter((field) => !field.closest("s-modal"));
-  await waitFor(() => expect(fields()).toHaveLength(1));
-  expect(container.textContent).toContain(
-    "Country Code (Primary Feed Product ID)",
-  );
-  expect(fields()[0].getAttribute("value")).toBe("GB");
-  await input(fields()[0], "lb");
-  country = "US";
-  fireEvent.click(screen.getByText("+ Add Market"));
-  await waitFor(() => expect(fields()).toHaveLength(2));
-  expect(fields().map((field) => field.getAttribute("value"))).toEqual([
-    "LB",
-    "US",
-  ]);
-});
-
-it("Generate feed URL submits the override without replacing the Shopify market country", async () => {
-  const container = await setup();
-  fireEvent.click(screen.getByText("+ Add Market"));
-  await waitFor(() =>
-    expect(
-      screen.queryByText("Germany: Germany / EUR", { selector: "s-button" }),
-    ).toBeTruthy(),
-  );
-  fireEvent.click(
-    screen.getByText("Germany: Germany / EUR", { selector: "s-button" }),
-  );
-  await waitFor(() =>
-    expect(
-      screen.queryByText("French / FR", { selector: "s-button" }),
-    ).toBeTruthy(),
-  );
-  fireEvent.click(screen.getByText("French / FR", { selector: "s-button" }));
-  const field = [
-    ...container.querySelectorAll('s-text-field[label^="Country Code"]'),
-  ].find((field) => !field.closest("s-modal"))!;
-  await input(field, "lb");
-  fireEvent.click(
-    screen.getByText("Generate feed URL", { selector: "s-button" }),
-  );
-  await waitFor(() =>
-    expect(writes[0]).toEqual({
-      intent: "generate",
-      paidFeedConfirmed: false,
-      countryCode: "DE",
-      idCountryCode: "LB",
-      locale: "fr",
-      marketId: "market",
-    }),
-  );
-});
-
-it("the sixth Additional feed requires a priced confirmation and cancel sends nothing", async () => {
-  additionalCount = 5;
-  const container = await setup();
-  const modal = container.querySelector("#paid-additional-feed-modal")!;
-  const showOverlay = vi.fn();
-  Object.assign(modal, { showOverlay, hideOverlay: vi.fn() });
-  fireEvent.click(screen.getByText("+ Add Market"));
-  await waitFor(() =>
-    expect(
-      screen.queryByText("Germany: Germany / EUR", { selector: "s-button" }),
-    ).toBeTruthy(),
-  );
-  fireEvent.click(
-    screen.getByText("Germany: Germany / EUR", { selector: "s-button" }),
-  );
-  await waitFor(() =>
-    expect(
-      screen.queryByText("French / FR", { selector: "s-button" }),
-    ).toBeTruthy(),
-  );
-  fireEvent.click(screen.getByText("French / FR", { selector: "s-button" }));
-  expect(
-    screen.getByText("Generate feed URL (+$1.49/month)", {
-      selector: "s-button",
-    }),
-  ).toBeTruthy();
-  fireEvent.click(
-    screen.getByText("Generate feed URL (+$1.49/month)", {
-      selector: "s-button",
-    }),
-  );
-  await waitFor(() => expect(showOverlay).toHaveBeenCalledOnce());
-  expect(writes).toEqual([]);
-  expect(modal.querySelector('s-button[command="--hide"]')?.textContent).toBe(
-    "Cancel",
-  );
-  await act(async () => {
-    modal.dispatchEvent(new Event("hide"));
-  });
-  expect(writes).toEqual([]);
-  fireEvent.click(
-    screen.getByText("Generate feed URL (+$1.49/month)", {
-      selector: "s-button",
-    }),
-  );
-  await waitFor(() => expect(showOverlay).toHaveBeenCalledTimes(2));
-  fireEvent.click(
-    screen.getByText("Add feed for $1.49/month", { selector: "s-button" }),
-  );
-  await waitFor(() => expect(writes[0]?.paidFeedConfirmed).toBe(true));
-});
-
-async function openPaidFeedForm(count = 5) {
-  additionalCount = count;
-  const container = await setup();
-  const renewalModal = container.querySelector(
-    "#additional-feed-renewal-modal",
-  )!;
-  const showRenewal = vi.fn();
-  const showPaid = vi.fn();
-  Object.assign(renewalModal, {
-    showOverlay: showRenewal,
-    hideOverlay: vi.fn(),
-  });
-  Object.assign(container.querySelector("#paid-additional-feed-modal")!, {
-    showOverlay: showPaid,
-    hideOverlay: vi.fn(),
-  });
-  fireEvent.click(screen.getByText("+ Add Market"));
-  fireEvent.click(
-    await screen.findByText("Germany: Germany / EUR", { selector: "s-button" }),
-  );
-  fireEvent.click(
-    await screen.findByText("French / FR", { selector: "s-button" }),
-  );
-  fireEvent.click(
-    screen.getByText("Generate feed URL (+$1.49/month)", {
-      selector: "s-button",
-    }),
-  );
-  return { container, renewalModal, showRenewal, showPaid };
-}
-
-it("old subscriptions show renewal instead of paid confirmation; Not now makes no changes", async () => {
-  requiresRenewal = true;
-  const { renewalModal, showRenewal, showPaid } = await openPaidFeedForm();
-  await waitFor(() => expect(showRenewal).toHaveBeenCalledOnce());
-  expect(showPaid).not.toHaveBeenCalled();
-  expect(renewalModal.textContent).toContain(
-    "Cancellation takes effect immediately",
-  );
-  expect(renewalModal.textContent).toContain("$1.49/month");
-  fireEvent.click(screen.getByText("Not now", { selector: "s-button" }));
-  expect(renewalModal.querySelector('s-button[command="--hide"]')).toBeTruthy();
+  expect(mocks.navigate).toHaveBeenCalledWith("/app/market-feed/feed");
+  expect(container.querySelector("#edit-additional-feed-modal")).toBeNull();
+  expect(container.querySelectorAll("s-switch")).toHaveLength(1);
   expect(writes).toEqual([]);
 });
-
-it("explicit resubscription sends one cancellation request and opens Shopify, never generates a feed", async () => {
-  requiresRenewal = true;
-  const navigate = vi.spyOn(window, "open").mockImplementation(() => null);
-  const { showRenewal } = await openPaidFeedForm();
-  await waitFor(() => expect(showRenewal).toHaveBeenCalledOnce());
-  const confirm = screen.getByText("Cancel and resubscribe", {
-    selector: "s-button",
-  });
-  fireEvent.click(confirm);
-  fireEvent.click(confirm);
-  await waitFor(() => expect(navigate).toHaveBeenCalledWith(planUrl, "_top"));
+it("legacy rows show custom OFF and confirmed toggle marks only that row Refresh required", async () => {
+  const container = await setup();
+  const control = container.querySelector("s-switch")!;
+  expect(control.hasAttribute("checked")).toBe(false);
+  await toggle(control, true);
+  await waitFor(() => expect(control.hasAttribute("checked")).toBe(true));
   expect(writes).toEqual([
-    { confirmed: true, subscriptionId: "gid://shopify/AppSubscription/1" },
+    {
+      intent: "toggle-configuration",
+      feedId: "feed",
+      customConfigurationEnabled: true,
+      expectedRevision: 0,
+    },
   ]);
   expect(
-    screen.getByText("Open Shopify plan selection").getAttribute("href"),
-  ).toBe(planUrl);
-  navigate.mockRestore();
+    screen.getAllByText("Refresh required", { selector: "s-badge" }),
+  ).toHaveLength(1);
 });
-
-it("verification outages never offer cancellation", async () => {
-  billingFailure = true;
-  const { showRenewal, showPaid } = await openPaidFeedForm();
-  await screen.findByText("Shopify is unavailable. Try again.");
-  expect(showRenewal).not.toHaveBeenCalled();
-  expect(showPaid).not.toHaveBeenCalled();
-  expect(writes).toEqual([]);
-});
-
-it("uncertain cancellation keeps the explanation and offers the Shopify recovery link", async () => {
-  requiresRenewal = true;
-  renewalFailure = true;
-  const { showRenewal } = await openPaidFeedForm();
-  await waitFor(() => expect(showRenewal).toHaveBeenCalledOnce());
-  fireEvent.click(
-    screen.getByText("Cancel and resubscribe", { selector: "s-button" }),
-  );
-  await screen.findByText("Shopify could not confirm cancellation.");
-  expect(
-    screen.getByText("Open Shopify plan selection").getAttribute("href"),
-  ).toBe(planUrl);
-  expect(writes).toHaveLength(1);
-});
-
-it("keeps Additional feeds visible without pricing or usage copy", async () => {
-  additionalCount = 24;
+it("failed switch request returns to saved OFF state and shows Polaris feedback", async () => {
+  failure = true;
   const container = await setup();
-  expect(
-    screen.getByText("Additional Market feeds", { selector: "s-heading" }),
-  ).toBeTruthy();
-  expect(
-    screen.getByText(
-      /Create localized Google feeds for specific Shopify Markets/,
-    ),
-  ).toBeTruthy();
-  expect(screen.getByText("Additional feed")).toBeTruthy();
-  expect(
-    container.querySelector('a[href="https://example.com/feed.xml"]'),
-  ).toBeTruthy();
-  expect(
-    screen.queryByText(/5 Additional Market feeds included with Pro/),
-  ).toBeNull();
-  expect(screen.queryByText(/Estimated additional usage:/)).toBeNull();
-});
-
-it("Cancel hides the edit dialog without saving", async () => {
-  const container = await setup();
-  fireEvent.click(container.querySelector('s-button[icon="edit"]')!);
-  const modal = container.querySelector("#edit-additional-feed-modal")!;
+  const control = container.querySelector("s-switch")!;
+  await toggle(control, true);
   await waitFor(() =>
     expect(
-      modal
-        .querySelector('s-text-field[label^="Country Code"]')
-        ?.getAttribute("value"),
-    ).toBe("GB"),
+      container.querySelector('s-banner[heading="Save failed"]'),
+    ).toBeTruthy(),
   );
-  const cancel = [...modal.querySelectorAll("s-button")].find(
-    (button) => button.textContent === "Cancel",
-  )!;
-  expect(cancel.getAttribute("command")).toBe("--hide");
-  expect(cancel.getAttribute("commandfor")).toBe("edit-additional-feed-modal");
+  expect(control.hasAttribute("checked")).toBe(false);
+  expect((control as Element & { checked: boolean }).checked).toBe(false);
+});
+it("rapid toggles are disabled until the server confirms, preventing duplicate saves", async () => {
+  deferred = () => {};
+  const container = await setup();
+  const control = container.querySelector("s-switch")!;
+  await toggle(control, true);
+  await waitFor(() => expect(control.hasAttribute("disabled")).toBe(true));
+  await toggle(control, false);
+  expect(writes).toHaveLength(1);
   await act(async () => {
-    modal.dispatchEvent(new Event("hide"));
+    deferred?.();
   });
-  expect(writes).toEqual([]);
-  expect(
-    modal
-      .querySelector('s-button[slot="primary-action"]')
-      ?.getAttribute("disabled"),
-  ).toBe("true");
+  await waitFor(() => expect(control.hasAttribute("checked")).toBe(true));
 });
 
-it("Free second Additional feed uses its backend allowance and requires explicit charge consent", async () => {
-  currentPlan = "FREE";
-  const { container, showPaid, showRenewal } = await openPaidFeedForm(1);
-  await waitFor(() => expect(showPaid).toHaveBeenCalledOnce());
-  expect(showRenewal).not.toHaveBeenCalled();
-  const modal = container.querySelector("#paid-additional-feed-modal")!;
-  expect(modal.textContent).toContain(
-    "Your Free plan includes 1 Additional Market feed",
-  );
-  expect(container.textContent).toContain(
-    "Each feed includes up to 10 eligible products",
-  );
+it("returning from the editor immediately shows the saved Refresh required badge from an inactive cached feed list", async () => {
+  client.setDefaultOptions({ queries: { retry: false, staleTime: Infinity, refetchOnMount: false } });
+  const key = feedKeys.additional(scope, "/app/additional-feeds");
+  const other = { feed: { ...metadata, id: "unrelated" }, market };
+  client.setQueryData(key, { ok: true, feeds: [{ feed: { ...metadata }, market }, other], activeGeneration: null, backendUnavailable: false });
+  const saved = { feed: { ...metadata, requiresRefresh: true, customConfigurationEnabled: true, marketConfigurationRevision: 1 }, market };
+  updateMarketFeedCache(client, scope, { ok: true, entry: saved });
+  await setup();
+  expect(screen.getAllByText("Refresh required", { selector: "s-badge" })).toHaveLength(1);
+  expect(client.getQueryData(key)).toMatchObject({ feeds: [saved, other] });
   expect(writes).toEqual([]);
-  fireEvent.click(
-    screen.getByText("Add feed for $1.49/month", { selector: "s-button" }),
-  );
-  await waitFor(() => expect(writes[0]?.paidFeedConfirmed).toBe(true));
 });

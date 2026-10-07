@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   availableOptionNames,
   configurationRequiresFeedRefresh,
+  ConfigurationValidationError,
   DEFAULT_COLOR_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
   normalizeExcludedTitleTerms,
@@ -166,6 +167,17 @@ test("product type configuration rejects empty, invalid, oversized, and excessiv
   }
 
   assert.deepEqual(validateConfigurationInput(base).productTypes, []);
+});
+
+test("Primary Country Code accepts 1-3 letters, uppercases, and rejects longer or nonalphabetic values", () => {
+  const base = { alertsEmail: "alerts@example.com", colorOptions: [], sizeOptions: [] };
+  for (const code of ["L", "US", "FR", "LB", "USA", "FRA", "LBN"]) {
+    assert.equal(validateConfigurationInput({ ...base, countryCode: ` ${code.toLowerCase()} ` }).countryCode, code);
+  }
+  for (const countryCode of ["", " ", "USAA", "FRANCE", "1234", "L1", "L-B", "L B", null, undefined]) {
+    assert.throws(() => validateConfigurationInput({ ...base, countryCode }),
+      (error: unknown) => error instanceof ConfigurationValidationError && Boolean(error.fields.countryCode));
+  }
 });
 
 test("Product Type-only edits do not require an XML refresh", () => {

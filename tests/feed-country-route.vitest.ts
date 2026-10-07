@@ -56,7 +56,7 @@ it("forwards only normalized Country Code and the authenticated shop session", a
   );
 });
 
-it.each([undefined, null, "", "   ", "LBN", "12"])(
+it.each([undefined, null, "", "   ", "USAA", "FRANCE", "1234", "L1", "12"])(
   "rejects invalid or missing code %s for both create and edit",
   async (idCountryCode) => {
     for (const intent of ["generate", "edit"]) {
@@ -73,6 +73,15 @@ it.each([undefined, null, "", "   ", "LBN", "12"])(
     expect(mocks.backend).not.toHaveBeenCalled();
   },
 );
+
+it.each(["L", "US", "FRA", "LBN"])("create and edit proxy preserve the complete %s XML Country Code", async (code) => {
+  for (const intent of ["generate", "edit"]) {
+    mocks.backend.mockClear();
+    await invoke({ intent, feedId: "feed", countryCode: "DE", idCountryCode: ` ${code.toLowerCase()} `, marketId: "market", locale: "de" });
+    expect(mocks.backend).toHaveBeenCalledWith(session, "POST", expect.any(String),
+      expect.objectContaining({ idCountryCode: code }));
+  }
+});
 
 it("keeps market country and XML Country Code separate in Generate feed URL", async () => {
   await invoke({

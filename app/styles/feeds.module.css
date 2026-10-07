@@ -371,6 +371,24 @@
   font-weight: 700;
 }
 
+.customConfigurationHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.customConfigurationSwitch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+}
+
+.customConfigurationSwitch s-switch {
+  inline-size: max-content;
+}
+
 .feedTable {
   inline-size: 100%;
   width: 100%;

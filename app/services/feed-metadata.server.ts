@@ -38,6 +38,8 @@ function mapStoredFeed(
   configurationCountryCode?: string,
 ): FeedMetadata {
   return {
+    customConfigurationEnabled: feed.customConfigurationEnabled === true,
+    marketConfigurationRevision: feed.marketConfigurationRevision ?? 0,
     idCountryCode:
       normalizeCountryCode(feed.idCountryCode) ??
       normalizeCountryCode(configurationCountryCode),

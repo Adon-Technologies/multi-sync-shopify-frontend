@@ -185,17 +185,11 @@ test("Primary metadata keeps polling while any store feed owns the lock", () => 
   );
 });
 
-test("additional generation forms show the pending feed product progress", () => {
-  const panelSource = readFileSync(
-    new URL("../app/components/FeedsPanel.tsx", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(
-    panelSource,
-    /progress=\{\s*pendingEntry\s*\?\s*generationProgress\(\s*pendingEntry\.feed,\s*entitlements\?\.productLimit,?\s*\)/,
-  );
-  assert.match(panelSource, /\{progress \? ` \(\$\{progress\}\)` : ""\}/);
+test("dedicated market setup shows pending product progress until generation finishes", () => {
+  const source = readFileSync(new URL("../app/components/MarketFeedEditor.tsx", import.meta.url), "utf8");
+  assert.match(source, /formatFeedGenerationProgress\(pendingFeed\)/);
+  assert.match(source, /pendingFeed\?\.status === "COMPLETED"/);
+  assert.match(source, /pendingFeed\?\.status === "FAILED"/);
 });
 
 test("the selected additional feed delete icon shows loading", () => {

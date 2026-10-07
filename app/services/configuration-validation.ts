@@ -370,7 +370,7 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
   }
 
   if (!normalizeCountryCode(countryCode)) {
-    fields.countryCode = "Enter a two-letter country code.";
+    fields.countryCode = "Enter a 1-3 letter country code.";
   }
 
   if (!Array.isArray(input.colorOptions)) {

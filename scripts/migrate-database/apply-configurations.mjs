@@ -4,10 +4,10 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { MongoClient, ObjectId } from "mongodb";
+import { normalizeCountryCode } from "@multi-sync/catalog-rules";
 
 const TARGET_DATABASE = "Multi-sync";
 const EMAIL_ADDRESS = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const COUNTRY_CODE = /^[A-Z]{2}$/;
 const SHOP_DOMAIN = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 const REVISION = /^[a-f0-9]{64}$/;
 const DOCUMENT_FIELDS = new Set([
@@ -137,7 +137,7 @@ function validateEntry(entry) {
   }
   if (
     typeof document.countryCode !== "string" ||
-    !COUNTRY_CODE.test(document.countryCode)
+    normalizeCountryCode(document.countryCode) !== document.countryCode
   ) {
     throw new Error(`${entry.sourceShopDomain}: invalid countryCode`);
   }

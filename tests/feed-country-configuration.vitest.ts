@@ -40,6 +40,7 @@ const db = vi.hoisted(() => {
       findUnique: vi.fn(async () => ({ id: "store", configuration: stored })),
     },
     xmlLink: {
+      findMany: vi.fn(async () => [{ id: "primary", feedType: "PRIMARY" }, { id: "additional", feedType: "ADDITIONAL" }]),
       updateMany: vi.fn<(args: Prisma.XmlLinkUpdateManyArgs) => Promise<{ count: number }>>(async () => ({
         count: 2,
       })),
@@ -70,6 +71,12 @@ const input = {
 beforeEach(() => {
   db.reset();
   vi.clearAllMocks();
+});
+
+it.each(["L", "US", "USA", "FRA", "LBN"])("Primary Configuration saves and returns the complete %s code", async (code) => {
+  const result = await saveConfigurationForShop(admin, session, { ...input, countryCode: ` ${code.toLowerCase()} ` });
+  expect(result.configuration.countryCode).toBe(code);
+  expect((await db.configuration.findUnique())?.countryCode).toBe(code);
 });
 
 it("Configuration GB to US freezes only unset legacy codes and preserves explicit choices", async () => {

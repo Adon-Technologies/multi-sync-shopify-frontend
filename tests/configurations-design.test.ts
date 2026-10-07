@@ -129,7 +129,7 @@ test("Inventory and Availability is a Polaris card between feed attributes and U
     panelSource,
     /Out-of-stock exclusion is ignored while this option is[\s\S]*enabled\./,
   );
-  assert.match(panelSource, /<s-choice-list[\s\S]*value="ALL_LOCATIONS"/);
+  assert.match(panelSource, /<PolarisChoiceList[\s\S]*value="ALL_LOCATIONS"/);
   assert.match(panelSource, /value="SELECTED_LOCATIONS"/);
   assert.match(panelSource, /Loading Shopify locations/);
   assert.match(panelSource, /Shopify locations couldn&apos;t be loaded/);

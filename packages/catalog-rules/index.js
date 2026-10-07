@@ -134,7 +134,7 @@ export function resolveProductExclusions(product, rules, excludedTags) {
 export function normalizeCountryCode(value) {
   if (typeof value !== "string") return null;
   const normalized = value.normalize("NFKC").trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
+  return /^[A-Z]{1,3}$/.test(normalized) ? normalized : null;
 }
 
 /** Preserve literal merchant text while trimming and deduplicating entries. */

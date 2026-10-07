@@ -1,4 +1,6 @@
-import { normalizeCountryCode } from "@multi-sync/catalog-rules";
+import { PolarisSwitch } from "./PolarisSwitch";
+import { useNavigate } from "react-router";
+import { saveMarketConfiguration } from "../services/market-configuration-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +11,6 @@ import type {
   AdditionalFeedActionResponse,
   AdditionalFeedEntry,
   AdditionalFeedsResponse,
-  AdditionalMarketOption,
 } from "../routes/app.additional-feeds";
 import type {
   FeedDataResponse,
@@ -17,29 +18,14 @@ import type {
   FeedStatus,
 } from "../routes/app.feed-data";
 import {
-  additionalFormCombinationKey,
-  availableLanguagesForForm,
-  createAdditionalMarketForm,
-  reconcileAdditionalMarketForms,
-  selectedAdditionalFormCombinations,
-  visibleAdditionalFeedEntries,
-  type AdditionalMarketFormState,
-} from "../services/additional-feed-forms";
-import {
   configurationKeys,
   configurationQueryOptions,
   type ConfigurationResponse,
 } from "../services/configuration-query";
 import {
-  checkAdditionalFeedBilling,
-  renewAdditionalFeedSubscription,
   additionalFeedsQueryOptions,
-  additionalLanguagesQueryOptions,
-  additionalMarketOptionsQueryOptions,
   deleteAdditionalFeed,
-  updateAdditionalFeedCountryCode,
   feedKeys,
-  generateAdditionalFeed,
   generatePrimaryFeed,
   primaryFeedQueryOptions,
   refreshAdditionalFeed,
@@ -63,7 +49,6 @@ interface FeedsPanelProps {
 }
 
 const pendingStatuses = new Set<FeedStatus>(["QUEUED", "PROCESSING"]);
-const COUNTRY_CODE_LABEL = "Country Code (Primary Feed Product ID)";
 
 function isSuccessfulFeedData(
   data: FeedDataResponse | undefined,
@@ -160,458 +145,16 @@ function LoadingRow() {
   );
 }
 
-interface AdditionalMarketFormProps {
-  paidFeed: boolean;
-  active: boolean;
-  endpoint: string;
-  form: AdditionalMarketFormState;
-  forms: AdditionalMarketFormState[];
-  generationLocked: boolean;
-  isGenerating: boolean;
-  progress: string | null;
-  marketError: boolean;
-  marketLoading: boolean;
-  marketOptions: AdditionalMarketOption[];
-  onGenerate: (form: AdditionalMarketFormState) => void;
-  onRemove: (formId: string) => void;
-  onUpdate: (
-    formId: string,
-    update: Partial<AdditionalMarketFormState>,
-  ) => void;
-  queryScope: FeedQueryScope;
-  scopeReady: boolean;
-}
-
-function AdditionalMarketForm({
-  paidFeed,
-  active,
-  endpoint,
-  form,
-  forms,
-  generationLocked,
-  isGenerating,
-  progress,
-  marketError,
-  marketLoading,
-  marketOptions,
-  onGenerate,
-  onRemove,
-  onUpdate,
-  queryScope,
-  scopeReady,
-}: AdditionalMarketFormProps) {
-  const hydrated = useHydrated();
-  const [marketSearch, setMarketSearch] = useState("");
-  const [languageSearch, setLanguageSearch] = useState("");
-  const marketSearchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
-  const languageSearchRef =
-    useRef<HTMLElementTagNameMap["s-search-field"]>(null);
-  const marketPopoverId = `${form.id}-market-popover`;
-  const languagePopoverId = `${form.id}-language-popover`;
-  const languagesQuery = useQuery({
-    ...additionalLanguagesQueryOptions(
-      queryScope,
-      form.market?.marketId ?? "",
-      form.market?.countryCode ?? "",
-      endpoint,
-    ),
-    enabled:
-      active && scopeReady && Boolean(form.market) && !form.pendingFeedId,
-  });
-  const selectableMarkets = useMemo(() => {
-    if (
-      !form.market ||
-      marketOptions.some(({ value }) => value === form.market?.value)
-    ) {
-      return marketOptions;
-    }
-    return [form.market, ...marketOptions];
-  }, [form.market, marketOptions]);
-  const selectableLanguages = useMemo(() => {
-    if (!form.market || !languagesQuery.data?.ok) {
-      return form.language ? [form.language] : [];
-    }
-
-    const available = availableLanguagesForForm(
-      languagesQuery.data.languages,
-      form.market,
-      forms,
-      form.id,
-    );
-    if (
-      form.language &&
-      !available.some(
-        ({ locale }) =>
-          locale.toLocaleLowerCase() ===
-          form.language?.locale.toLocaleLowerCase(),
-      )
-    ) {
-      return [form.language, ...available];
-    }
-    return available;
-  }, [form.id, form.language, form.market, forms, languagesQuery.data]);
-  const selectionLocked = isGenerating || Boolean(form.pendingFeedId);
-  const normalizedMarketSearch = marketSearch
-    .normalize("NFKC")
-    .trim()
-    .toLocaleLowerCase();
-  const normalizedLanguageSearch = languageSearch
-    .normalize("NFKC")
-    .trim()
-    .toLocaleLowerCase();
-  const filteredMarkets = selectableMarkets.filter((option) =>
-    [
-      option.marketName,
-      option.countryName,
-      option.countryCode,
-      option.currencyCode,
-    ]
-      .join(" ")
-      .normalize("NFKC")
-      .toLocaleLowerCase()
-      .includes(normalizedMarketSearch),
-  );
-  const filteredLanguages = selectableLanguages.filter((language) =>
-    [language.name, language.locale]
-      .join(" ")
-      .normalize("NFKC")
-      .toLocaleLowerCase()
-      .includes(normalizedLanguageSearch),
-  );
-  const marketDisabled = marketLoading || marketError || selectionLocked;
-  const languageDisabled =
-    !form.market ||
-    languagesQuery.isPending ||
-    languagesQuery.isError ||
-    selectionLocked;
-
-  return (
-    <div className={styles.addMarketForm}>
-      <div className={styles.selectorGrid}>
-        <div className={styles.selectorField}>
-          <span className={styles.selectorLabelWithLoading}>
-            <span className={styles.selectorLabel}>Market and country</span>
-            {marketLoading ||
-            (form.market && languagesQuery.isPending && !form.pendingFeedId) ? (
-              <s-spinner
-                accessibilityLabel="Loading Shopify Market options"
-                size="base"
-              />
-            ) : null}
-          </span>
-          <s-clickable
-            accessibilityLabel="Choose a Shopify Market and country"
-            background="base"
-            blockSize="32px"
-            border="small-100"
-            borderColor="base"
-            borderRadius="base"
-            borderStyle="solid"
-            commandFor={marketPopoverId}
-            disabled={marketDisabled ? true : undefined}
-            inlineSize="100%"
-            padding="none"
-          >
-            <span className={styles.selectorTriggerContent}>
-              <s-text color={form.market ? "base" : "subdued"}>
-                {form.market
-                  ? `${form.market.marketName}: ${form.market.countryName} / ${form.market.currencyCode}`
-                  : marketLoading
-                    ? "Loading Shopify Markets"
-                    : "Choose market and country"}
-              </s-text>
-              <s-icon color="subdued" type="chevron-down" />
-            </span>
-          </s-clickable>
-          {form.error === "Choose a market and country." ? (
-            <span className={styles.formError} role="alert">
-              {form.error}
-            </span>
-          ) : null}
-          <s-popover
-            id={marketPopoverId}
-            inlineSize="420px"
-            onHide={hydrated ? () => setMarketSearch("") : undefined}
-            onShow={
-              hydrated
-                ? () => {
-                    window.requestAnimationFrame(() =>
-                      marketSearchRef.current?.focus(),
-                    );
-                  }
-                : undefined
-            }
-          >
-            <s-box padding="small-200">
-              <div className={styles.selectorPopoverContent}>
-                <s-search-field
-                  label="Search Markets and countries"
-                  labelAccessibilityVisibility="exclusive"
-                  onInput={(event) =>
-                    setMarketSearch(event.currentTarget.value)
-                  }
-                  placeholder="Search market or country"
-                  ref={marketSearchRef}
-                  value={marketSearch}
-                />
-                <div className={styles.selectorResults}>
-                  {filteredMarkets.length === 0 ? (
-                    <div className={styles.selectorEmpty}>
-                      <s-text color="subdued">
-                        No Markets or countries found.
-                      </s-text>
-                    </div>
-                  ) : (
-                    <s-stack direction="block" gap="small-100">
-                      {filteredMarkets.map((option) => (
-                        <s-button
-                          command="--hide"
-                          commandFor={marketPopoverId}
-                          key={option.value}
-                          onClick={() => {
-                            setMarketSearch("");
-                            setLanguageSearch("");
-                            onUpdate(form.id, {
-                              error: null,
-                              language: null,
-                              market: option,
-                              pendingFeedId: null,
-                            });
-                          }}
-                          variant="tertiary"
-                        >
-                          {option.marketName}: {option.countryName} /{" "}
-                          {option.currencyCode}
-                        </s-button>
-                      ))}
-                    </s-stack>
-                  )}
-                </div>
-              </div>
-            </s-box>
-          </s-popover>
-        </div>
-
-        <div className={styles.selectorField}>
-          <span className={styles.selectorLabel}>Language</span>
-          <s-clickable
-            accessibilityLabel="Choose a feed language"
-            background="base"
-            blockSize="32px"
-            border="small-100"
-            borderColor="base"
-            borderRadius="base"
-            borderStyle="solid"
-            commandFor={languagePopoverId}
-            disabled={languageDisabled ? true : undefined}
-            inlineSize="100%"
-            padding="none"
-          >
-            <span className={styles.selectorTriggerContent}>
-              <s-text color={form.language ? "base" : "subdued"}>
-                {form.language
-                  ? `${form.language.name} / ${form.language.locale.toUpperCase()}`
-                  : languagesQuery.isPending
-                    ? "Loading languages"
-                    : "Choose language"}
-              </s-text>
-              <s-icon color="subdued" type="chevron-down" />
-            </span>
-          </s-clickable>
-          {form.error === "Choose a language." ? (
-            <span className={styles.formError} role="alert">
-              {form.error}
-            </span>
-          ) : null}
-          <s-popover
-            id={languagePopoverId}
-            inlineSize="420px"
-            onHide={hydrated ? () => setLanguageSearch("") : undefined}
-            onShow={
-              hydrated
-                ? () => {
-                    window.requestAnimationFrame(() =>
-                      languageSearchRef.current?.focus(),
-                    );
-                  }
-                : undefined
-            }
-          >
-            <s-box padding="small-200">
-              <div className={styles.selectorPopoverContent}>
-                <s-search-field
-                  label="Search feed languages"
-                  labelAccessibilityVisibility="exclusive"
-                  onInput={(event) =>
-                    setLanguageSearch(event.currentTarget.value)
-                  }
-                  placeholder="Search language"
-                  ref={languageSearchRef}
-                  value={languageSearch}
-                />
-                <div className={styles.selectorResults}>
-                  {filteredLanguages.length === 0 ? (
-                    <div className={styles.selectorEmpty}>
-                      <s-text color="subdued">No languages found.</s-text>
-                    </div>
-                  ) : (
-                    <s-stack direction="block" gap="small-100">
-                      {filteredLanguages.map((language) => (
-                        <s-button
-                          command="--hide"
-                          commandFor={languagePopoverId}
-                          key={language.locale}
-                          onClick={() => {
-                            setLanguageSearch("");
-                            onUpdate(form.id, {
-                              error: null,
-                              language,
-                            });
-                          }}
-                          variant="tertiary"
-                        >
-                          {language.name} / {language.locale.toUpperCase()}
-                        </s-button>
-                      ))}
-                    </s-stack>
-                  )}
-                </div>
-              </div>
-            </s-box>
-          </s-popover>
-        </div>
-        <div className={styles.selectorField}>
-          <span className={styles.selectorLabel}>{COUNTRY_CODE_LABEL}</span>
-          <s-text-field
-            label={COUNTRY_CODE_LABEL}
-            labelAccessibilityVisibility="exclusive"
-            maxLength={2}
-            value={form.idCountryCode}
-            disabled={Boolean(form.pendingFeedId) || isGenerating}
-            onInput={(event) =>
-              onUpdate(form.id, {
-                idCountryCode: event.currentTarget.value.toUpperCase(),
-                error: null,
-              })
-            }
-            details="Used in Google item IDs, independently of the selected Market."
-          />
-        </div>
-      </div>
-
-      {languagesQuery.isError && !form.pendingFeedId ? (
-        <div className={styles.inlineError}>
-          <span className={styles.formError} role="alert">
-            Languages could not be loaded for this Market and country.
-          </span>
-          <s-button
-            onClick={() => void languagesQuery.refetch()}
-            variant="secondary"
-          >
-            Retry
-          </s-button>
-        </div>
-      ) : null}
-
-      {form.market &&
-      languagesQuery.data?.ok &&
-      selectableLanguages.length === 0 &&
-      !form.pendingFeedId ? (
-        <s-text color="subdued">
-          No ungenerated languages remain for this Market and country.
-        </s-text>
-      ) : null}
-
-      {form.error &&
-      !["Choose a market and country.", "Choose a language."].includes(
-        form.error,
-      ) ? (
-        <span className={styles.formError} role="alert">
-          {form.error}
-        </span>
-      ) : null}
-
-      {isGenerating && form.market && form.language ? (
-        <s-text color="subdued">
-          Generating {form.market.marketName} / {form.market.countryName} /{" "}
-          {form.language.name}
-          {progress ? ` (${progress})` : ""}
-        </s-text>
-      ) : null}
-
-      <div className={styles.formActions}>
-        <s-button
-          disabled={generationLocked ? true : undefined}
-          loading={isGenerating ? true : undefined}
-          onClick={() => onGenerate(form)}
-          variant="primary"
-        >
-          {form.pendingFeedId && form.error
-            ? "Retry generation"
-            : "Generate feed URL"}
-          {paidFeed ? " (+$1.49/month)" : ""}
-        </s-button>
-        <s-button
-          disabled={isGenerating ? true : undefined}
-          onClick={() => onRemove(form.id)}
-          variant="secondary"
-        >
-          Cancel
-        </s-button>
-      </div>
-    </div>
-  );
-}
-
 export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   const hydrated = useHydrated();
   const shopify = useAppBridge();
+  const navigate = useNavigate();
+  const toggleInFlight = useRef(false);
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<{
     message: string;
     tone: "critical";
   } | null>(null);
-  const [additionalForms, setAdditionalForms] = useState<
-    AdditionalMarketFormState[]
-  >([]);
-  const nextFormId = useRef(0);
-  const [paidFeedTarget, setPaidFeedTarget] =
-    useState<AdditionalMarketFormState | null>(null);
-  const paidFeedModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
-  const renewalModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
-  const [renewalTarget, setRenewalTarget] = useState<{
-    subscriptionId: string;
-    url: string;
-  } | null>(null);
-  const [renewalError, setRenewalError] = useState<string | null>(null);
-  const [renewalComplete, setRenewalComplete] = useState(false);
-  const [renewalPending, setRenewalPending] = useState(false);
-  const renewalInFlight = useRef(false);
-  const eligibilityInFlight = useRef(false);
-  const [checkingBilling, setCheckingBilling] = useState(false);
-  useEffect(() => {
-    const modal = paidFeedModalRef.current;
-    const onHide = () => setPaidFeedTarget(null);
-    modal?.addEventListener("hide", onHide);
-    return () => modal?.removeEventListener("hide", onHide);
-  }, []);
-  const [openingMarket, setOpeningMarket] = useState(false);
-  const [editTarget, setEditTarget] = useState<AdditionalFeedEntry | null>(
-    null,
-  );
-  const [editCountryCode, setEditCountryCode] = useState("");
-  const [editError, setEditError] = useState<string | null>(null);
-  const editModalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
-  useEffect(() => {
-    const modal = editModalRef.current;
-    const onHide = () => {
-      setEditTarget(null);
-      setEditError(null);
-    };
-    modal?.addEventListener("hide", onHide);
-    return () => modal?.removeEventListener("hide", onHide);
-  }, []);
-
   const [deleteTarget, setDeleteTarget] = useState<AdditionalFeedEntry | null>(
     null,
   );
@@ -694,10 +237,6 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     refetchIntervalInBackground: false,
   });
   const refetchAdditionalFeeds = additionalQuery.refetch;
-  const marketOptionsQuery = useQuery({
-    ...additionalMarketOptionsQueryOptions(queryScope, additionalEndpoint),
-    enabled: active && Boolean(scope) && additionalForms.length > 0,
-  });
   const invalidateFeedQueries = async () => {
     if (!scope) return;
     await queryClient.invalidateQueries({
@@ -749,81 +288,20 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       });
     },
   });
-  const additionalGenerateMutation = useMutation({
-    mutationFn: (request: {
-      paidFeedConfirmed: boolean;
-      countryCode: string;
-      idCountryCode: string;
-      formId: string;
-      locale: string;
-      marketId: string;
-      retryFeedId: string | null;
-    }) =>
-      generateAdditionalFeed(
-        {
-          paidFeedConfirmed: request.paidFeedConfirmed,
-          countryCode: request.countryCode,
-          idCountryCode: request.idCountryCode,
-          locale: request.locale,
-          marketId: request.marketId,
-        },
-        additionalEndpoint,
-      ),
-    onSuccess: (result, request) => {
-      applyAdditionalActionResult(result);
-      // The queued feed is now in the table cache; show its status there.
-      setAdditionalForms((forms) =>
-        forms.filter((form) => form.id !== request.formId),
-      );
-      setFeedback(null);
-      void invalidateFeedQueries();
-      shopify.toast.show("Additional Market feed generation started.");
-    },
-    onError: (error, request) => {
-      setAdditionalForms((forms) =>
-        forms.map((form) =>
-          form.id === request.formId
-            ? {
-                ...form,
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : "The additional feed couldn't be generated.",
-              }
-            : form,
-        ),
-      );
-      void invalidateFeedQueries();
-    },
-  });
-  const editMutation = useMutation({
-    mutationFn: ({
-      feedId,
-      idCountryCode,
-    }: {
-      feedId: string;
-      idCountryCode: string;
-    }) =>
-      updateAdditionalFeedCountryCode(
-        feedId,
-        idCountryCode,
-        additionalEndpoint,
-      ),
+  const toggleMutation = useMutation({
+    mutationFn: (input: { feedId: string; customConfigurationEnabled: boolean; expectedRevision: number }) => saveMarketConfiguration(input, true),
     onSuccess: (result) => {
       applyAdditionalActionResult(result);
-      editModalRef.current?.hideOverlay();
-      setEditTarget(null);
-      setEditError(null);
+      setFeedback(null);
       void invalidateFeedQueries();
       void synchronizeConfigurationRefreshState();
-      shopify.toast.show("Country Code saved.");
+      shopify.toast.show("Configuration mode saved. Refresh this feed to apply changes.");
     },
-    onError: (error) =>
-      setEditError(
-        error instanceof Error
-          ? error.message
-          : "Country Code could not be saved.",
-      ),
+    onError: (error) => {
+      setFeedback({ message: error.message, tone: "critical" });
+      void invalidateFeedQueries();
+    },
+    onSettled: () => { toggleInFlight.current = false; },
   });
   const additionalRefreshMutation = useMutation({
     mutationFn: (feedId: string) =>
@@ -937,16 +415,8 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     [additionalData],
   );
   const additionalUsage = additionalData?.usage;
-  const additionalCount =
-    additionalUsage?.additionalFeedCount ??
-    additionalFeeds.filter(
-      ({ feed: candidate }) =>
-        candidate.lastRefreshedAt && candidate.gcsObjectName,
-    ).length;
   const entitlements = additionalUsage?.entitlements;
-  const nextAdditionalIsPaid = Boolean(
-    entitlements && additionalCount >= entitlements.includedAdditionalFeeds,
-  );
+
   const feedRefreshRequired = Boolean(
     feed?.requiresRefresh ||
     additionalFeeds.some(({ feed: candidate }) => candidate.requiresRefresh),
@@ -958,10 +428,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       void synchronizeConfigurationRefreshState(true);
     }
   }, [feedRefreshRequired, synchronizeConfigurationRefreshState]);
-  const visibleAdditionalFeeds = useMemo(
-    () => visibleAdditionalFeedEntries(additionalFeeds, additionalForms),
-    [additionalFeeds, additionalForms],
-  );
+  const visibleAdditionalFeeds = additionalFeeds;
   const backendUnavailable = Boolean(data?.backendUnavailable);
   const primaryGenerationInProgress = Boolean(
     feed && pendingStatuses.has(feed.status),
@@ -979,11 +446,8 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     Boolean(refreshAllRunId) ||
     generationInProgress ||
     mutation.isPending ||
-    additionalGenerateMutation.isPending ||
     additionalRefreshMutation.isPending ||
     refreshAllMutation.isPending;
-  const activeGeneration =
-    additionalData?.activeGeneration ?? data?.activeGeneration ?? null;
   const successfulFeed = Boolean(feed?.gcsObjectName && feed.lastRefreshedAt);
   const hasRefreshableFeeds =
     successfulFeed ||
@@ -994,11 +458,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     ? generationProgress(feed, entitlements?.productLimit)
     : null;
 
-  useEffect(() => {
-    setAdditionalForms((forms) =>
-      reconcileAdditionalMarketForms(forms, additionalFeeds),
-    );
-  }, [additionalFeeds]);
+
 
   useEffect(() => {
     const result = refreshAllStatusQuery.data;
@@ -1096,175 +556,6 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       setFeedback({
         message:
           "The Feed URL couldn't be copied. Select and copy it manually.",
-        tone: "critical",
-      });
-    }
-  };
-
-  const updateAdditionalForm = (
-    formId: string,
-    update: Partial<AdditionalMarketFormState>,
-  ) => {
-    setAdditionalForms((forms) =>
-      reconcileAdditionalMarketForms(
-        forms.map((form) =>
-          form.id === formId ? { ...form, ...update } : form,
-        ),
-        additionalFeeds,
-      ),
-    );
-  };
-
-  const generateAdditional = async (
-    form: AdditionalMarketFormState,
-    paidFeedConfirmed = false,
-  ) => {
-    if (!form.market) {
-      updateAdditionalForm(form.id, {
-        error: "Choose a market and country.",
-      });
-      return;
-    }
-    if (!form.language) {
-      updateAdditionalForm(form.id, {
-        error: "Choose a language.",
-      });
-      return;
-    }
-    if (
-      selectedAdditionalFormCombinations(additionalForms, form.id).has(
-        additionalFormCombinationKey(form.market, form.language),
-      )
-    ) {
-      updateAdditionalForm(form.id, {
-        error:
-          "Another open form already uses this Market, country, and language.",
-      });
-      return;
-    }
-    if (generationLocked) {
-      updateAdditionalForm(form.id, {
-        error: "Wait for the current XML feed generation to finish.",
-      });
-      return;
-    }
-
-    const idCountryCode = normalizeCountryCode(form.idCountryCode);
-    if (!idCountryCode) {
-      updateAdditionalForm(form.id, {
-        error: "Enter a two-letter country code.",
-      });
-      return;
-    }
-    updateAdditionalForm(form.id, { error: null });
-    if (nextAdditionalIsPaid && !paidFeedConfirmed) {
-      if (eligibilityInFlight.current) return;
-      eligibilityInFlight.current = true;
-      setCheckingBilling(true);
-      try {
-        const eligibility = await checkAdditionalFeedBilling();
-        if (eligibility.requiresRenewal) {
-          setRenewalTarget(eligibility);
-          setRenewalError(null);
-          setRenewalComplete(false);
-          renewalModalRef.current?.showOverlay();
-        } else {
-          setPaidFeedTarget(form);
-          paidFeedModalRef.current?.showOverlay();
-        }
-      } catch (error) {
-        updateAdditionalForm(form.id, {
-          error:
-            error instanceof Error
-              ? error.message
-              : "Your subscription could not be verified. Try again.",
-        });
-      } finally {
-        eligibilityInFlight.current = false;
-        setCheckingBilling(false);
-      }
-      return;
-    }
-    additionalGenerateMutation.mutate({
-      paidFeedConfirmed,
-      countryCode: form.market.countryCode,
-      idCountryCode,
-      formId: form.id,
-      locale: form.language.locale,
-      marketId: form.market.marketId,
-      retryFeedId: form.pendingFeedId,
-    });
-  };
-
-  const cancelAndResubscribe = async () => {
-    if (!renewalTarget || renewalInFlight.current || renewalComplete) return;
-    renewalInFlight.current = true;
-    setRenewalPending(true);
-    setRenewalError(null);
-    try {
-      const result = await renewAdditionalFeedSubscription(
-        renewalTarget.subscriptionId,
-      );
-      setRenewalComplete(true);
-      setRenewalTarget({ ...renewalTarget, url: result.url });
-      window.open(result.url, "_top");
-    } catch (error) {
-      setRenewalError(
-        error instanceof Error
-          ? error.message
-          : "Your subscription update could not be completed.",
-      );
-    } finally {
-      renewalInFlight.current = false;
-      setRenewalPending(false);
-    }
-  };
-
-  const currentConfigurationCountryCode = async () => {
-    if (!scope) throw new Error("Configuration is not ready. Try again.");
-    const result = await queryClient.fetchQuery({
-      ...configurationQueryOptions(scope),
-      staleTime: 0,
-    });
-    return result.configuration.countryCode;
-  };
-  const addMarket = async () => {
-    setOpeningMarket(true);
-    try {
-      const countryCode = await currentConfigurationCountryCode();
-      nextFormId.current += 1;
-      const form = createAdditionalMarketForm(
-        `additional-market-${nextFormId.current}`,
-        countryCode,
-      );
-      setAdditionalForms((forms) => [...forms, form]);
-    } catch (error) {
-      setFeedback({
-        message:
-          error instanceof Error
-            ? error.message
-            : "Configuration could not be loaded.",
-        tone: "critical",
-      });
-    } finally {
-      setOpeningMarket(false);
-    }
-  };
-  const editAdditional = async (entry: AdditionalFeedEntry) => {
-    try {
-      const countryCode =
-        normalizeCountryCode(entry.feed.idCountryCode) ??
-        (await currentConfigurationCountryCode());
-      setEditCountryCode(countryCode);
-      setEditError(null);
-      setEditTarget(entry);
-      editModalRef.current?.showOverlay();
-    } catch (error) {
-      setFeedback({
-        message:
-          error instanceof Error
-            ? error.message
-            : "Country Code could not be loaded.",
         tone: "critical",
       });
     }
@@ -1574,13 +865,11 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           <s-button
             disabled={
               additionalData?.backendUnavailable ||
-              generationLocked ||
-              openingMarket
+              generationLocked
                 ? true
                 : undefined
             }
-            loading={openingMarket ? true : undefined}
-            onClick={() => void addMarket()}
+            onClick={() => navigate("/app/market-feed/new")}
             variant="primary"
           >
             + Add Market
@@ -1653,6 +942,27 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                 </s-table-header>
                 <s-table-header format="base" listSlot="labeled">
                   <span className={styles.tableHeader}>Last refresh</span>
+                </s-table-header>
+                <s-table-header format="base" listSlot="labeled">
+                  <span className={styles.customConfigurationHeader}>
+                    <span className={styles.tableHeader}>Custom configuration</span>
+                    <s-clickable
+                      accessibilityLabel="About custom configuration"
+                      interestFor="custom-configuration-tooltip"
+                      inlineSize="20px"
+                      padding="none"
+                      borderRadius="base"
+                    >
+                      <s-icon type="info" color="subdued" />
+                    </s-clickable>
+                    <s-tooltip id="custom-configuration-tooltip">
+                      On: Use separate settings for this market feed. Off: Follow
+                      the Primary Feed configuration, including future changes.
+                      Your saved custom settings are kept when turned off. Color,
+                      size, gender, and age always follow Primary. Refresh the
+                      feed to apply changes.
+                    </s-tooltip>
+                  </span>
                 </s-table-header>
                 <s-table-header format="base" listSlot="inline">
                   <span className={styles.tableHeader}>Actions</span>
@@ -1753,25 +1063,37 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
                         )}
                       </s-table-cell>
                       <s-table-cell>
+                        <div className={styles.customConfigurationSwitch}>
+                        <PolarisSwitch label={`Custom configuration for ${entry.market.name} ${entry.market.locale}`}
+                          labelAccessibilityVisibility="exclusive"
+                          checked={candidate.customConfigurationEnabled === true}
+                          disabled={candidatePending || toggleMutation.isPending || additionalData?.backendUnavailable}
+                          onChange={enabled => {
+                            if (toggleInFlight.current) return;
+                            toggleInFlight.current = true;
+                            toggleMutation.mutate({ feedId: candidate.id, customConfigurationEnabled: enabled, expectedRevision: candidate.marketConfigurationRevision ?? 0 });
+                          }} />
+                        </div>
+                      </s-table-cell>
+                      <s-table-cell>
                         <div className={styles.actions}>
                           <s-button
-                            accessibilityLabel={`Edit ${entry.market.name} ${entry.market.locale} Country Code`}
+                            accessibilityLabel={`Edit ${entry.market.name} ${entry.market.locale} configuration`}
                             icon="edit"
                             interestFor={`additional-feed-${candidate.id}-edit-tooltip`}
                             disabled={
                               candidatePending ||
-                              editMutation.isPending ||
                               additionalData?.backendUnavailable
                                 ? true
                                 : undefined
                             }
-                            onClick={() => void editAdditional(entry)}
+                            onClick={() => navigate(`/app/market-feed/${candidate.id}`)}
                             variant="secondary"
                           />
                           <s-tooltip
                             id={`additional-feed-${candidate.id}-edit-tooltip`}
                           >
-                            Edit Country Code
+                            Edit configuration
                           </s-tooltip>
                           {candidateReady ? (
                             <>
@@ -1882,84 +1204,6 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           </div>
         )}
 
-        {additionalForms.length > 0 && marketOptionsQuery.isError ? (
-          <div className={styles.inlineError}>
-            <span className={styles.formError} role="alert">
-              Shopify Markets could not be loaded.
-            </span>
-            <s-button
-              onClick={() => void marketOptionsQuery.refetch()}
-              variant="secondary"
-            >
-              Retry
-            </s-button>
-          </div>
-        ) : null}
-
-        {additionalForms.length > 0 &&
-        marketOptionsQuery.data?.ok &&
-        marketOptionsQuery.data.options.length === 0 ? (
-          <s-text color="subdued">
-            Every available Market, country, and language combination already
-            has a feed.
-          </s-text>
-        ) : null}
-
-        <div className={styles.additionalFormList}>
-          {additionalForms.map((form) => {
-            const pendingEntry = form.pendingFeedId
-              ? additionalFeeds.find(
-                  ({ feed: candidate }) => candidate.id === form.pendingFeedId,
-                )
-              : null;
-            const isGenerating =
-              (additionalGenerateMutation.isPending &&
-                additionalGenerateMutation.variables?.formId === form.id) ||
-              Boolean(
-                pendingEntry && pendingStatuses.has(pendingEntry.feed.status),
-              ) ||
-              activeGeneration?.feedId === form.pendingFeedId;
-
-            return (
-              <AdditionalMarketForm
-                paidFeed={nextAdditionalIsPaid}
-                active={active}
-                endpoint={additionalEndpoint}
-                form={form}
-                forms={additionalForms}
-                generationLocked={
-                  generationLocked || checkingBilling || renewalPending
-                }
-                isGenerating={isGenerating}
-                key={form.id}
-                marketError={marketOptionsQuery.isError}
-                marketLoading={marketOptionsQuery.isPending}
-                marketOptions={
-                  marketOptionsQuery.data?.ok
-                    ? marketOptionsQuery.data.options
-                    : []
-                }
-                progress={
-                  pendingEntry
-                    ? generationProgress(
-                        pendingEntry.feed,
-                        entitlements?.productLimit,
-                      )
-                    : null
-                }
-                onGenerate={(form) => generateAdditional(form)}
-                onRemove={(formId) =>
-                  setAdditionalForms((forms) =>
-                    forms.filter(({ id }) => id !== formId),
-                  )
-                }
-                onUpdate={updateAdditionalForm}
-                queryScope={queryScope}
-                scopeReady={Boolean(scope)}
-              />
-            );
-          })}
-        </div>
       </s-section>
 
       <AutomaticRefreshCard
@@ -1973,172 +1217,6 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
         onAlertsChange={setAutomaticRefreshAlerts}
         scope={scope}
       />
-
-      <s-modal
-        id="paid-additional-feed-modal"
-        heading="Add paid feed?"
-        accessibilityLabel="Confirm additional feed usage charge"
-        ref={paidFeedModalRef}
-      >
-        <s-paragraph>
-          Your {entitlements?.name} plan includes{" "}
-          {entitlements?.includedAdditionalFeeds} Additional Market{" "}
-          {entitlements?.includedAdditionalFeeds === 1 ? "feed" : "feeds"}. This feed will add
-          $1.49/month in usage charges to your Shopify app bill.
-        </s-paragraph>
-        <s-button
-          slot="primary-action"
-          variant="primary"
-          disabled={
-            !paidFeedTarget ||
-            generationLocked ||
-            additionalGenerateMutation.isPending
-              ? true
-              : undefined
-          }
-          onClick={() => {
-            if (paidFeedTarget) generateAdditional(paidFeedTarget, true);
-            paidFeedModalRef.current?.hideOverlay();
-          }}
-        >
-          Add feed for $1.49/month
-        </s-button>
-        <s-button
-          slot="secondary-actions"
-          command="--hide"
-          commandFor="paid-additional-feed-modal"
-        >
-          Cancel
-        </s-button>
-      </s-modal>
-
-      <s-modal
-        id="additional-feed-renewal-modal"
-        heading="Update your subscription to add more feeds"
-        accessibilityLabel="Update subscription for paid Additional feeds"
-        ref={renewalModalRef}
-      >
-        <s-stack direction="block" gap="base">
-          <s-paragraph>
-            Your current subscription does not include paid Additional Market
-            feeds. To add more than your {entitlements?.includedAdditionalFeeds}{" "}
-            included Additional feeds, cancel your current subscription and
-            select a plan with usage billing on Shopify.
-          </s-paragraph>
-          <s-paragraph>
-            Additional feeds beyond your selected plan&apos;s allowance cost
-            $1.49/month each. Cancellation takes effect immediately.
-            Access to subscription features pauses until you approve the
-            replacement plan. Shopify determines any charges and credits; review
-            the billing terms before approving. A new free trial is not
-            guaranteed.
-          </s-paragraph>
-          {renewalError ? (
-            <s-banner tone="critical">{renewalError}</s-banner>
-          ) : null}
-          {renewalComplete ? (
-            <s-paragraph>
-              Your previous subscription has ended. Continue on Shopify to
-              select and approve your plan, then return to Feeds.
-            </s-paragraph>
-          ) : null}
-          {renewalTarget && (renewalError || renewalComplete) ? (
-            <s-link href={renewalTarget.url} target="_top">
-              Open Shopify plan selection
-            </s-link>
-          ) : null}
-        </s-stack>
-        <s-button
-          slot="primary-action"
-          variant="primary"
-          disabled={
-            !renewalTarget || renewalPending || renewalComplete
-              ? true
-              : undefined
-          }
-          loading={renewalPending ? true : undefined}
-          onClick={() => void cancelAndResubscribe()}
-        >
-          Cancel and resubscribe
-        </s-button>
-        <s-button
-          slot="secondary-actions"
-          command="--hide"
-          commandFor="additional-feed-renewal-modal"
-          disabled={renewalPending ? true : undefined}
-        >
-          Not now
-        </s-button>
-      </s-modal>
-
-      <s-modal
-        accessibilityLabel="Edit additional Market Country Code"
-        heading="Edit additional Market"
-        id="edit-additional-feed-modal"
-        ref={editModalRef}
-      >
-        <s-stack direction="block" gap="base">
-          <s-text-field
-            label="Market and country"
-            readOnly
-            value={
-              editTarget
-                ? `${editTarget.market.name} / ${editTarget.market.countryName ?? editTarget.market.countryCode}`
-                : ""
-            }
-          />
-          <s-text-field
-            label="Language"
-            readOnly
-            value={
-              editTarget?.market.languageName ?? editTarget?.market.locale ?? ""
-            }
-          />
-          <s-text-field
-            label={COUNTRY_CODE_LABEL}
-            maxLength={2}
-            value={editCountryCode}
-            error={editError ?? undefined}
-            disabled={editMutation.isPending}
-            onInput={(event) => {
-              setEditCountryCode(event.currentTarget.value.toUpperCase());
-              setEditError(null);
-            }}
-          />
-          <s-paragraph color="subdued">
-            Changing Country Code changes Google item IDs after the next feed
-            refresh.
-          </s-paragraph>
-        </s-stack>
-        <s-button
-          slot="primary-action"
-          variant="primary"
-          loading={editMutation.isPending ? true : undefined}
-          disabled={!editTarget || editMutation.isPending ? true : undefined}
-          onClick={() => {
-            const idCountryCode = normalizeCountryCode(editCountryCode);
-            if (!idCountryCode) {
-              setEditError("Enter a two-letter country code.");
-              return;
-            }
-            if (editTarget)
-              editMutation.mutate({
-                feedId: editTarget.feed.id,
-                idCountryCode,
-              });
-          }}
-        >
-          Save
-        </s-button>
-        <s-button
-          slot="secondary-actions"
-          command="--hide"
-          commandFor="edit-additional-feed-modal"
-          disabled={editMutation.isPending ? true : undefined}
-        >
-          Cancel
-        </s-button>
-      </s-modal>
 
       <s-modal
         accessibilityLabel="Delete additional Market feed confirmation"

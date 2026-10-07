@@ -1,0 +1,129 @@
+Multi Sync market configuration implementation report
+Date: 7 October 2026
+
+Outcome
+Additional Market feeds can dynamically follow Primary Configuration or use their own saved configuration. Creation and editing now use dedicated Polaris pages. All XML continues through the existing feed generator.
+
+Database and deployment
+Both frontend and backend Prisma XmlLink models add:
+- customConfigurationEnabled: nullable Boolean with default false.
+- customConfiguration: nullable JSON containing only allowed market fields.
+- marketConfigurationRevision: nullable Int with default 0 for concurrent-edit protection.
+Missing/null mode is interpreted as OFF; missing/null revision is 0. There is no data backfill or migration, no new index, and no automatic generation. Optional MongoDB scalar fields require regenerated Prisma clients, not a destructive schema/data migration. No database push or production data operation was run. Deploy backend and frontend with their regenerated clients and matching local catalog-rules package exports. The dashboard schema does not need these fields because dashboard operations do not write market configuration.
+
+Backward compatibility and identity
+Old feeds resolve to the original Primary rules without requiring a resave. No existing records are recreated. Public URL/token, GCS object naming/directory functions, Shopify Market, market country, language, XML item ID Country Code, pricing/localization, billing, metering, allowances, and schedules retain their existing behavior. The Shopify market country and the separate idCountryCode used for g:id remain distinct. Legacy missing ID Country Codes continue using the existing fallback/freeze behavior.
+
+Global-only settings
+Alerts email; Color option mapping (including legacy/plural mappings); Size option mapping; Gender Rules and default Gender; Age Rules and default Age Group. Rule versions and bookkeeping are never copied into market JSON. Custom markets always receive current Primary global rules/mappings at execution.
+
+Exact market-overridable fields discovered in the current codebase (15)
+- Product inclusion: productSubmissionMode, includedCollectionIds.
+- Collection exclusions: excludedCollections (stable IDs and display titles).
+- Product-title exclusions: excludedTitleTerms.
+- XML title cleanup: excludedTitleAttributes.
+- Tag exclusions: excludedProductTags.
+- Google options: showSalePriceInGoogleFeed, useProductImageAsMainImage, includeShippingWeightInGoogleFeed, excludeOutOfStockItems.
+- Inventory: ignoreShopifyInventoryInGoogleFeed, inventorySourceMode, selectedInventoryLocationIds.
+- URLs: disableUtmParameters, checkoutLinkMode.
+The currency-parameter toggle disablePrimaryCurrencyParameter is intrinsically Primary-only: existing Additional URLs always retain currency for localized pricing. It is hidden and rejected as a market override. productTypes are Diagnostics suggestions, not feed configuration; they stay on Primary. Country Code is edited as feed identity, not custom configuration. The current Configuration does not offer separate title/description source, additional-image enablement, or variant submission controls; no new duplicate settings were invented. Existing image, pricing, custom-label, variant, transformation and serialization logic is reused unchanged.
+
+Resolution architecture
+The mirrored @multi-sync/catalog-rules/market-configuration subpath centralizes the explicit allowlist, logical sections, JSON validation, picking, effective resolution, and Primary-change impact comparison. Primary feeds return Primary rules. Additional OFF returns current Primary rules and ignores all retained JSON. Additional ON overlays only allowed saved fields onto current Primary rules. Global/stale/unknown override keys can never override Primary. Missing newly classified fields safely fall back to Primary until explicitly initialized/saved. New fields require a deliberate classification in this allowlist; frontend omission is not the business boundary.
+
+Routing and setup
+/app/market-feed/new: Market/country, available language, XML ID Country Code, Create feed.
+/app/market-feed/configure: selected context, Customize configuration switch (OFF by default), optional custom editor, Generate feed.
+/app/market-feed/:feedId: existing identity/context, editable Country Code, mode/custom settings, Save.
+/app hides App Bridge navigation on these routes; standalone pages do not mount DashboardTabs. The top-left Polaris breadcrumb link contains a back arrow returning to /app/feeds. The editor includes retryable load feedback.
+Create feed only navigates. No draft record, XML upload, successful status, queue job, or billing event is created; abandoned setup leaves nothing to clean up. Available combinations/languages are revalidated on step 2 and final generation. Final generation saves mode/allowed values atomically with a new XmlLink, then uses the existing store slot, billing eligibility, unique combination index and BullMQ enqueue. It polls the saved feed and returns to Feeds only on COMPLETED. Errors stay on the page, FAILED is retryable, and a ref guard/loading state prevents double submission. Existing paid usage consent and legacy subscription renewal UI remain explicit.
+
+Editing and switches
+Existing Market/country/language remain immutable, matching the previous editor. Country Code remains normalized and validated; Save never generates XML. Table switches exist only on Additional rows. They wait for the server, are disabled during the request, reject rapid repeats, restore saved state on failure, and show Polaris feedback. Initial ON copies only current Primary overridable values. Previously saved values are retained while OFF and restored on later ON; they are completely ignored while OFF. Missing newly classified fields are initialized from current Primary. Optimistic revision checks and conditional updates prevent a stale editor or concurrent queue/claim from overwriting settings. The legacy Country Code API also advances this revision.
+
+Copy from Primary
+Eight actions copy logical sections: inclusion, collection exclusions, title exclusions, title cleanup, tags, Google options, inventory, and URLs. Each reads current Primary on click, clones only that section, keeps Custom ON, and leaves other custom fields untouched. Copies are form edits committed by Save or Generate; later Primary changes do not mutate them. No Copy action appears on the main Configuration page. The optional Copy all action was omitted to keep the page compact.
+
+Refresh required
+Mode changes, effective custom settings changes and Country Code changes mark only the edited Additional feed. Saving an unchanged effective configuration does not newly mark it. No switch/save action queues generation or modifies published XML. Primary saves compare each published feed's before/after effective settings: Primary and inherited markets are marked for applicable changed fields, custom markets are marked only when their effective settings changed. Color/Size changes reach both modes; existing Gender/Age save/worker invalidation remains global. Alerts email and Diagnostics-only Product Types do not change XML. Primary-only country/currency options do not invalidate an Additional feed whose XML behavior is unchanged.
+
+Workers and unchanged features
+The common processFeed resolves effective settings after reading the current saved feed and current Primary rules. Initial generation, manual feed refresh, automatic/scheduled refresh, manual store refresh and retries use that same path. Queue payloads retain IDs/generation numbers; no resolved configuration snapshot is queued. The existing eligibility, transformations, attribute resolution, inventory, XML and GCS generator is reused. Inclusion/exclusion priority and duplicate membership behavior remain in the shared catalog rules. Diagnostics and Single Product Preview remain Primary-only with no new market UI. No Shopify product/metafield mutations were added.
+
+Security and validation
+Existing subscribed Shopify authentication and internal backend store authentication scope every read/write. Feed lookups and conditional saves require authenticated store ownership and ADDITIONAL type. Invalid IDs/modes/Country Codes/enums/booleans/arrays and global/unknown JSON fields are rejected. New collection/location IDs are verified against authenticated Shopify nodes; previously valid saved references can be retained/removed as with the existing editor. Edit Market/language are not accepted as mutable fields. Create preserves existing combination, market/language and billing validation. Tests exercise hostile stored JSON, cross-store requests, invalid references, stale revisions, generation races and direct unsupported overrides.
+
+Validation results
+Backend:
+- npm run typecheck: PASS.
+- npm test: 391/391 PASS.
+- npm run test:integration: 200/200 PASS; isolated Prisma/Shopify/queue/storage doubles, no production calls.
+- npx tsc and node scripts/copy-static-assets.mjs: PASS.
+- npx prisma validate: PASS.
+- Fresh client generation from the same schema into node_modules/.cache/market-prisma/client: PASS.
+- Standard npm run build: BLOCKED at Prisma generation by a locked existing query_engine-windows.dll.node (EPERM rename). No unrelated process was stopped. Run the normal build in a fresh process/deployment environment; compilation and client generation were separately verified.
+Frontend:
+- npm run typecheck: PASS.
+- npm test: 194/194 PASS.
+- npm run test:reviews: 187/187 PASS, 27 files.
+- npm run lint: PASS.
+- npm run build: PASS (client and server).
+- npx prisma validate and fresh temporary-output client generation: PASS.
+- Initial default-output prisma generate also encountered a locked Windows engine DLL; schemas/client generation were verified in an isolated output path.
+- git diff --check in both repositories: PASS.
+- Playwright isolated real-Polaris preview: market/language selection, Create navigation, OFF/ON switch, desktop and mobile layout visually inspected. Four PNGs are in output/playwright. No live Shopify session was used. The isolated preview logged CDN icon warnings (without App Bridge) and no JavaScript errors; layout and control behavior were checked, while real authenticated embedding remains a deployment smoke check.
+972 tests pass across the four suites. Existing source-structure tests were updated for removed dialogs/forms and native Polaris wrappers. Two pre-existing unused mock parameters and a whitespace-sensitive dashboard test assertion were corrected; dashboard product code was untouched.
+
+Decisions and limitations
+Custom saved values restore on re-enable. Copying is per section, no destructive Copy all action. No persisted drafts. Existing feed identity is immutable except XML ID Country Code. No per-market Diagnostics or preview. Native Polaris wrappers address React 18 custom-element change events and synchronize switch/checkbox properties. Shared package copies are byte-identical and must remain synchronized in future changes. Verification uses mock external services and a local preview, not production feeds or billing. No deployment, migration/backfill, production feed refresh, billing event, or production Shopify mutation was performed.
+
+Files changed/new
+multi-sync-backend/packages/catalog-rules/market-configuration.d.ts
+multi-sync-backend/packages/catalog-rules/market-configuration.js
+multi-sync-backend/packages/catalog-rules/package.json
+multi-sync-backend/prisma/schema.prisma
+multi-sync-backend/src/feeds/service.ts
+multi-sync-backend/src/feeds/worker.ts
+multi-sync-backend/src/http/routes.ts
+multi-sync-backend/tests/feed-country-service.integration.ts
+multi-sync-backend/tests/feed-country-worker.integration.ts
+multi-sync-backend/tests/helpers/market-configuration.ts
+multi-sync-backend/tests/market-configuration.test.ts
+multi-sync-frontend/app/components/ConfigurationsPanel.tsx
+multi-sync-frontend/app/components/FeedsPanel.tsx
+multi-sync-frontend/app/components/MarketFeedEditor.tsx
+multi-sync-frontend/app/components/PolarisFormControls.tsx
+multi-sync-frontend/app/components/PolarisSwitch.tsx
+multi-sync-frontend/app/routes/app.additional-feeds.tsx
+multi-sync-frontend/app/routes/app.feed-data.tsx
+multi-sync-frontend/app/routes/app.market-feed.$feedId.tsx
+multi-sync-frontend/app/routes/app.market-feed.configure.tsx
+multi-sync-frontend/app/routes/app.market-feed.new.tsx
+multi-sync-frontend/app/routes/app.tsx
+multi-sync-frontend/app/services/configuration.server.ts
+multi-sync-frontend/app/services/feed-metadata.server.ts
+multi-sync-frontend/app/services/feed-query.ts
+multi-sync-frontend/app/services/market-configuration-query.ts
+multi-sync-frontend/app/services/market-feed-editor.server.ts
+multi-sync-frontend/app/styles/market-feed.module.css
+multi-sync-frontend/docs/market-feed-configuration-implementation.txt
+multi-sync-frontend/output/playwright/market-step-1.png
+multi-sync-frontend/output/playwright/market-step-2-custom.png
+multi-sync-frontend/output/playwright/market-step-2-inherited.png
+multi-sync-frontend/output/playwright/market-step-2-mobile.png
+multi-sync-frontend/packages/catalog-rules/market-configuration.d.ts
+multi-sync-frontend/packages/catalog-rules/market-configuration.js
+multi-sync-frontend/packages/catalog-rules/package.json
+multi-sync-frontend/prisma/schema.prisma
+multi-sync-frontend/tests/additional-feed-forms.test.ts
+multi-sync-frontend/tests/configurations-design.test.ts
+multi-sync-frontend/tests/dashboard-feed-overview.test.ts
+multi-sync-frontend/tests/dashboard-product-statistics.vitest.ts
+multi-sync-frontend/tests/dashboard-store-information.vitest.ts
+multi-sync-frontend/tests/feed-country-configuration.vitest.ts
+multi-sync-frontend/tests/feed-country.ui.test.tsx
+multi-sync-frontend/tests/market-feed-editor-route.vitest.ts
+multi-sync-frontend/tests/market-feed-editor.ui.test.tsx
+multi-sync-frontend/tests/product-inclusion-configuration.vitest.ts
+multi-sync-frontend/tests/product-tag-persistence.vitest.ts
+multi-sync-frontend/tests/title-attributes-persistence.vitest.ts

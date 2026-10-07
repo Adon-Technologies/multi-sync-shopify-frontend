@@ -93,6 +93,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const resource = url.searchParams.get("resource") ?? "feeds";
 
   try {
+    if (resource === "configuration") {
+      const feedId = url.searchParams.get("feedId") ?? "";
+      return Response.json(await requestFeedBackend(session, "GET", `/api/feeds/additional/${encodeURIComponent(feedId)}/configuration`));
+    }
     if (resource === "markets") {
       const result =
         await requestFeedBackend<AdditionalMarketOptionsResponse>(
@@ -150,6 +154,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     intent?: unknown;
     locale?: unknown;
     marketId?: unknown;
+    customConfigurationEnabled?: unknown;
+    customConfiguration?: unknown;
+    expectedRevision?: unknown;
   } | null;
   const intent = typeof input?.intent === "string" ? input.intent : "";
 
@@ -159,7 +166,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       !normalizeCountryCode(input?.idCountryCode)
     ) {
       return Response.json(
-        { ok: false, error: "Enter a two-letter country code." },
+        { ok: false, error: "Enter a 1-3 letter country code." },
         { status: 400 },
       );
     }
@@ -170,6 +177,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         "/api/feeds/additional/generate",
         {
           paidFeedConfirmed: input?.paidFeedConfirmed === true,
+          ...(input?.customConfigurationEnabled !== undefined ? { customConfigurationEnabled: input.customConfigurationEnabled } : {}),
+          ...(input?.customConfiguration !== undefined ? { customConfiguration: input.customConfiguration } : {}),
           idCountryCode: normalizeCountryCode(input?.idCountryCode),
           countryCode:
             typeof input?.countryCode === "string"
@@ -191,6 +200,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         { ok: false, error: "The feed could not be identified." },
         { status: 400 },
       );
+    }
+
+    if (intent === "save-configuration" || intent === "toggle-configuration") {
+      const result = await requestFeedBackend<AdditionalFeedActionResponse>(session, "POST", `/api/feeds/additional/${encodeURIComponent(feedId)}/configuration`, {
+        customConfigurationEnabled: input?.customConfigurationEnabled,
+        expectedRevision: input?.expectedRevision,
+        ...(intent === "save-configuration" ? { idCountryCode: input?.idCountryCode,
+          ...(input?.customConfiguration !== undefined ? { customConfiguration: input.customConfiguration } : {}) } : {}),
+      });
+      return Response.json(result);
     }
 
     if (intent === "edit") {

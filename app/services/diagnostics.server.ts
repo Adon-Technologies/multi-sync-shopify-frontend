@@ -615,7 +615,12 @@ async function buildDiagnosticsExclusionContext(
   const collectionIdsByProductId = new Map<string, string[]>();
   let previousPayload: GraphQLPayload<unknown> | null = null;
 
-  for (const collection of rules.excludedCollections) {
+  const collectionIds = new Set([
+    ...rules.excludedCollections.map(({ id }) => id),
+    ...(rules.productSubmissionMode === "SELECTED_COLLECTIONS" ? rules.includedCollectionIds ?? [] : []),
+  ]);
+  for (const id of collectionIds) {
+    const collection = { id };
     const collectionId = numericShopifyId(collection.id);
 
     if (!collectionId) {

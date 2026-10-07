@@ -114,6 +114,8 @@ test("configuration retains stable collection IDs and normalized store values", 
 
   assert.deepEqual(configuration, {
     alertsEmail: "alerts@example.com",
+    productSubmissionMode: "ALL_PRODUCTS",
+    includedCollectionIds: [],
     countryCode: "LB",
     colorOptions: ["Colour", "Taille"],
     sizeOptions: ["Shoe size", "Taille"],

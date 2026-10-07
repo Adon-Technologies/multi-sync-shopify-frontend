@@ -39,6 +39,18 @@ const noExclusions: DiagnosticExclusionRules = {
   excludedTitleTerms: [],
 };
 
+test("Diagnostics classifies products outside selected collections as excluded without inflating submitted counts", () => {
+  const rules: DiagnosticExclusionRules = { ...noExclusions, productSubmissionMode: "SELECTED_COLLECTIONS", includedCollectionIds: ["gid://shopify/Collection/1", "gid://shopify/Collection/2"] };
+  const outside = validateDiagnosticProduct(product(), rules);
+  assert.equal(outside.status, "error");
+  assert.deepEqual(outside.warnings, [{ code: "not-in-selected-collections", message: "Not in selected collections" }]);
+  const inside = validateDiagnosticProduct(product({ collectionIds: ["gid://shopify/Collection/2"] }), rules);
+  assert.notEqual(inside.status, "error");
+  const counts = countDiagnosticProducts([outside, inside]);
+  assert.equal(counts.allProducts, 2);
+  assert.equal(counts.excluded, 1);
+});
+
 test("filter metadata uses metafield Gender and Age values plus product tags", () => {
   const diagnostic = validateDiagnosticProduct(
     product({

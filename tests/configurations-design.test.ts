@@ -39,13 +39,13 @@ test("the compact Attributes and Exclusions editor exposes seven accessible View
 });
 
 test("all seven editors use Polaris modals and removable Polaris chips", () => {
-  assert.match(panelSource, /<s-modal[\s\S]*?heading="Excluded collections"/);
+  assert.match(panelSource, /<s-modal[\s\S]*?heading=\{`\$\{label\} collections`\}/);
   assert.match(panelSource, /heading=\{`\$\{attribute\} options`\}/);
   assert.match(panelSource, /<s-modal[\s\S]*?heading=\{heading\}/);
   assert.match(panelSource, /heading="Excluded product titles"/);
   assert.match(panelSource, /heading="Product types"/);
-  assert.equal(panelSource.match(/<s-clickable-chip/g)?.length, 3);
-  assert.equal(panelSource.match(/removable/g)?.length, 3);
+  assert.equal(panelSource.match(/<s-clickable-chip/g)?.length, 4);
+  assert.equal(panelSource.match(/removable/g)?.length, 4);
 });
 
 test("dialog edits remain drafts until Confirm and main fields show compact summaries", () => {

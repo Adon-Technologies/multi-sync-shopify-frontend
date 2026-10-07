@@ -360,6 +360,7 @@ export function shopifyLocationsQueryOptions(
 export async function saveConfigurationRequest(
   value: ConfigurationInput,
   endpoint = defaultEndpoint,
+  expectedUpdatedAt?: string,
 ) {
   const response = await fetch(endpoint, {
     method: "POST",
@@ -369,7 +370,7 @@ export async function saveConfigurationRequest(
       Accept: "application/json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(value),
+    body: JSON.stringify({ ...value, ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}) }),
   });
 
   return readJson<SaveConfigurationResponse>(response);

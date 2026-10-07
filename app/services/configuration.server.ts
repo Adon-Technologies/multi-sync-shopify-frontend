@@ -21,6 +21,7 @@ import {
 import {
   CollectionVerificationError,
   verifyShopCollections,
+  resolveIncludedCollections,
 } from "./collection-search.server";
 import { createDiagnosticsConfigurationRevision } from "./configuration-revision.server";
 import {
@@ -39,6 +40,8 @@ import {
   type ConfigurationInput,
   type SelectedCollection,
   validateConfigurationInput,
+  normalizeIncludedCollectionIds,
+  ConfigurationValidationError,
 } from "./configuration-validation";
 import { verifySelectedInventoryLocations } from "./shopify-locations.server";
 import {
@@ -71,6 +74,8 @@ interface ConfigurationBootstrapQuery {
 }
 
 interface StoredConfiguration {
+  productSubmissionMode?: string;
+  includedCollectionIds?: string[];
   ageRules: Prisma.JsonValue | null;
   ageRulesAppliedVersion: number;
   ageRulesVersion: number;
@@ -109,6 +114,7 @@ interface StoredConfiguration {
 }
 
 export interface PublicConfiguration extends ConfigurationInput {
+  includedCollections?: SelectedCollection[];
   ageRules: AgeRulesConfiguration["rules"];
   ageRulesAppliedVersion: number;
   ageRulesVersion: number;
@@ -147,6 +153,8 @@ export class AttributeRuleScopeError extends Error {
 }
 
 export interface DiagnosticsConfigurationRules {
+  productSubmissionMode?: "ALL_PRODUCTS" | "SELECTED_COLLECTIONS";
+  includedCollectionIds?: string[];
   colorOptions: string[];
   excludedCollections: SelectedCollection[];
   excludedTitleTerms: string[];
@@ -169,6 +177,8 @@ function mapConfiguration(
 
   return {
     id: configuration.id,
+    productSubmissionMode: configuration.productSubmissionMode === "SELECTED_COLLECTIONS" ? "SELECTED_COLLECTIONS" : "ALL_PRODUCTS",
+    includedCollectionIds: normalizeIncludedCollectionIds(configuration.includedCollectionIds),
     ageRules: age.rules,
     ageRulesAppliedVersion: configuration.ageRulesAppliedVersion,
     ageRulesVersion: configuration.ageRulesVersion,
@@ -215,6 +225,8 @@ function mapConfiguration(
 
 function getStoredDiagnosticsRevision(configuration: StoredConfiguration) {
   return createDiagnosticsConfigurationRevision({
+    productSubmissionMode: configuration.productSubmissionMode,
+    includedCollectionIds: configuration.includedCollectionIds,
     ageRulesAppliedVersion: configuration.ageRulesAppliedVersion,
     colorOptions: configuration.colorOptions,
     excludedCollections: configuration.excludedCollections,
@@ -357,7 +369,10 @@ export async function getConfigurationPageData(
   ]);
 
   return {
-    configuration: mapConfiguration(configuration),
+    configuration: {
+      ...mapConfiguration(configuration),
+      includedCollections: await resolveIncludedCollections(admin, normalizeIncludedCollectionIds(configuration.includedCollectionIds)),
+    },
     feedRefreshRequired: staleFeedCount > 0,
     ruleJobs,
   };
@@ -388,6 +403,22 @@ export async function saveConfigurationForShop(
   const previousConfiguration = await prisma.configuration.findUnique({
     where: { storeId: store.id },
   });
+  const expectedUpdatedAt = (value as Record<string, unknown>)?.expectedUpdatedAt;
+  if (expectedUpdatedAt !== undefined && previousConfiguration && expectedUpdatedAt !== previousConfiguration.updatedAt.toISOString()) {
+    throw new ConfigurationValidationError({ includedCollectionIds: "Configuration changed in another session. Reload Configuration and try again." });
+  }
+  if (input.productSubmissionMode === "SELECTED_COLLECTIONS") {
+    const currentlyExcluded = normalizeSelectedCollections(previousConfiguration?.excludedCollections);
+    if (currentlyExcluded.some(({ id }) => input.includedCollectionIds?.includes(id))) {
+      throw new ConfigurationValidationError({ includedCollectionIds: "This collection is currently excluded from your feeds. Remove it from Exclude collection and save before selecting it here." });
+    }
+    try {
+      await verifyShopCollections(admin, input.includedCollectionIds!.map((id) => ({ id, title: id })));
+    } catch (error) {
+      if (!(error instanceof CollectionVerificationError)) throw error;
+      throw new ConfigurationValidationError({ includedCollectionIds: "One or more selected collections are unavailable. Remove or replace them before saving." });
+    }
+  }
   const selectedInventoryLocationIds = await verifySelectedInventoryLocations(
     admin,
     input.selectedInventoryLocationIds,
@@ -431,26 +462,43 @@ export async function saveConfigurationForShop(
       data: { idCountryCode: previousCountryCode },
     });
   }
-  const configuration = await prisma.configuration.upsert({
-    where: { storeId: store.id },
-    create: {
-      ...verifiedInput,
-      excludedCollections:
-        input.excludedCollections as unknown as Prisma.InputJsonValue,
-      diagnosticsRevision: nextDiagnosticsRevision,
-      optionMappingsInitialized: true,
-      storeId: store.id,
-    },
-    update: {
-      ...verifiedInput,
-      colorOption: null,
-      excludedCollections:
-        input.excludedCollections as unknown as Prisma.InputJsonValue,
-      diagnosticsRevision: nextDiagnosticsRevision,
-      optionMappingsInitialized: true,
-      sizeOption: null,
-    },
-  });
+  const updateData = {
+    ...verifiedInput,
+    colorOption: null,
+    excludedCollections: input.excludedCollections as unknown as Prisma.InputJsonValue,
+    diagnosticsRevision: nextDiagnosticsRevision,
+    optionMappingsInitialized: true,
+    sizeOption: null,
+  };
+  let configuration;
+  try {
+    configuration = previousConfiguration
+      ? await prisma.configuration.update({
+          where: { id: previousConfiguration.id, updatedAt: previousConfiguration.updatedAt },
+          data: updateData,
+        })
+      : await prisma.configuration.upsert({
+          where: { storeId: store.id },
+          create: {
+            ...verifiedInput,
+            excludedCollections:
+              input.excludedCollections as unknown as Prisma.InputJsonValue,
+            diagnosticsRevision: nextDiagnosticsRevision,
+            optionMappingsInitialized: true,
+            storeId: store.id,
+          },
+          // Do not overwrite a Configuration created concurrently with this save.
+          update: {},
+        });
+    if (!previousConfiguration && configuration.diagnosticsRevision !== nextDiagnosticsRevision) {
+      throw new ConfigurationValidationError({ includedCollectionIds: "Configuration changed in another session. Reload Configuration and try again." });
+    }
+  } catch (error) {
+    if ((error as { code?: string }).code === "P2025" || (error as { code?: string }).code === "P2002") {
+      throw new ConfigurationValidationError({ includedCollectionIds: "Configuration changed in another session. Reload Configuration and try again." });
+    }
+    throw error;
+  }
   // Configured Product Types are reusable Diagnostics suggestions and are not
   // read by feed generation. Every other Configuration change remains
   // feed-affecting and invalidates already-published XML for this store.
@@ -472,7 +520,10 @@ export async function saveConfigurationForShop(
   });
 
   return {
-    configuration: mapConfiguration(configuration),
+    configuration: {
+      ...mapConfiguration(configuration),
+      includedCollections: await resolveIncludedCollections(admin, normalizeIncludedCollectionIds(configuration.includedCollectionIds)),
+    },
     feedRefreshRequired: staleFeedCount > 0,
   };
 }
@@ -491,6 +542,8 @@ export async function getDiagnosticsConfigurationRules(
 
   if (configuration) {
     const revision = createDiagnosticsConfigurationRevision({
+      productSubmissionMode: configuration.productSubmissionMode,
+      includedCollectionIds: configuration.includedCollectionIds,
       ageRulesAppliedVersion: configuration.ageRulesAppliedVersion,
       colorOptions: configuration.colorOptions,
       excludedCollections: configuration.excludedCollections,
@@ -514,6 +567,8 @@ export async function getDiagnosticsConfigurationRules(
     colorOptions: normalizeOptionNames(
       configuration?.colorOptions ?? DEFAULT_COLOR_OPTIONS,
     ),
+    productSubmissionMode: configuration?.productSubmissionMode === "SELECTED_COLLECTIONS" ? "SELECTED_COLLECTIONS" : "ALL_PRODUCTS",
+    includedCollectionIds: normalizeIncludedCollectionIds(configuration?.includedCollectionIds),
     excludedCollections: normalizeSelectedCollections(
       configuration?.excludedCollections,
     ),

@@ -379,6 +379,28 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.productSubmission {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+}
+
+.submissionChoices {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.submissionChoices legend {
+  margin-bottom: 10px;
+  font-weight: 550;
+}
+
+.productSubmission > .dialogTags {
+  max-height: 96px;
+  overflow-y: auto;
+}
+
 .attributeRulesCard {
   display: grid;
   gap: 16px;

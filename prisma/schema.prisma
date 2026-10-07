@@ -78,6 +78,11 @@ enum InventorySourceMode {
   SELECTED_LOCATIONS
 }
 
+enum ProductSubmissionMode {
+  ALL_PRODUCTS
+  SELECTED_COLLECTIONS
+}
+
 enum SupportTicketStatus {
   PENDING
   OPEN
@@ -205,6 +210,8 @@ model Configuration {
   sizeOptions                        String[]            @default([])
   optionMappingsInitialized          Boolean             @default(false)
   excludedCollections                Json
+  productSubmissionMode              ProductSubmissionMode @default(ALL_PRODUCTS)
+  includedCollectionIds              String[]            @default([])
   excludedProductTags                String[]            @default([])
   excludedTitleAttributes            String[] @default([])
   excludedTitleTerms                 String[]

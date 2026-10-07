@@ -48,6 +48,8 @@ export interface RawDiagnosticProduct {
 }
 
 export interface DiagnosticExclusionRules {
+  productSubmissionMode?: "ALL_PRODUCTS" | "SELECTED_COLLECTIONS";
+  includedCollectionIds?: string[];
   colorOptions?: string[];
   excludedCollections: Array<{
     id: string;

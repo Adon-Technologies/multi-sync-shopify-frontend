@@ -29,6 +29,7 @@ const COLLECTIONS_QUERY = `#graphql
       nodes {
         id
         title
+        productsCount { count precision }
       }
       pageInfo {
         endCursor
@@ -242,4 +243,18 @@ export async function verifyShopCollections(
   }
 
   return collections.map(({ id }) => verified.get(id)!);
+}
+
+/** Read current display names, retaining deleted selections so they can be removed. */
+export async function resolveIncludedCollections(admin: AdminGraphQLClient, ids: string[]) {
+  const found = new Map<string, SelectedCollection>();
+  for (let index = 0; index < ids.length; index += COLLECTION_LOOKUP_LIMIT) {
+    const data = await queryShopifyAdmin<CollectionNodesQuery>(admin, COLLECTION_NODES_QUERY, {
+      ids: ids.slice(index, index + COLLECTION_LOOKUP_LIMIT),
+    });
+    for (const node of data.nodes) if (node) found.set(node.id, node);
+  }
+  return ids.map((id) => found.get(id) ?? {
+    id, title: `Unavailable collection (${id.split("/").at(-1)})`, missing: true,
+  });
 }

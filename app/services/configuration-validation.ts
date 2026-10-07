@@ -4,6 +4,8 @@ export { normalizeExcludedTitleAttributes, normalizeExcludedProductTags } from "
 export interface SelectedCollection {
   id: string;
   title: string;
+  productsCount?: { count: number; precision: string };
+  missing?: boolean;
 }
 
 export const CHECKOUT_LINK_MODES = ["DISABLED", "CART", "CHECKOUT"] as const;
@@ -18,6 +20,8 @@ export const INVENTORY_SOURCE_MODES = [
 export type InventorySourceMode = (typeof INVENTORY_SOURCE_MODES)[number];
 
 export interface ConfigurationInput {
+  productSubmissionMode?: "ALL_PRODUCTS" | "SELECTED_COLLECTIONS";
+  includedCollectionIds?: string[];
   alertsEmail: string;
   countryCode: string;
   colorOptions: string[];
@@ -40,6 +44,8 @@ export interface ConfigurationInput {
 }
 
 export interface ConfigurationFieldErrors {
+  productSubmissionMode?: string;
+  includedCollectionIds?: string;
   alertsEmail?: string;
   countryCode?: string;
   colorOptions?: string;
@@ -259,6 +265,11 @@ export function normalizeCheckoutLinkMode(value: unknown): CheckoutLinkMode {
     : "DISABLED";
 }
 
+export function normalizeIncludedCollectionIds(value: unknown): string[] {
+  return Array.isArray(value) ? [...new Set(value.filter((id): id is string =>
+    typeof id === "string" && SHOPIFY_COLLECTION_ID.test(id)))] : [];
+}
+
 export function normalizeInventorySourceMode(
   value: unknown,
 ): InventorySourceMode {
@@ -308,12 +319,27 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
       ? normalizeConfigurationText(input.alertsEmail).toLocaleLowerCase()
       : "";
   const countryCode = normalizeCountryCode(input.countryCode) ?? "";
+  const productSubmissionMode = input.productSubmissionMode === "SELECTED_COLLECTIONS" ? "SELECTED_COLLECTIONS" : "ALL_PRODUCTS";
+  const includedCollectionIds = normalizeIncludedCollectionIds(input.includedCollectionIds);
+  if (input.productSubmissionMode !== undefined && !["ALL_PRODUCTS", "SELECTED_COLLECTIONS"].includes(String(input.productSubmissionMode))) {
+    fields.productSubmissionMode = "Choose a valid product submission mode.";
+  }
+  if (input.includedCollectionIds !== undefined && (!Array.isArray(input.includedCollectionIds) ||
+      input.includedCollectionIds.length !== includedCollectionIds.length || includedCollectionIds.length > 1000)) {
+    fields.includedCollectionIds = "Select valid collections (up to 1000).";
+  }
+  if (productSubmissionMode === "SELECTED_COLLECTIONS" && includedCollectionIds.length === 0) {
+    fields.includedCollectionIds = "Select at least one collection.";
+  }
   const colorOptions = normalizeOptionNames(input.colorOptions);
   const sizeOptions = normalizeOptionNames(input.sizeOptions);
   const excludedCollections = normalizeSelectedCollections(
     input.excludedCollections,
   );
   const excludedTitleAttributes = normalizeExcludedTitleAttributes(input.excludedTitleAttributes);
+  if (productSubmissionMode === "SELECTED_COLLECTIONS" && excludedCollections.some(({ id }) => includedCollectionIds.includes(id))) {
+    fields.includedCollectionIds = "A selected collection is excluded. Remove it from Exclude collection or from the included collections before saving.";
+  }
   const excludedTitleTerms = normalizeExcludedTitleTerms(
     input.excludedTitleTerms,
   );
@@ -553,6 +579,8 @@ export function validateConfigurationInput(value: unknown): ConfigurationInput {
 
   return {
     alertsEmail,
+    productSubmissionMode,
+    includedCollectionIds: productSubmissionMode === "SELECTED_COLLECTIONS" ? includedCollectionIds : [],
     countryCode,
     colorOptions,
     sizeOptions,

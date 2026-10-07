@@ -7,6 +7,8 @@ export interface CatalogExclusionProduct {
 }
 
 export interface CatalogExclusionRules {
+  productSubmissionMode?: "ALL_PRODUCTS" | "SELECTED_COLLECTIONS";
+  includedCollectionIds?: string[];
   excludedCollections: Array<{
     id: string;
     title: string;

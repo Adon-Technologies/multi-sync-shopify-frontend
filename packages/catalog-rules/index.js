@@ -74,6 +74,12 @@ export function resolveProductExclusions(product, rules, excludedTags) {
   const productCollectionIds = new Set(product.collectionIds ?? []);
   const reasons = [];
 
+  // Inclusion narrows candidates; every exclusion below remains authoritative.
+  if (rules.productSubmissionMode === "SELECTED_COLLECTIONS" &&
+      !(rules.includedCollectionIds ?? []).some((id) => productCollectionIds.has(id))) {
+    reasons.push({ code: "not-in-selected-collections", message: "Not in selected collections" });
+  }
+
   for (const collection of rules.excludedCollections ?? []) {
     if (productCollectionIds.has(collection.id)) {
       reasons.push({

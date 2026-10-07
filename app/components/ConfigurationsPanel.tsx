@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { SaveBar, useAppBridge } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PiEye } from "react-icons/pi";
+import { AppProvider as PolarisAppProvider, InlineStack, RadioButton } from "@shopify/polaris";
+import enTranslations from "@shopify/polaris/locales/en.json";
 
 import { ProductTagsSelector, TextListSelector } from "./ProductTagsSelector";
 export { ProductTagsSelector } from "./ProductTagsSelector";
@@ -9,6 +11,7 @@ export { ProductTagsSelector } from "./ProductTagsSelector";
 import { AttributeRulesCard } from "./AttributeRulesCard";
 import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 import { useHydrated } from "../hooks/useHydrated";
+import { useOverlayEvents } from "../hooks/useOverlayEvents";
 import type { PublicConfiguration } from "../services/configuration.server";
 import {
   collectionsQueryOptions,
@@ -56,6 +59,8 @@ function configurationForm(
 ): ConfigurationInput {
   return {
     alertsEmail: configuration.alertsEmail,
+    productSubmissionMode: configuration.productSubmissionMode ?? "ALL_PRODUCTS",
+    includedCollectionIds: configuration.includedCollectionIds ?? [],
     countryCode: configuration.countryCode,
     colorOptions: configuration.colorOptions,
     sizeOptions: configuration.sizeOptions,
@@ -362,18 +367,26 @@ const TITLE_ATTRIBUTES_MODAL_ID = "configuration-excluded-title-attributes";
 const TITLE_TERMS_MODAL_ID = "configuration-excluded-product-titles";
 const PRODUCT_TYPES_MODAL_ID = "configuration-product-types";
 
-function CollectionSelector({
+export function CollectionSelector({
   error,
   onChange,
   scope,
   value,
+  inclusion = false,
+  excludedIds = [],
+  includedIds = [],
 }: {
   error?: string;
   onChange: (value: SelectedCollection[]) => void;
   scope: ConfigurationQueryScope;
   value: SelectedCollection[];
+  inclusion?: boolean;
+  excludedIds?: string[];
+  includedIds?: string[];
 }) {
-  const hydrated = useHydrated();
+  const modalId = inclusion ? "configuration-included-collections" : COLLECTIONS_MODAL_ID;
+  const label = inclusion ? "Included" : "Excluded";
+  const unavailableIds = inclusion ? excludedIds : includedIds;
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -381,6 +394,28 @@ function CollectionSelector({
   const [results, setResults] = useState<SelectedCollection[]>([]);
   const [draftValue, setDraftValue] = useState<SelectedCollection[]>(value);
   const searchRef = useRef<HTMLElementTagNameMap["s-search-field"]>(null);
+  const modalRef = useRef<HTMLElementTagNameMap["s-modal"]>(null);
+  useOverlayEvents(modalRef, {
+    onHide: () => setIsOpen(false),
+    onShow: () => {
+      setDraftValue(value);
+      setSearch("");
+      setDebouncedSearch("");
+      setCursor(null);
+      setResults([]);
+      setIsOpen(true);
+      window.requestAnimationFrame(() => searchRef.current?.focus());
+    },
+  });
+  useEffect(() => {
+    const chips = [...(modalRef.current?.querySelectorAll("s-clickable-chip") ?? [])];
+    const removers = chips.map((chip, index) => {
+      const remove = () => setDraftValue((current) => current.filter(({ id }) => id !== draftValue[index]?.id));
+      chip.addEventListener("remove", remove);
+      return () => chip.removeEventListener("remove", remove);
+    });
+    return () => removers.forEach((remove) => remove());
+  }, [draftValue]);
   const collectionsQuery = useQuery({
     ...collectionsQueryOptions(scope, debouncedSearch, cursor),
     enabled: isOpen,
@@ -431,20 +466,20 @@ function CollectionSelector({
 
   const visibleCollections = results.filter(
     (collection) =>
-      !draftValue.some((selected) => selected.id === collection.id),
+      unavailableIds.includes(collection.id) || !draftValue.some((selected) => selected.id === collection.id),
   );
 
   return (
     <div className={styles.combobox}>
       <s-clickable
-        accessibilityLabel="Edit excluded collections"
+        accessibilityLabel={inclusion ? "Select collections" : "Edit excluded collections"}
         background="base"
         border="small-100"
         borderColor="base"
         borderRadius="base"
         borderStyle="solid"
         command="--show"
-        commandFor={COLLECTIONS_MODAL_ID}
+        commandFor={modalId}
         inlineSize="100%"
         padding="small-200 base"
       >
@@ -457,7 +492,7 @@ function CollectionSelector({
           <s-text color={value.length > 0 ? "base" : "subdued"}>
             {value.length > 0
               ? `${value.length} collection${value.length === 1 ? "" : "s"} selected`
-              : "Type to search collection"}
+              : inclusion ? "Select collections" : "Type to search collection"}
           </s-text>
           <s-icon color="subdued" type="select" />
         </s-stack>
@@ -470,23 +505,10 @@ function CollectionSelector({
       ) : null}
 
       <s-modal
-        accessibilityLabel="Excluded collection selection"
-        heading="Excluded collections"
-        id={COLLECTIONS_MODAL_ID}
-        onHide={hydrated ? () => setIsOpen(false) : undefined}
-        onShow={
-          hydrated
-            ? () => {
-                setDraftValue(value);
-                setSearch("");
-                setDebouncedSearch("");
-                setCursor(null);
-                setResults([]);
-                setIsOpen(true);
-                window.requestAnimationFrame(() => searchRef.current?.focus());
-              }
-            : undefined
-        }
+        accessibilityLabel={`${label} collection selection`}
+        heading={`${label} collections`}
+        id={modalId}
+        ref={modalRef}
         padding="none"
         size="base"
       >
@@ -494,23 +516,13 @@ function CollectionSelector({
           <div className={styles.collectionModalContent}>
             {draftValue.length > 0 ? (
               <div
-                aria-label="Selected excluded collections"
+                aria-label={`Selected ${label.toLowerCase()} collections`}
                 className={styles.dialogTags}
               >
                 {draftValue.map((collection) => (
                   <s-clickable-chip
-                    accessibilityLabel={`${collection.title}, excluded collection`}
+                    accessibilityLabel={`${collection.title}, ${label.toLowerCase()} collection`}
                     key={collection.id}
-                    onRemove={
-                      hydrated
-                        ? () =>
-                            setDraftValue((current) =>
-                              current.filter(
-                                (candidate) => candidate.id !== collection.id,
-                              ),
-                            )
-                        : undefined
-                    }
                     removable
                   >
                     {collection.title}
@@ -557,16 +569,24 @@ function CollectionSelector({
               ) : (
                 <s-stack direction="block" gap="small-100">
                   {visibleCollections.map((collection) => (
+                    <s-stack key={collection.id} direction="block" gap="small-100">
                     <s-button
                       icon="collection"
-                      key={collection.id}
-                      onClick={() =>
-                        setDraftValue((current) => [...current, collection])
-                      }
+                      disabled={unavailableIds.includes(collection.id) ? true : undefined}
+                      onClick={() => {
+                        if (unavailableIds.includes(collection.id)) return;
+                        setDraftValue((current) => current.some(({ id }) => id === collection.id) ? current : [...current, collection]);
+                      }}
                       variant="tertiary"
                     >
-                      {collection.title}
+                      {collection.title}{inclusion ? collection.productsCount ? ` (${collection.productsCount.count}${collection.productsCount.precision === "AT_LEAST" ? "+" : ""} products)` : " (product count unavailable)" : ""}
                     </s-button>
+                    {unavailableIds.includes(collection.id) ? (
+                      <s-text color="subdued">{inclusion
+                        ? "Excluded — This collection is currently excluded from your feeds. Remove it from Exclude collection to select it here."
+                        : "Included — This collection is currently included in your feeds. Remove it from the included collections to exclude it here."}</s-text>
+                    ) : null}
+                    </s-stack>
                   ))}
                 </s-stack>
               )}
@@ -574,7 +594,7 @@ function CollectionSelector({
 
             {collectionsQuery.data?.pageInfo.hasNextPage ? (
               <s-button
-                disabled={collectionsQuery.isFetching}
+                disabled={collectionsQuery.isFetching ? true : undefined}
                 loading={collectionsQuery.isFetching ? true : undefined}
                 onClick={() =>
                   setCursor(collectionsQuery.data?.pageInfo.endCursor ?? null)
@@ -588,7 +608,7 @@ function CollectionSelector({
         </s-box>
         <s-button
           command="--hide"
-          commandFor={COLLECTIONS_MODAL_ID}
+          commandFor={modalId}
           onClick={() => onChange(draftValue)}
           slot="primary-action"
           variant="primary"
@@ -597,7 +617,7 @@ function CollectionSelector({
         </s-button>
         <s-button
           command="--hide"
-          commandFor={COLLECTIONS_MODAL_ID}
+          commandFor={modalId}
           slot="secondary-actions"
           variant="secondary"
         >
@@ -606,6 +626,21 @@ function CollectionSelector({
       </s-modal>
     </div>
   );
+}
+
+function IncludedCollectionChip({ collection, onRemove }: {
+  collection: SelectedCollection;
+  onRemove: () => void;
+}) {
+  const ref = useRef<HTMLElementTagNameMap["s-clickable-chip"]>(null);
+  useEffect(() => {
+    const chip = ref.current;
+    chip?.addEventListener("remove", onRemove);
+    return () => chip?.removeEventListener("remove", onRemove);
+  }, [onRemove]);
+  return <s-clickable-chip ref={ref} removable accessibilityLabel={`Remove ${collection.title}`}>
+    {collection.title}{collection.missing ? " — remove or replace" : ""}
+  </s-clickable-chip>;
 }
 
 function TitleTermsSelector(props: {
@@ -701,6 +736,7 @@ export function ConfigurationsPanel({
   };
   const [form, setForm] = useState<ConfigurationInput | null>(null);
   const [savedForm, setSavedForm] = useState<ConfigurationInput | null>(null);
+  const [includedCollectionDisplay, setIncludedCollectionDisplay] = useState<SelectedCollection[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<ConfigurationFieldErrors>({});
   const [feedback, setFeedback] = useState<{
@@ -720,7 +756,7 @@ export function ConfigurationsPanel({
       form?.inventorySourceMode === "SELECTED_LOCATIONS",
   });
   const saveMutation = useMutation({
-    mutationFn: (value: ConfigurationInput) => saveConfigurationRequest(value),
+    mutationFn: (value: ConfigurationInput) => saveConfigurationRequest(value, undefined, configurationQuery.data?.configuration.updatedAt),
   });
 
   useEffect(() => {
@@ -1030,6 +1066,7 @@ export function ConfigurationsPanel({
               ) : (
                 <CollectionSelector
                   error={fieldErrors.excludedCollections}
+                  includedIds={form?.productSubmissionMode === "SELECTED_COLLECTIONS" ? form.includedCollectionIds ?? [] : []}
                   onChange={(value) => updateForm("excludedCollections", value)}
                   scope={queryScope}
                   value={form?.excludedCollections ?? []}
@@ -1128,6 +1165,43 @@ export function ConfigurationsPanel({
                 </div>
               ) : (
                 <div className={styles.googleFeedOptionsGrid}>
+                  <div className={styles.productSubmission}>
+                    <PolarisAppProvider i18n={enTranslations}>
+                      <fieldset className={styles.submissionChoices}>
+                        <legend>Which products need to be submitted in the feed?</legend>
+                        <InlineStack gap="400">
+                          <RadioButton label="All products" id="submission-all-products" name="product-submission-mode"
+                            checked={form?.productSubmissionMode !== "SELECTED_COLLECTIONS"}
+                            onChange={() => updateForm("productSubmissionMode", "ALL_PRODUCTS")} />
+                          <RadioButton label="Products from collections" id="submission-selected-collections" name="product-submission-mode"
+                            checked={form?.productSubmissionMode === "SELECTED_COLLECTIONS"}
+                            onChange={() => updateForm("productSubmissionMode", "SELECTED_COLLECTIONS")} />
+                        </InlineStack>
+                      </fieldset>
+                    </PolarisAppProvider>
+                    {fieldErrors.productSubmissionMode ? <span role="alert" className={styles.fieldError}>{fieldErrors.productSubmissionMode}</span> : null}
+                    {form?.productSubmissionMode === "SELECTED_COLLECTIONS" && scope ? (
+                      <>
+                        <s-text>Which collections would you like to choose?</s-text>
+                        <CollectionSelector inclusion scope={scope} error={fieldErrors.includedCollectionIds}
+                          excludedIds={form.excludedCollections.map(({ id }) => id)}
+                          value={(form.includedCollectionIds ?? []).map((id) =>
+                            configurationQuery.data?.configuration.includedCollections?.find((collection) => collection.id === id) ??
+                            includedCollectionDisplay.find((collection) => collection.id === id) ?? { id, title: `Collection (${id.split("/").at(-1)})` })}
+                          onChange={(collections) => {
+                            setIncludedCollectionDisplay(collections);
+                            updateForm("includedCollectionIds", collections.map(({ id }) => id));
+                          }} />
+                        <div className={styles.dialogTags} aria-label="Selected included collections">
+                          {(form.includedCollectionIds ?? []).map((id) => {
+                            const collection = configurationQuery.data?.configuration.includedCollections?.find((entry) => entry.id === id) ?? includedCollectionDisplay.find((entry) => entry.id === id);
+                            return <IncludedCollectionChip key={id} collection={collection ?? { id, title: `Collection (${id.split("/").at(-1)})` }}
+                              onRemove={() => updateForm("includedCollectionIds", form.includedCollectionIds?.filter((entry) => entry !== id) ?? [])} />;
+                          })}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
                   <s-checkbox
                     checked={form?.showSalePriceInGoogleFeed ?? false}
                     details="When enabled, Google receives the original price plus sale_price. When disabled, only the final current price is sent."

@@ -13,6 +13,8 @@ import {
 } from "./configuration-validation.ts";
 
 export interface DiagnosticsRevisionInput {
+  productSubmissionMode?: string;
+  includedCollectionIds?: string[];
   ageRulesAppliedVersion?: number | unknown;
   colorOptions?: string[] | unknown;
   excludedCollections?: SelectedCollection[] | unknown;
@@ -45,6 +47,10 @@ export function createDiagnosticsConfigurationRevision(
     .map(normalizeCatalogText)
     .sort();
   const normalizedInput = {
+    ...(input.productSubmissionMode === "SELECTED_COLLECTIONS" ? {
+      productSubmissionMode: input.productSubmissionMode,
+      includedCollectionIds: [...new Set(input.includedCollectionIds ?? [])].sort(),
+    } : {}),
     ageRulesAppliedVersion:
       typeof input.ageRulesAppliedVersion === "number" &&
       Number.isSafeInteger(input.ageRulesAppliedVersion)

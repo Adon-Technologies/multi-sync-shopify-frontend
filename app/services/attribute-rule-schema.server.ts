@@ -13,6 +13,8 @@ export function ensureAttributeRuleConfigurationFields() {
       .$runCommandRaw({
         update: "Configuration",
         updates: [
+          { multi: true, q: { productSubmissionMode: { $exists: false } }, u: { $set: { productSubmissionMode: "ALL_PRODUCTS" } } },
+          { multi: true, q: { includedCollectionIds: { $exists: false } }, u: { $set: { includedCollectionIds: [] } } },
           {
             multi: true,
             q: { excludedTitleAttributes: { $exists: false } },

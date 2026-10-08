@@ -1,5 +1,5 @@
 import { PolarisSwitch } from "./PolarisSwitch";
-import { useNavigate } from "react-router";
+import { useNavigate, useNavigation } from "react-router";
 import { saveMarketConfiguration } from "../services/market-configuration-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -149,6 +149,10 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
   const hydrated = useHydrated();
   const shopify = useAppBridge();
   const navigate = useNavigate();
+  const navigation = useNavigation();
+  const openingMarket =
+    navigation.state !== "idle" &&
+    navigation.location?.pathname === "/app/market-feed/new";
   const toggleInFlight = useRef(false);
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<{
@@ -865,10 +869,12 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
           <s-button
             disabled={
               additionalData?.backendUnavailable ||
-              generationLocked
+              generationLocked ||
+              openingMarket
                 ? true
                 : undefined
             }
+            loading={openingMarket ? true : undefined}
             onClick={() => navigate("/app/market-feed/new")}
             variant="primary"
           >

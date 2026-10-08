@@ -116,6 +116,13 @@ function MarketFeedForm({
   }));
   const [discardRevision, setDiscardRevision] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [creationPricing, setCreationPricing] = useState(data.creationPricing);
+  const additionalFeedPrice = creationPricing
+    ? new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: creationPricing.currency,
+      }).format(creationPricing.incrementalPriceCents / 100)
+    : "";
   const [pendingFeedId, setPendingFeedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
@@ -291,14 +298,12 @@ function MarketFeedForm({
             staleTime: 0,
           });
           if (!feeds.ok) throw new Error(feeds.error);
-          if (!feeds.usage)
+          if (!feeds.usage?.nextFeedPricing)
             throw new Error(
               "Your feed allowance could not be verified. Try again.",
             );
-          if (
-            feeds.usage.additionalFeedCount >=
-            feeds.usage.entitlements.includedAdditionalFeeds
-          ) {
+          setCreationPricing(feeds.usage.nextFeedPricing);
+          if (feeds.usage.nextFeedPricing.nextFeedIsBillable) {
             const eligibility = await checkAdditionalFeedBilling();
             if (eligibility.requiresRenewal) {
               setRenewal(eligibility);
@@ -523,6 +528,13 @@ function MarketFeedForm({
               </s-stack>
             </s-section>
           )}
+          {!editing && creationPricing?.nextFeedIsBillable ? (
+            <s-banner heading="Additional feed cost">
+              <s-paragraph>
+                This feed will add {additionalFeedPrice}/month to your plan.
+              </s-paragraph>
+            </s-banner>
+          ) : null}
           {pendingFeedId ? (
             <s-banner heading="Generating market feed">
               <s-paragraph>
@@ -562,7 +574,7 @@ function MarketFeedForm({
           ref={paidModal}
         >
           <s-paragraph>
-            This feed exceeds your included allowance and adds $1.49/month in
+            This feed exceeds your included allowance and adds {additionalFeedPrice}/month in
             usage charges to your Shopify app bill.
           </s-paragraph>
           <s-button
@@ -574,7 +586,7 @@ function MarketFeedForm({
               void submit(true);
             }}
           >
-            Add feed for $1.49/month
+            Add feed for {additionalFeedPrice}/month
           </s-button>
           <s-button
             slot="secondary-actions"
@@ -593,7 +605,7 @@ function MarketFeedForm({
             Your current subscription does not include paid Additional Market
             feeds. Cancel and select a plan with usage billing on Shopify.
             Cancellation takes effect immediately and access pauses until you
-            approve the replacement. Additional feeds cost $1.49/month each.
+            approve the replacement. Additional feeds cost {additionalFeedPrice}/month each.
             Shopify determines charges and credits; a new free trial is not
             guaranteed.
           </s-paragraph>

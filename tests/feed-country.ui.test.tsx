@@ -14,8 +14,15 @@ import { FeedsPanel } from "../app/components/FeedsPanel";
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   toast: { show: vi.fn() },
+  navigation: {
+    state: "idle",
+    location: undefined as { pathname: string } | undefined,
+  },
 }));
-vi.mock("react-router", () => ({ useNavigate: () => mocks.navigate }));
+vi.mock("react-router", () => ({
+  useNavigate: () => mocks.navigate,
+  useNavigation: () => mocks.navigation,
+}));
 vi.mock("@shopify/app-bridge-react", () => ({
   useAppBridge: () => ({ toast: mocks.toast }),
 }));
@@ -60,6 +67,8 @@ beforeEach(() => {
   failure = false;
   deferred = null;
   vi.clearAllMocks();
+  mocks.navigation.state = "idle";
+  mocks.navigation.location = undefined;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, options?: RequestInit) => {
@@ -135,9 +144,26 @@ async function toggle(element: Element, checked: boolean) {
   });
 }
 it("Add Market and Edit navigate to dedicated pages with no old dialogs or inline forms", async () => {
-  const container = await setup();
+  const panel = () => (
+    <QueryClientProvider client={client}>
+      <FeedsPanel active scope={scope} />
+    </QueryClientProvider>
+  );
+  const { container, rerender } = render(panel());
+  await waitFor(() => expect(container.querySelector('s-button[icon="edit"]')).toBeTruthy());
   fireEvent.click(screen.getByText("+ Add Market", { selector: "s-button" }));
   expect(mocks.navigate).toHaveBeenCalledWith("/app/market-feed/new");
+  mocks.navigation.state = "loading";
+  mocks.navigation.location = { pathname: "/app/market-feed/new" };
+  rerender(panel());
+  const addMarket = screen.getByText("+ Add Market", { selector: "s-button" });
+  expect(addMarket.hasAttribute("loading")).toBe(true);
+  expect(addMarket.hasAttribute("disabled")).toBe(true);
+  mocks.navigation.state = "idle";
+  mocks.navigation.location = undefined;
+  rerender(panel());
+  expect(addMarket.hasAttribute("loading")).toBe(false);
+  expect(addMarket.hasAttribute("disabled")).toBe(false);
   fireEvent.click(container.querySelector('s-button[icon="edit"]')!);
   expect(mocks.navigate).toHaveBeenCalledWith("/app/market-feed/feed");
   expect(container.querySelector("#edit-additional-feed-modal")).toBeNull();

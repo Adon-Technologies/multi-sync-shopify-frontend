@@ -7,6 +7,7 @@ import type {
   AdditionalFeedEntry,
   AdditionalMarketOption,
   AdditionalLanguageOption,
+  AdditionalFeedsResponse,
 } from "../routes/app.additional-feeds";
 
 export interface MarketEditorSettings {
@@ -35,11 +36,20 @@ export async function loadMarketFeedEditor({
       settings,
       options: [] as AdditionalMarketOption[],
       selection: null,
+      creationPricing: null,
     };
   }
-  const markets = await requestFeedBackend<{
-    options: AdditionalMarketOption[];
-  }>(session, "GET", "/api/feeds/additional/options");
+  const [markets, feeds] = await Promise.all([
+    requestFeedBackend<{ options: AdditionalMarketOption[] }>(
+      session, "GET", "/api/feeds/additional/options",
+    ),
+    requestFeedBackend<AdditionalFeedsResponse>(
+      session, "GET", "/api/feeds/additional",
+    ),
+  ]);
+  if (!feeds.ok || !feeds.usage?.nextFeedPricing)
+    throw new Error("Your feed allowance could not be verified. Try again.");
+  const creationPricing = feeds.usage.nextFeedPricing;
   const url = new URL(request.url);
   if (url.pathname.endsWith("/configure")) {
     const market = markets.options.find(
@@ -73,6 +83,7 @@ export async function loadMarketFeedEditor({
       settings: null,
       options: markets.options,
       selection: { market, language, idCountryCode },
+      creationPricing,
     };
   }
   return {
@@ -81,5 +92,6 @@ export async function loadMarketFeedEditor({
     settings: null,
     options: markets.options,
     selection: null,
+    creationPricing,
   };
 }

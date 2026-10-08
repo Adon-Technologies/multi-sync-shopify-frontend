@@ -30,6 +30,13 @@ const market = {
   value: "market|FR",
   availableLanguageCount: 1,
 };
+const creationPricing = {
+  includedAdditionalFeeds: 5,
+  currentAdditionalFeeds: 5,
+  nextFeedIsBillable: true,
+  incrementalPriceCents: 149,
+  currency: "USD",
+};
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.auth.mockResolvedValue({ session, admin: {} });
@@ -39,7 +46,9 @@ beforeEach(() => {
       ? { ok: true, options: [market] }
       : endpoint.endsWith("languages")
         ? { ok: true, languages: [{ name: "French", locale: "fr" }] }
-        : { ok: true, entry: { feed: { id: "feed" } } },
+        : endpoint === "/api/feeds/additional"
+          ? { ok: true, usage: { nextFeedPricing: creationPricing } }
+          : { ok: true, entry: { feed: { id: "feed" } } },
   );
 });
 const args = (url: string, params = {}) => ({
@@ -60,11 +69,24 @@ it("first setup page obtains existing available combinations without generation 
   const result = await loadMarketFeedEditor(args("/app/market-feed/new"));
   expect(result.options).toEqual([market]);
   expect(result.selection).toBeNull();
-  expect(mocks.backend).toHaveBeenCalledExactlyOnceWith(
+  expect(result.creationPricing).toEqual(creationPricing);
+  expect(mocks.backend).toHaveBeenCalledWith(
     session,
     "GET",
     "/api/feeds/additional/options",
   );
+  expect(mocks.backend).toHaveBeenCalledWith(session, "GET", "/api/feeds/additional");
+  expect(mocks.backend.mock.calls).toHaveLength(2);
+  expect(mocks.backend.mock.calls.every((call) => call[1] === "GET")).toBe(true);
+});
+
+it("billing data unavailable never silently assumes the next feed is included", async () => {
+  mocks.backend.mockImplementation(async (_session, _method, endpoint) =>
+    endpoint.endsWith("options") ? { options: [market] } : { ok: true },
+  );
+  await expect(loadMarketFeedEditor(args("/app/market-feed/new")))
+    .rejects.toThrow("Your feed allowance could not be verified");
+  expect(mocks.backend.mock.calls.every((call) => call[1] === "GET")).toBe(true);
 });
 it.each(["L", "FR", "FRA"])("configuration setup loader preserves normalized %s XML code", async (code) => {
   const result = await loadMarketFeedEditor(args(`/app/market-feed/configure?${new URLSearchParams({
@@ -81,6 +103,7 @@ it("second setup page revalidates market/language and normalized Country Code wi
     ),
   );
   expect(result.selection?.idCountryCode).toBe("LB");
+  expect(result.creationPricing).toEqual(creationPricing);
   expect(
     mocks.backend.mock.calls.every(
       (call) => !String(call[2]).includes("generate"),

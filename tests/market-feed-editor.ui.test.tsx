@@ -98,6 +98,13 @@ let paid: boolean;
 let renewal: boolean;
 let failSave: boolean;
 const writes: Record<string, unknown>[] = [];
+const includedPricing = {
+  includedAdditionalFeeds: 5,
+  currentAdditionalFeeds: 0,
+  nextFeedIsBillable: false,
+  incrementalPriceCents: 0,
+  currency: "USD",
+};
 beforeEach(() => {
   vi.clearAllMocks();
   writes.length = 0;
@@ -112,6 +119,7 @@ beforeEach(() => {
     settings: null,
     options: [market],
     selection: { market, language, idCountryCode: "FR" },
+    creationPricing: includedPricing,
   };
   client = new QueryClient({
     defaultOptions: {
@@ -170,6 +178,12 @@ beforeEach(() => {
         usage: {
           additionalFeedCount: paid ? 5 : 0,
           entitlements: { includedAdditionalFeeds: 5 },
+          nextFeedPricing: {
+            ...includedPricing,
+            currentAdditionalFeeds: paid ? 5 : 0,
+            nextFeedIsBillable: paid,
+            incrementalPriceCents: paid ? 149 : 0,
+          },
         },
         activeGeneration: null,
       });
@@ -438,6 +452,39 @@ it("paid generation retains explicit charge consent before using the existing pi
   expect(writes[0].paidFeedConfirmed).toBe(true);
 });
 
+it("refreshes the backend quote before consent and uses that price in the notice and confirmation", async () => {
+  const container = setup();
+  vi.mocked(fetch).mockImplementationOnce(async () => Response.json({
+    ok: true,
+    feeds: [],
+    usage: {
+      nextFeedPricing: {
+        includedAdditionalFeeds: 2,
+        currentAdditionalFeeds: 2,
+        nextFeedIsBillable: true,
+        incrementalPriceCents: 249,
+        currency: "CAD",
+      },
+    },
+  }));
+  fireEvent.click(screen.getByText("Generate feed", { selector: "s-button" }));
+  await waitFor(() => expect(container.querySelector('s-banner[heading="Additional feed cost"]')?.textContent).toContain("CA$2.49/month"));
+  expect(screen.getByText("Add feed for CA$2.49/month", { selector: "s-button" })).toBeTruthy();
+  expect(writes).toHaveLength(0);
+});
+
+it("cancelling the paid confirmation sends no generation, renewal, or billing writes", async () => {
+  paid = true;
+  const container = setup();
+  const modal = container.querySelector("#market-paid-confirmation") as Element & { showOverlay: () => void };
+  fireEvent.click(screen.getByText("Generate feed", { selector: "s-button" }));
+  await waitFor(() => expect(modal.showOverlay).toHaveBeenCalled());
+  fireEvent.click(screen.getByText("Cancel", { selector: "s-button" }));
+  fireEvent.click(screen.getByText("Back to Feeds", { selector: "s-button" }));
+  expect(writes).toHaveLength(0);
+  expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === "GET")).toBe(true);
+});
+
 it("legacy paid subscription requires the existing renewal flow before generation", async () => {
   paid = true;
   renewal = true;
@@ -447,6 +494,14 @@ it("legacy paid subscription requires the existing renewal flow before generatio
   };
   fireEvent.click(screen.getByText("Generate feed", { selector: "s-button" }));
   await waitFor(() => expect(modal.showOverlay).toHaveBeenCalled());
+  expect(writes).toHaveLength(0);
+});
+
+it("does not show a new-feed pricing notice when editing an existing feed", () => {
+  mocks.data.settings = { entry: { ...entry, feed: { ...feed, status: "COMPLETED" } }, customConfiguration: null };
+  mocks.data.creationPricing = null;
+  const container = setup();
+  expect(container.querySelector('s-banner[heading="Additional feed cost"]')).toBeNull();
   expect(writes).toHaveLength(0);
 });
 
@@ -487,6 +542,69 @@ it("displays collection names when reopening saved market collection selections"
   const modal = container.querySelector("#configuration-included-collections")!;
   await act(async () => modal.dispatchEvent(new Event("show")));
   expect(modal.querySelector('[aria-label="Selected included collections"]')?.textContent).toBe("Men's collection");
+});
+
+it.each([
+  ["Pro", 5, 0, false],
+  ["Pro", 5, 4, false],
+  ["Pro", 5, 5, true],
+  ["Pro", 5, 6, true],
+  ["Free", 1, 0, false],
+  ["Free", 1, 1, true],
+])("%s first Add Market page with allowance %i and %i Additional feeds shows paid notice: %s", (_plan, allowance, count, billable) => {
+  mocks.data.selection = null;
+  mocks.data.creationPricing = {
+    ...includedPricing,
+    includedAdditionalFeeds: allowance,
+    currentAdditionalFeeds: count,
+    nextFeedIsBillable: billable,
+    incrementalPriceCents: billable ? 149 : 0,
+  };
+  const container = setup();
+  const notice = container.querySelector('s-banner[heading="Additional feed cost"]');
+  if (billable) {
+    expect(notice?.textContent).toContain("This feed will add $1.49/month to your plan.");
+    expect((notice?.compareDocumentPosition(screen.getByText("Create feed", { selector: "s-button" })) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  } else {
+    expect(notice).toBeNull();
+    expect(container.textContent).not.toContain("$1.49/month");
+  }
+  expect(writes).toHaveLength(0);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("renders the backend quote's price and currency without recomputing allowances", () => {
+  mocks.data.selection = null;
+  mocks.data.creationPricing = {
+    includedAdditionalFeeds: 2,
+    currentAdditionalFeeds: 2,
+    nextFeedIsBillable: true,
+    incrementalPriceCents: 249,
+    currency: "CAD",
+  };
+  const container = setup();
+  expect(container.querySelector('s-banner[heading="Additional feed cost"]')?.textContent)
+    .toContain("CA$2.49/month");
+  expect(container.textContent).not.toContain("$1.49/month");
+  expect(writes).toHaveLength(0);
+});
+
+it("backing out of a paid Add Market page only navigates, without billing or generation requests", () => {
+  mocks.data.selection = null;
+  mocks.data.creationPricing = { ...includedPricing, nextFeedIsBillable: true, incrementalPriceCents: 149 };
+  setup();
+  fireEvent.click(screen.getByText("Back to Feeds", { selector: "s-button" }));
+  fireEvent.click(screen.getByText(/Feeds/, { selector: "s-link" }));
+  expect(mocks.navigate).toHaveBeenCalledWith("/app/feeds");
+  expect(writes).toHaveLength(0);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("shows pricing on configuration before generation", () => {
+  mocks.data.creationPricing = { ...includedPricing, nextFeedIsBillable: true, incrementalPriceCents: 149 };
+  const container = setup();
+  expect(container.querySelector('s-banner[heading="Additional feed cost"]')?.textContent).toContain("$1.49/month");
+  expect(writes).toHaveLength(0);
 });
 
 it("Primary configuration input accepts three letters and normalizes typed lowercase", async () => {

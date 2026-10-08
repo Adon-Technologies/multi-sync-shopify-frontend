@@ -34,12 +34,22 @@ export interface AdditionalLanguageOption {
   name: string;
 }
 
+// Read-only backend quote; the frontend does not calculate billing allowances.
+export interface AdditionalFeedPricing {
+  includedAdditionalFeeds: number;
+  currentAdditionalFeeds: number;
+  nextFeedIsBillable: boolean;
+  incrementalPriceCents: number;
+  currency: string;
+}
+
 export type AdditionalFeedsResponse =
   | {
       usage?: {
         plan: "FREE" | "PRO";
         entitlements: PlanEntitlements;
         additionalFeedCount: number;
+        nextFeedPricing: AdditionalFeedPricing;
         billableQuantity: number;
         estimatedUsageCents: number;
         estimatedTotalCents: number;

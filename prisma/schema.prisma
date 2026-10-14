@@ -595,6 +595,7 @@ model XmlLink {
   lastRefreshedAt       DateTime?
   fileSizeBytes         BigInt?
   lastError             String?
+  generationWarnings    Json?
   generationStartedAt   DateTime?
   generationCompletedAt DateTime?
   generationNumber      Int               @default(0)

@@ -28,6 +28,7 @@ export interface FeedMetadata {
   gcsObjectName: string | null;
   id: string;
   lastError: string | null;
+  generationWarnings?: string[];
   lastRefreshedAt: string | null;
   processedProducts: number;
   processedVariants: number;

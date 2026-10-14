@@ -7,6 +7,7 @@ export interface ProductFeedPreview {
   xml: string | null;
   itemCount: number;
   message: string | null;
+  warnings?: string[];
 }
 
 export async function requestProductFeedPreview(productId: string, signal: AbortSignal): Promise<ProductFeedPreview> {

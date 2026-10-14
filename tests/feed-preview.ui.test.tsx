@@ -7,6 +7,13 @@ const target = { id: "gid://shopify/Product/1", title: "Product & title" };
 const xml = '<?xml version="1.0"?>\n<rss><item><g:title>A &amp; B</g:title></item>\n<item>Second variant</item></rss>';
 const result = { ok: true, productId: target.id, productTitle: target.title, feedType: "PRIMARY", status: "included", xml, itemCount: 2, message: null };
 beforeEach(() => { api.request.mockReset(); api.request.mockResolvedValue(result); });
+it("shows attribute collection warnings alongside usable XML", async () => {
+  api.request.mockResolvedValue({ ...result, warnings: ["Collection 99 used in age rules is unavailable."] });
+  const view = render(<ProductFeedPreviewModal target={target} onClose={vi.fn()} />);
+  await waitFor(() => expect(view.container.querySelector('s-banner[tone="warning"]')?.textContent).toContain("Collection 99"));
+  expect(view.container.querySelector("pre")?.textContent).toBe(xml);
+  expect(view.container.querySelector('s-banner[tone="critical"]')).toBeNull();
+});
 function button(container: HTMLElement, text: string) { return [...container.querySelectorAll("s-button")].find(b => b.textContent === text)!; }
 it("does no work until opened, immediately loads and safely displays complete XML", async () => {
   let finish!: (value: typeof result) => void;

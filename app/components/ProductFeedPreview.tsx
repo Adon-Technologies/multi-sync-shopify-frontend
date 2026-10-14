@@ -32,6 +32,7 @@ export function ProductFeedPreviewModal({ target, onClose }: { target: PreviewTa
     {target ? <s-stack gap="base">
       <s-heading>{result?.productTitle ?? target.title}</s-heading>
       <s-paragraph color="subdued">Primary Feed</s-paragraph>
+      {(result?.warnings ?? []).map((warning, index) => <s-banner key={index} tone="warning" heading="Collection rule needs attention"><s-paragraph>{warning}</s-paragraph></s-banner>)}
       {error ? <s-banner tone="critical" heading="XML preview unavailable"><s-paragraph>{error}</s-paragraph></s-banner>
         : !result ? <s-stack direction="inline" gap="small" alignItems="center"><s-spinner accessibilityLabel="Generating XML preview" /><s-text>Generating XML preview…</s-text></s-stack>
         : result.status === "not-in-feed" ? <s-banner tone="info" heading="Not included in the Primary Feed"><s-paragraph>{result.message}</s-paragraph></s-banner>

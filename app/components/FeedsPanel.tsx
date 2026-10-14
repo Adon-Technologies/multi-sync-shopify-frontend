@@ -633,6 +633,20 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     });
   }
   tabAlerts.push(...automaticRefreshAlerts);
+  for (const { feed: warningFeed, label } of [
+    { feed, label: "Primary Feed" },
+    ...additionalFeeds.map(entry => ({ feed: entry.feed, label: `${entry.market.name} (${entry.market.countryCode ?? entry.market.countryName ?? ""}, ${entry.market.locale.toUpperCase()}) feed` })),
+  ]) {
+    if (warningFeed?.status !== "COMPLETED") continue;
+    for (const [index, message] of (warningFeed.generationWarnings ?? []).entries()) {
+      tabAlerts.push({
+        heading: `${label} generated with a warning`,
+        id: `feed-warning-${warningFeed.id}-${index}`,
+        message,
+        tone: "warning",
+      });
+    }
+  }
 
   return (
     <div className={styles.feeds}>

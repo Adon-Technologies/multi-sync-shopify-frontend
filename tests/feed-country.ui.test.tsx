@@ -10,6 +10,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FeedsPanel } from "../app/components/FeedsPanel";
+import type { FeedMetadata } from "../app/routes/app.feed-data";
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -40,10 +41,11 @@ const market = {
   countryCode: "DE",
   countryName: "Germany",
   currencyCode: "EUR",
+  currencyName: "Euro",
   languageName: "German",
   locale: "de",
 };
-const metadata = {
+const metadata: FeedMetadata = {
   id: "feed",
   feedType: "ADDITIONAL",
   idCountryCode: "GB",
@@ -55,17 +57,28 @@ const metadata = {
   gcsObjectName: "feed.xml",
   fileSizeBytes: "100",
   marketConfigurationRevision: 0,
+  createdAt: "2026-09-01",
+  generationCompletedAt: "2026-09-01",
+  generationStartedAt: "2026-09-01",
+  lastError: null,
+  processedProducts: 1,
+  processedVariants: 1,
+  skippedItems: 0,
+  totalProducts: 1,
+  updatedAt: "2026-09-01",
 };
-let savedFeed: typeof metadata & { customConfigurationEnabled?: boolean };
+let savedFeed: typeof metadata & { customConfigurationEnabled?: boolean; generationWarnings?: string[] };
 let client: QueryClient;
 let failure: boolean;
 let deferred: (() => void) | null;
+let additionalEntries: Array<{ feed: FeedMetadata; market: typeof market }> | null;
 const writes: Record<string, unknown>[] = [];
 beforeEach(() => {
   savedFeed = { ...metadata };
   writes.length = 0;
   failure = false;
   deferred = null;
+  additionalEntries = null;
   vi.clearAllMocks();
   mocks.navigation.state = "idle";
   mocks.navigation.location = undefined;
@@ -103,7 +116,7 @@ beforeEach(() => {
           ok: true,
           activeGeneration: null,
           backendUnavailable: false,
-          feeds: [{ feed: savedFeed, market }],
+          feeds: additionalEntries ?? [{ feed: savedFeed, market }],
         });
       return Response.json({
         ok: true,
@@ -133,6 +146,16 @@ async function setup() {
   );
   return ui.container;
 }
+
+it("completed additional feeds display generation warnings without a failure banner and clear them on fresh metadata", async () => {
+  savedFeed.generationWarnings = ["Collection 99 used in gender rules is unavailable."];
+  const container = await setup();
+  await waitFor(() => expect(container.querySelector('s-banner[tone="warning"]')?.textContent).toContain("Collection 99"));
+  expect(container.querySelector('s-banner[tone="critical"]')).toBeNull();
+  savedFeed.generationWarnings = [];
+  await act(async () => { await client.invalidateQueries({ queryKey: feedKeys.all(scope) }); });
+  await waitFor(() => expect(container.textContent).not.toContain("Collection 99"));
+});
 async function toggle(element: Element, checked: boolean) {
   Object.defineProperty(element, "checked", {
     configurable: true,
@@ -221,6 +244,8 @@ it("returning from the editor immediately shows the saved Refresh required badge
   const other = { feed: { ...metadata, id: "unrelated" }, market };
   client.setQueryData(key, { ok: true, feeds: [{ feed: { ...metadata }, market }, other], activeGeneration: null, backendUnavailable: false });
   const saved = { feed: { ...metadata, requiresRefresh: true, customConfigurationEnabled: true, marketConfigurationRevision: 1 }, market };
+  // The mount also refreshes metadata; the mock server must reflect the saved row.
+  additionalEntries = [saved, other];
   updateMarketFeedCache(client, scope, { ok: true, entry: saved });
   await setup();
   expect(screen.getAllByText("Refresh required", { selector: "s-badge" })).toHaveLength(1);

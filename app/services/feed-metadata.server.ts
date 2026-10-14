@@ -52,6 +52,7 @@ function mapStoredFeed(
     gcsObjectName: feed.gcsObjectName,
     id: feed.id,
     lastError: feed.lastError,
+    generationWarnings: Array.isArray(feed.generationWarnings) ? feed.generationWarnings.filter((value): value is string => typeof value === "string") : [],
     lastRefreshedAt: feed.lastRefreshedAt?.toISOString() ?? null,
     processedProducts: feed.processedProducts,
     processedVariants: feed.processedVariants,

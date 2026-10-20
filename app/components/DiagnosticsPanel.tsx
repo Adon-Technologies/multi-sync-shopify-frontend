@@ -9,6 +9,7 @@ import {
 import { flushSync } from "react-dom";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { ProductFeedPreviewModal, type PreviewTarget } from "./ProductFeedPreview";
+import { FacebookStatus, useMetaDiagnostics } from "./MetaDiagnostics";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { VscCircleSlash } from "react-icons/vsc";
 
@@ -236,6 +237,7 @@ interface DiagnosticsRefreshFallback {
 }
 
 interface DiagnosticsTableProps {
+  scope: DiagnosticsQueryScope | null;
   activeJob: DiagnosticsBulkEditJob | null;
   bulkSelection: DiagnosticsBulkSelection;
   canGoPrevious: boolean;
@@ -1065,6 +1067,7 @@ function SkeletonRows() {
           <td className={styles.statusCell}>
             <span className={styles.skeletonStatus} />
           </td>
+          <td><span className={styles.skeletonStatus} /></td>
           <td>
             <span className={styles.skeletonWarning} />
             <span className={styles.skeletonWarningShort} />
@@ -1076,6 +1079,7 @@ function SkeletonRows() {
 }
 
 function DiagnosticsTable({
+  scope,
   activeJob,
   bulkSelection,
   canGoPrevious,
@@ -1106,6 +1110,7 @@ function DiagnosticsTable({
   const lastProduct =
     products.length === 0 ? 0 : firstProduct + products.length - 1;
   const displayedProductIds = products.map(({ id }) => id);
+  const facebook = useMetaDiagnostics(scope, displayedProductIds);
   const pageSelection = diagnosticsPageSelectionState(
     bulkSelection,
     displayedProductIds,
@@ -1138,6 +1143,7 @@ function DiagnosticsTable({
             <col className={styles.productTypeColumn} />
             <col className={styles.previewColumn} />
             <col className={styles.statusColumn} />
+            <col className={styles.facebookColumn} />
             <col className={styles.errorColumn} />
           </colgroup>
           <thead>
@@ -1178,7 +1184,7 @@ function DiagnosticsTable({
                 </div>
               </th>
               {bulkMode ? (
-                <th colSpan={5} scope="col">
+                <th colSpan={6} scope="col">
                   <div className={styles.bulkHeaderActions}>
                     <s-button
                       accessibilityLabel="Bulk edit selected products"
@@ -1245,6 +1251,7 @@ function DiagnosticsTable({
                   <th className={styles.googleHeader} scope="col">
                     <img alt="Google" src="/google-icon.png" />
                   </th>
+                  <th className={styles.googleHeader} scope="col"><img alt="Facebook" src="/facebook.png" /></th>
                   <th scope="col">
                     <div className={styles.errorHeader}>
                       <span>Error from Multi-Sync</span>
@@ -1270,13 +1277,13 @@ function DiagnosticsTable({
               <SkeletonRows />
             ) : error && products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={6}>
+                <td className={styles.emptyCell} colSpan={7}>
                   {error}
                 </td>
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td className={styles.emptyCell} colSpan={6}>
+                <td className={styles.emptyCell} colSpan={7}>
                   {emptyMessage}
                 </td>
               </tr>
@@ -1340,6 +1347,7 @@ function DiagnosticsTable({
                   <td className={styles.statusCell}>
                     <StatusIcon status={product.status} />
                   </td>
+                  <td className={`${styles.statusCell} ${styles.facebookCell}`}><FacebookStatus value={facebook.data?.products[product.id]} failed={facebook.isError} /></td>
                   <td>
                     {product.warnings.length === 0 ? (
                       <span className={styles.noWarnings}>
@@ -2460,6 +2468,7 @@ export function DiagnosticsPanel({
           ) : null}
 
           <DiagnosticsTable
+            scope={queryScope}
             activeJob={activeBulkJob}
             bulkSelection={bulkSelection}
             canGoPrevious={navigation.index > 0}

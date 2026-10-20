@@ -36,6 +36,7 @@ import { FreePlanFeedLimitBanner } from "./FreePlanFeedLimitBanner";
 import { FeedStatusBadge } from "./FeedStatusBadge";
 import { TabAlertNavigator, type TabAlert } from "./TabAlertNavigator";
 import { SupportPanel } from "./SupportPanel";
+import { IntegrationsPanel } from "./IntegrationsPanel";
 import { PlanReviewBanner } from "./ReviewBanner";
 import type {
   ProductStatistics,
@@ -65,6 +66,7 @@ const tabIcons = {
   feeds: TbFileTypeXml,
   diagnostics: SiGoogleanalytics,
   configurations: IoMdSettings,
+  integrations: IoMdSettings,
   support: MdOutlineSupportAgent,
   plan: MdOutlineCreditCard,
 };
@@ -1104,6 +1106,22 @@ export function DashboardTabs(props: DashboardTabsProps) {
               />
             ) : null}
           </BillingAccessGate>
+        </div>
+
+        <div
+          aria-labelledby="tab-integrations"
+          className={styles.panel}
+          hidden={activeTab !== "integrations"}
+          id="panel-integrations"
+          role="tabpanel"
+          tabIndex={0}
+        >
+          {activeTab === "integrations" ? (
+            <IntegrationsPanel
+              key={`${props.diagnosticsScope?.shop}:${props.diagnosticsScope?.sessionId}`}
+              scope={props.diagnosticsScope}
+            />
+          ) : null}
         </div>
 
         <div

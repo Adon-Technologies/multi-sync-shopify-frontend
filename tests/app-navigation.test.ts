@@ -8,9 +8,10 @@ import {
   shouldRevalidateDashboard,
 } from "../app/services/app-navigation.ts";
 
-test("all six sidebar destinations have distinct paths matching their panels", () => {
+test("all seven sidebar destinations have distinct paths matching their panels", () => {
   const paths = appSections.map(({ id }) => dashboardTabHref(id));
-  assert.equal(new Set(paths).size, 6);
+  assert.equal(new Set(paths).size, 7);
+  assert.deepEqual(appSections.map(section => section.label), ["Dashboard", "Feeds", "Diagnostics", "Configurations", "Integrations", "Support", "Plan"]);
   for (const { id } of appSections) {
     const url = new URL(dashboardTabHref(id), "https://app.example");
     assert.equal(url.search, "");

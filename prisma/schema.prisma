@@ -5,12 +5,145 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+// Meta synchronization uses string Shopify store IDs (hex serialization), unlike
+// Store relations. These collections are owned by the bounded Mongo transaction repository.
+model MetaSyncRun {
+  id                  String    @id @map("_id")
+  storeId             String
+  catalogId           String
+  businessId          String
+  accountId           String
+  revision            Int
+  actorId             String
+  status              String
+  policy              Json
+  cursor              String?
+  enumerationComplete Boolean
+  createdAt           DateTime
+  updatedAt           DateTime
+  completedAt         DateTime?
+  error               String?
+  retry               Int
+  nextAt              DateTime
+  leaseOwner          String?
+  leaseUntil          DateTime?
+  sequence            Int
+  staleItems          Int?
+  writeConfirmed      Boolean?
+
+  @@index([storeId, catalogId, createdAt(sort: Desc)])
+  @@index([status, id])
+}
+
+model MetaSyncItem {
+  id                String    @id @map("_id")
+  runId             String
+  storeId           String
+  catalogId         String
+  productId         String
+  variantId         String
+  retailerId        String
+  status            String
+  hash              String?
+  payload           Json?
+  error             String?
+  confirmedAt       DateTime?
+  attemptedAt       DateTime?
+  handle            String?
+  validationWarning Boolean?
+
+  @@index([runId, status, id])
+  @@index([runId, productId, status])
+  @@index([storeId, catalogId])
+}
+
+model MetaManagedItem {
+  id          String   @id @map("_id")
+  storeId     String
+  catalogId   String
+  productId   String
+  variantId   String
+  retailerId  String
+  hash        String
+  confirmedAt DateTime
+  lastSeenRun String
+  warning     Boolean
+  mappedFields String[] @default([])
+
+  @@index([storeId, catalogId, lastSeenRun])
+}
+
+model MetaSyncBatch {
+  id          String    @id @map("_id")
+  runId       String
+  storeId     String
+  catalogId   String
+  status      String
+  itemIds     String[]
+  payloads    Json?
+  handle      String?
+  createdAt   DateTime
+  completedAt DateTime?
+
+  @@index([runId, status])
+  @@index([storeId, catalogId])
+}
+
+model MetaSyncCoordinator {
+  id        String  @id @map("_id")
+  activeRun String?
+  latestRun String
+}
+
 datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
+}
+
+// Phase 1 Meta connection. Deterministic _id gives one record per store/platform
+// using MongoDB's built-in unique primary index, without a data migration.
+model StoreIntegration {
+  id                  String    @id @map("_id")
+  storeId             String    @db.ObjectId
+  platform            String    @default("META")
+  revision            Int       @default(0)
+  status              String    @default("DISCONNECTED")
+  accountId           String?
+  accountName         String?
+  businessId          String?
+  businessName        String?
+  catalogId           String?
+  catalogName         String?
+  encryptedToken      String?
+  tokenExpiresAt      DateTime?
+  dataAccessExpiresAt DateTime?
+  validatedAt         DateTime?
+  connectedAt         DateTime?
+  updatedAt           DateTime  @updatedAt
+}
+
+// _id is SHA-256(state). A consumed authorization cannot be exchanged again.
+// Pending credentials never overwrite StoreIntegration until confirmation.
+model MetaConnectionAttempt {
+  id                  String    @id @map("_id")
+  storeId             String    @db.ObjectId
+  actorId             String
+  baseRevision        Int
+  status              String
+  browserHash         String?
+  accountId           String?
+  accountName         String?
+  businessId          String?
+  catalogId           String?
+  encryptedToken      String?
+  tokenExpiresAt      DateTime?
+  dataAccessExpiresAt DateTime?
+  validatedAt         DateTime?
+  errorCode           String?
+  createdAt           DateTime  @default(now())
+  expiresAt           DateTime
+
+  @@index([storeId, actorId, createdAt])
 }
 
 // App Store click records share the historic Feedback collection. Legacy

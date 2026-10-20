@@ -5,6 +5,7 @@ export const appSections = [
   { id: "feeds", label: "Feeds" },
   { id: "diagnostics", label: "Diagnostics" },
   { id: "configurations", label: "Configurations" },
+  { id: "integrations", label: "Integrations" },
   { id: "support", label: "Support" },
   { id: "plan", label: "Plan" },
 ] as const;

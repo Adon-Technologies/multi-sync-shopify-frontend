@@ -416,7 +416,7 @@
 
 .diagnosticsTable {
   width: 100%;
-  min-width: 1170px;
+  min-width: 1330px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
@@ -473,6 +473,17 @@
 
 .statusColumn {
   width: 5%;
+}
+
+.facebookColumn {
+  width: 160px;
+}
+
+.facebookCell small {
+  margin-top: 4px;
+  color: #616161;
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .errorColumn {

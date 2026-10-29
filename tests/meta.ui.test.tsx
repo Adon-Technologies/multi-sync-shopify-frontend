@@ -74,7 +74,13 @@ beforeEach(() => {
   request = vi.fn(async (_url: string, options: RequestInit) => {
     if (options.method === "GET") return Response.json(status);
     const input = JSON.parse(options.body as string);
-    if (input.intent === "sync-status") return Response.json({ ok: true, enabled: false, run: null, lastSuccessfulSync: null });
+    if (input.intent === "sync-status")
+      return Response.json({
+        ok: true,
+        enabled: false,
+        run: null,
+        lastSuccessfulSync: null,
+      });
     actions.push(input);
     if (responseError)
       return Response.json(
@@ -238,8 +244,8 @@ it("setup lists authorized businesses and catalogs by ID, clears stale catalog o
     ).value,
   ).toBe("");
   select("Product Catalog", "23");
-  fireEvent.click(screen.getByText("Connect Catalog"));
-  fireEvent.click(screen.getByText("Connect Catalog"));
+  fireEvent.click(screen.getByText("Connect and enable daily sync"));
+  fireEvent.click(screen.getByText("Connect and enable daily sync"));
   await waitFor(() => expect(done).toHaveBeenCalledTimes(1));
   expect(actions.filter((input) => input.intent === "confirm")).toEqual([
     {
@@ -247,6 +253,7 @@ it("setup lists authorized businesses and catalogs by ID, clears stale catalog o
       attemptId: pending.id,
       businessId: "12",
       catalogId: "23",
+      confirmed: true,
     },
   ]);
 });
@@ -278,7 +285,7 @@ it("failed catalog read validation preserves setup and offers retry without mark
   await screen.findByText("My Catalog (21)");
   select("Product Catalog", "21");
   responseError = "Meta did not grant catalog read access.";
-  fireEvent.click(screen.getByText("Connect Catalog"));
+  fireEvent.click(screen.getByText("Connect and enable daily sync"));
   await screen.findByText(responseError);
   expect(done).not.toHaveBeenCalled();
   expect(screen.queryByText("Connected")).toBeNull();

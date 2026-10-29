@@ -16,6 +16,7 @@ import type {
   FeedDataResponse,
   FeedMetadata,
   FeedStatus,
+  PrimaryMarketChange,
 } from "../routes/app.feed-data";
 import {
   configurationKeys,
@@ -34,6 +35,7 @@ import {
   type FeedQueryScope,
 } from "../services/feed-query";
 import { useHydrated } from "../hooks/useHydrated";
+import { useOverlayEvents } from "../hooks/useOverlayEvents";
 import {
   formatFeedGenerationProgress as generationProgress,
   shouldPollPrimaryFeed,
@@ -163,6 +165,18 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     null,
   );
   const [automaticWorkActive, setAutomaticWorkActive] = useState(false);
+  const [primaryMarketChange, setPrimaryMarketChange] = useState<PrimaryMarketChange | null>(null);
+  const primaryMarketModal = useRef<HTMLElementTagNameMap["s-modal"]>(null);
+  useOverlayEvents(primaryMarketModal, {
+    onHide: (event) => {
+      if (event.target === primaryMarketModal.current) setPrimaryMarketChange(null);
+    },
+  });
+  useEffect(() => {
+    if (primaryMarketChange) {
+      primaryMarketModal.current?.showOverlay?.();
+    }
+  }, [primaryMarketChange]);
   const [automaticRefreshAlerts, setAutomaticRefreshAlerts] = useState<
     TabAlert[]
   >([]);
@@ -272,8 +286,9 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     );
   };
   const mutation = useMutation({
-    mutationFn: () => generatePrimaryFeed(endpoint),
+    mutationFn: (confirmationToken: string | undefined) => generatePrimaryFeed(endpoint, confirmationToken),
     onSuccess: (data) => {
+      setPrimaryMarketChange(data.ok ? data.marketChange ?? null : null);
       if (scope) {
         queryClient.setQueryData(feedKeys.primary(scope, endpoint), data);
         void queryClient.invalidateQueries({
@@ -283,6 +298,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
       setFeedback(null);
     },
     onError: (error) => {
+      setPrimaryMarketChange(null);
       setFeedback({
         message:
           error instanceof Error
@@ -526,7 +542,7 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
     }
 
     setFeedback(null);
-    mutation.mutate();
+    mutation.mutate(undefined);
   };
 
   const openFeed = () => {
@@ -1237,6 +1253,39 @@ export function FeedsPanel({ active, scope }: FeedsPanelProps) {
         onAlertsChange={setAutomaticRefreshAlerts}
         scope={scope}
       />
+
+      {primaryMarketChange ? (
+        <s-modal
+          ref={primaryMarketModal}
+          id="primary-market-change-modal"
+          heading="Update Primary Feed market?"
+          accessibilityLabel="Primary Feed replacement market confirmation"
+        >
+          <s-paragraph>
+            Shopify changed the default market for this feed. Review the replacement before refreshing.
+          </s-paragraph>
+          <s-paragraph>
+            Current: {primaryMarketChange.previousMarket.name} / {primaryMarketChange.previousMarket.countryName ?? primaryMarketChange.previousMarket.countryCode} / {primaryMarketChange.previousMarket.currencyCode} / {primaryMarketChange.previousMarket.locale.toUpperCase()}
+          </s-paragraph>
+          <s-paragraph>
+            Replacement: {primaryMarketChange.replacementMarket.name} / {primaryMarketChange.replacementMarket.countryName ?? primaryMarketChange.replacementMarket.countryCode} / {primaryMarketChange.replacementMarket.currencyCode} / {primaryMarketChange.replacementMarket.locale.toUpperCase()}
+          </s-paragraph>
+          <s-paragraph>
+            The feed URL will stay the same. Products, prices, and language will use the replacement market. Existing additional feeds will keep their URLs and settings.
+          </s-paragraph>
+          <s-button slot="primary-action" variant="primary"
+            disabled={generationLocked || mutation.isPending ? true : undefined}
+            loading={mutation.isPending ? true : undefined}
+            onClick={() => mutation.mutate(primaryMarketChange.confirmationToken)}>
+            Update market and refresh
+          </s-button>
+          <s-button slot="secondary-actions" variant="secondary" command="--hide" commandFor="primary-market-change-modal"
+            disabled={mutation.isPending ? true : undefined}
+            onClick={() => setPrimaryMarketChange(null)}>
+            Cancel
+          </s-button>
+        </s-modal>
+      ) : null}
 
       <s-modal
         accessibilityLabel="Delete additional Market feed confirmation"

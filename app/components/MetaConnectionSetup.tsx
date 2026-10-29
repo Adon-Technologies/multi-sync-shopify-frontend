@@ -109,7 +109,13 @@ export function MetaConnectionSetup({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await metaRequest({ intent, attemptId: setup.id, businessId, catalogId });
+      await metaRequest({
+        intent,
+        attemptId: setup.id,
+        businessId,
+        catalogId,
+        ...(intent === "confirm" ? { confirmed: true } : {}),
+      });
       onDone();
     } catch (failure) {
       showError(failure);
@@ -199,9 +205,15 @@ export function MetaConnectionSetup({ onDone }: { onDone: () => void }) {
                     </s-stack>
                   ) : null}
                   <s-paragraph>
-                    Multi Sync will verify catalog read access and its Business
-                    Account before saving. Product write access will remain
-                    unverified until an authorized product sync confirms it.
+                    Connecting this catalog authorizes Multi Sync to
+                    automatically add and update all eligible Shopify products
+                    and variants in it, following your product selection and
+                    exclusion rules. Automatic sync starts at the next 00:00 UTC
+                    and runs once daily. Use Sync now after connecting for an
+                    earlier manual import. Existing matching Multi Sync items
+                    can be updated. Google feeds and Shopify products are not
+                    edited by this connection. Product write access will remain
+                    unverified until Meta confirms product processing.
                   </s-paragraph>
                 </>
               ) : null}
@@ -219,7 +231,7 @@ export function MetaConnectionSetup({ onDone }: { onDone: () => void }) {
                   loading={busy || undefined}
                   onClick={() => void act("confirm")}
                 >
-                  Connect Catalog
+                  Connect and enable daily sync
                 </s-button>
                 <s-button
                   disabled={busy || catalogLoading || undefined}

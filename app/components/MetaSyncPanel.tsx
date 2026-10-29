@@ -5,6 +5,10 @@ import type { DiagnosticsQueryScope } from "../services/diagnostics-query";
 
 export interface MetaSyncStatus {
   enabled: boolean;
+  automaticSyncEnabled?: boolean;
+  automaticSyncError?: string | null;
+  automaticSyncQueued?: boolean;
+  nextAutomaticSyncAt?: string | null;
   lastSuccessfulSync: string | null;
   run: null | {
     id: string;
@@ -14,6 +18,7 @@ export interface MetaSyncStatus {
     total: number;
     processed: number;
     succeeded: number;
+    warnings?: number;
     failed: number;
     excluded: number;
     staleItems: number;
@@ -25,6 +30,9 @@ const labels: Record<string, string> = {
   SYNCHRONIZING: "Synchronizing",
   PROCESSING: "Processing in Meta",
   COMPLETED: "Completed",
+  COMPLETED_WITH_WARNINGS: "Completed with warnings",
+  LEGACY_TEST: "Previous limited test",
+  NO_ELIGIBLE_PRODUCTS: "Nothing submitted",
   COMPLETED_WITH_ERRORS: "Completed with errors",
   NEEDS_ATTENTION: "Needs attention",
   CANCELLED: "Cancelled",
@@ -51,7 +59,10 @@ export function MetaSyncPanel({
       metaRequest<MetaSyncStatus>({ intent: "sync-status" }, signal),
     enabled: Boolean(scope && catalogId),
     retry: false,
-    refetchInterval: (q) => (q.state.data?.run?.active ? 5000 : 30_000),
+    refetchInterval: (q) =>
+      q.state.data?.run?.active || q.state.data?.automaticSyncQueued
+        ? 5000
+        : 30_000,
   });
   const run = query.data?.run;
   useEffect(() => {
@@ -66,7 +77,10 @@ export function MetaSyncPanel({
     setBusy(true);
     setError(null);
     try {
-      await metaRequest({ intent: "sync-start", confirmed: true });
+      await metaRequest({
+        intent: query.data?.automaticSyncEnabled ? "sync-start" : "sync-enable",
+        confirmed: true,
+      });
       await query.refetch();
     } catch (failure) {
       setError(
@@ -82,12 +96,39 @@ export function MetaSyncPanel({
   return (
     <s-stack gap="small">
       <s-heading>Product synchronization</s-heading>
+      {query.data?.automaticSyncQueued ? (
+        <s-banner tone="info">
+          The daily 00:00 UTC product sync is due. It will start when the worker
+          is available and the current sync has finished.
+        </s-banner>
+      ) : null}
+      <s-paragraph>
+        {query.data?.automaticSyncEnabled
+          ? "Automatic sync runs once daily at 00:00 UTC. Product and inventory changes are included in the next daily sync. Use Sync now for an earlier update."
+          : "Enable automatic sync to synchronize eligible products and variants once daily at 00:00 UTC."}
+      </s-paragraph>
+      {query.data?.automaticSyncEnabled && query.data.nextAutomaticSyncAt ? (
+        <s-paragraph>
+          Next scheduled sync:{" "}
+          {new Date(query.data.nextAutomaticSyncAt)
+            .toISOString()
+            .replace("T", " ")
+            .replace(".000Z", " UTC")}
+          .
+        </s-paragraph>
+      ) : null}
+      {query.data?.automaticSyncError ? (
+        <s-banner tone="warning">{query.data.automaticSyncError}</s-banner>
+      ) : null}
       <s-badge
         tone={
           run?.status === "COMPLETED"
             ? "success"
             : run?.status === "NEEDS_ATTENTION" ||
-                run?.status === "COMPLETED_WITH_ERRORS"
+                run?.status === "COMPLETED_WITH_ERRORS" ||
+                run?.status === "COMPLETED_WITH_WARNINGS" ||
+                run?.status === "NO_ELIGIBLE_PRODUCTS" ||
+                run?.status === "LEGACY_TEST"
               ? "warning"
               : "neutral"
         }
@@ -100,12 +141,20 @@ export function MetaSyncPanel({
         </s-banner>
       ) : null}
       {run?.error ? <s-banner tone="warning">{run.error}</s-banner> : null}
+      {run?.warnings ? (
+        <s-banner tone="warning">
+          Some items were processed with warnings. Review Facebook Diagnostics.
+          A constructed product URL does not confirm public storefront access or
+          advertising eligibility.
+        </s-banner>
+      ) : null}
       {run ? (
         <>
           <s-paragraph>
             Eligible variants{run.enumerationComplete ? "" : " found so far"}:{" "}
             {run.total}. Processed: {run.processed}. Synchronized:{" "}
             {run.succeeded}. Failed: {run.failed}. Excluded: {run.excluded}.
+            Warnings: {run.warnings ?? 0}.
           </s-paragraph>
           {run.active ? (
             <>
@@ -148,19 +197,30 @@ export function MetaSyncPanel({
         }
         loading={busy || undefined}
       >
-        {run ? "Sync now" : "Sync products"}
+        {query.data?.automaticSyncEnabled
+          ? "Sync now"
+          : "Enable automatic sync"}
       </s-button>
       <s-modal
         id="meta-sync-confirmation"
-        heading="Synchronize Shopify products?"
+        heading={
+          query.data?.automaticSyncEnabled
+            ? "Synchronize Shopify products?"
+            : "Enable automatic product sync?"
+        }
         accessibilityLabel="Confirm Meta product synchronization"
       >
         <s-stack gap="small">
           <s-paragraph>
-            Shopify product information will be submitted to{" "}
-            {catalogName || "your selected Meta catalog"}. Existing matching
-            Multi Sync-managed items may be updated. Shopify products will not
-            be edited.
+            {query.data?.automaticSyncEnabled
+              ? "Sync now starts an immediate manual update of eligible Shopify products and variants in "
+              : "Enable daily updates of eligible Shopify products and variants in "}
+            {catalogName || "your selected Meta catalog"}.
+            {query.data?.automaticSyncEnabled
+              ? " The daily 00:00 UTC schedule stays unchanged."
+              : " The first automatic sync runs at the next 00:00 UTC. Sync now can start an earlier manual import."}{" "}
+            Existing matching Multi Sync-managed items may be updated. Shopify
+            products will not be edited.
           </s-paragraph>
           <s-paragraph>
             Active, published products follow your product selection, exclusion
@@ -184,7 +244,9 @@ export function MetaSyncPanel({
           }
           onClick={() => void start()}
         >
-          Start synchronization
+          {query.data?.automaticSyncEnabled
+            ? "Start synchronization"
+            : "Enable daily sync"}
         </s-button>
         <s-button
           slot="secondary-actions"

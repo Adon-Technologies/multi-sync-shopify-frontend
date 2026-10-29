@@ -103,10 +103,11 @@ export function primaryFeedQueryOptions(
   });
 }
 
-export async function generatePrimaryFeed(endpoint = "/app/feed-data") {
+export async function generatePrimaryFeed(endpoint = "/app/feed-data", confirmationToken?: string) {
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...(confirmationToken ? { "Content-Type": "application/json" } : {}) },
+    ...(confirmationToken ? { body: JSON.stringify({ confirmationToken }) } : {}),
   });
 
   return readResponse<FeedDataResponse>(response);

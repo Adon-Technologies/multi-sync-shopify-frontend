@@ -136,8 +136,9 @@ export function IntegrationsPanel({
                     ) : (
                       <>
                         Product write access is unverified. It must be checked
-                        during your first authorized product sync. Saving this
-                        connection does not start product syncing.
+                        when Meta confirms your first product sync. New catalog
+                        connections are scheduled for the next 00:00 UTC after
+                        confirmation. Sync now can start an earlier manual sync.
                       </>
                     )}
                   </s-paragraph>

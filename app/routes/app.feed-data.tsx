@@ -58,6 +58,12 @@ export interface ActiveFeedGeneration {
   status: "QUEUED" | "PROCESSING";
 }
 
+export interface PrimaryMarketChange {
+  confirmationToken: string;
+  previousMarket: FeedMarket;
+  replacementMarket: FeedMarket;
+}
+
 export type FeedDataResponse =
   | {
       ok: true;
@@ -66,6 +72,7 @@ export type FeedDataResponse =
       market: FeedMarket | null;
       backendUnavailable: boolean;
       marketUnavailable: boolean;
+      marketChange?: PrimaryMarketChange;
     }
   | {
       ok: false;
@@ -139,12 +146,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticateSubscribedAdmin(request);
 
   try {
+    const input = await request.json().catch(() => null) as { confirmationToken?: unknown } | null;
     const result = await requestFeedBackend<FeedDataResponse>(
       session,
       "POST",
       "/api/feeds/primary/generate",
+      ...(typeof input?.confirmationToken === "string"
+        ? [{ confirmationToken: input.confirmationToken }]
+        : []),
     );
-    return Response.json(withBackendAvailability(result), { status: 202 });
+    return Response.json(withBackendAvailability(result), { status: result.ok && result.marketChange ? 200 : 202 });
   } catch (error) {
     return errorResponse(error);
   }

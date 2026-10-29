@@ -8,6 +8,7 @@ generator client {
 // Meta synchronization uses string Shopify store IDs (hex serialization), unlike
 // Store relations. These collections are owned by the bounded Mongo transaction repository.
 model MetaSyncRun {
+  scheduledFor        DateTime?
   id                  String    @id @map("_id")
   storeId             String
   catalogId           String
@@ -69,6 +70,7 @@ model MetaManagedItem {
   lastSeenRun String
   warning     Boolean
   mappedFields String[] @default([])
+  developmentTest Boolean?
 
   @@index([storeId, catalogId, lastSeenRun])
 }
@@ -119,7 +121,14 @@ model StoreIntegration {
   dataAccessExpiresAt DateTime?
   validatedAt         DateTime?
   connectedAt         DateTime?
+  autoSyncEnabled     Boolean?
+  autoSyncActorId     String?
+  autoSyncRequestedAt DateTime?
+  autoSyncDueAt       DateTime?
+  autoSyncError       String?
   updatedAt           DateTime  @updatedAt
+
+  @@index([autoSyncEnabled, autoSyncDueAt, id])
 }
 
 // _id is SHA-256(state). A consumed authorization cannot be exchanged again.
@@ -743,7 +752,7 @@ model XmlLink {
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
-  @@unique([storeId, marketId, countryCode, locale])
+  @@unique([storeId, feedType, marketId, countryCode, locale])
   @@index([storeId, feedType])
   @@index([storeId, status])
   @@index([status, leaseExpiresAt])

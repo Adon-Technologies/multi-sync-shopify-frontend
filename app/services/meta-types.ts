@@ -7,6 +7,7 @@ export interface MetaConnection {
   catalogId: string | null;
   catalogName: string | null;
   connectedAt: string | null;
+  automaticSync?: boolean;
   access: {
     catalogMetadataRead: "VERIFIED" | "UNVERIFIED";
     productWrite: "UNVERIFIED" | "VERIFIED";
